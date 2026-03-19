@@ -67,7 +67,7 @@
 - Added a canonical-topic rule to reduce overlapping topic aliases in the stable `/spark/...` surface.
 - Added explicit bimanual stability guidance: fixed arm ordering must come from the mapping profile.
 - Added standing eval-set requirements and manual spot-check expectations to the success criteria.
-- Made `AGENTS.md` an explicit operating manual requirement and required conversion artifacts like `diagnostics.json` and effective-profile snapshots for every run.
+- Required conversion artifacts like `diagnostics.json` and effective-profile snapshots for every run.
 - Refined the eval section so V1 tracks graded quality metrics, not just binary converter success.
 
 ### Lean spec pass
@@ -85,5 +85,9 @@
 ### GitHub prep pass
 
 - Expanded `.gitignore` for Python, ROS/colcon, editor, and dataset artifacts so the repo is easier to move between Windows and Ubuntu.
-- Added `data_pipeline/AGENTS.md` as the local operating note for the new pipeline.
 - Updated the root `README.md` to point new work toward `data_pipeline/`.
+
+### Cleanup pass
+
+- Removed `data_pipeline/AGENTS.md` to keep the repository from spreading intent across too many files.
+- Kept the source of truth concentrated in `V1_SPEC.md`, the contract docs, the mapping YAML, and `running-notes.md`.

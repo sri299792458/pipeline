@@ -63,7 +63,6 @@ V1 work lives under `data_pipeline/`.
 Expected files:
 
 - `data_pipeline/V1_SPEC.md`
-- `data_pipeline/AGENTS.md`
 - `data_pipeline/docs/topic-contract.md`
 - `data_pipeline/docs/dataset-mapping.md`
 - `data_pipeline/configs/multisensor_20hz.yaml`
