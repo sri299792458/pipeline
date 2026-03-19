@@ -25,3 +25,9 @@ Thumbs.db
 *.stl
 raw_episodes/
 published/
+
+# Local upstream checkouts used for reference/integration work
+lerobot/
+realsense-ros/
+librealsense/
+gsrobotics/
