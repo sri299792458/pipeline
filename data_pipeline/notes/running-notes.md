@@ -258,3 +258,41 @@
   - a published eval dataset under `/tmp/pipeline_eval_test/published/eval_dummy_multisensor_v1`
   - an eval report at `/tmp/pipeline_eval_test/reports/evaluation_summary.json`
 - The script intentionally keeps the real-episode check optional unless `--require-real` is passed, so the dummy path can run in CI or on development machines without attached hardware while still supporting the standing real-episode check once one is recorded.
+
+### RealSense timestamp resolution pass
+
+- Revisited the RealSense timestamp problem after the offline converter and eval path were stable.
+- Confirmed again from the official `realsense-ros` source that the wrapper computes image header stamps from RealSense frame timestamps and time-base conversion logic rather than from immediate host ROS time at frame acquisition.
+- Tried the narrowest official-wrapper path first:
+  - patched the local `realsense-ros` checkout to support a host-capture-time mode,
+  - built `realsense2_camera_msgs` successfully under system Python,
+  - installed missing host packages needed for wrapper and SDK work:
+    - `ros-jazzy-diagnostic-updater`
+    - `librealsense2`
+    - `librealsense2-dev`
+- That wrapper build still failed against the available SDK on this machine because the current upstream `ros2-master` wrapper expects newer librealsense APIs and stream types such as safety, occupancy, and labeled point cloud that are not present in the installed 2.56.5 SDK surface.
+
+### Final RealSense runtime decision
+
+- Replaced the contract launch dependency on `realsense-ros` with an in-repository ROS 2 package built directly against the official `librealsense2` SDK:
+  - `data_pipeline/ros2/spark_realsense_bridge/`
+- Added `spark_realsense_bridge` as a small dedicated ROS 2 node that:
+  - opens one RealSense by explicit serial number,
+  - publishes `color/image_raw` and optional `depth/image_rect_raw`,
+  - stamps both streams with `node->now()` immediately after `pipeline.wait_for_frames()` returns,
+  - preserves the same stamp across the color and depth pair from the same frameset, and
+  - exposes profile and device identity as ROS parameters so the existing manifest metadata helper can still infer camera serial and model information.
+- Updated `data_pipeline/launch/realsense_contract.launch.py` so it now launches two instances of this bridge under:
+  - `/spark/cameras/wrist`
+  - `/spark/cameras/scene`
+- Added `data_pipeline/setup_realsense_contract_runtime.sh` to build the package into `install/spark_realsense_bridge`.
+
+### RealSense bridge validation
+
+- Built the custom package successfully with:
+  - `./data_pipeline/setup_realsense_contract_runtime.sh`
+- Verified the built package is visible to ROS:
+  - `ros2 pkg prefix spark_realsense_bridge`
+- Verified the launch file interface under the built overlay:
+  - `ros2 launch data_pipeline/launch/realsense_contract.launch.py --show-args`
+- Did not run a live camera acquisition test in this turn because no RealSense devices were attached to validate against.
