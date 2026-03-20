@@ -95,16 +95,25 @@ raw_episodes/
 - `end_time_ns`
 - `topics`
 - `topic_types`
+- `sensor_inventory_version`
+- `sensor_inventory_complete`
 - `sensors`
 - `mapping_profile`
 - `profile_version`
 - `clock_policy`
 - `git_commit`
 
-The `sensors` section must include per-sensor identity when available:
+The `sensors` section must include per-sensor identity and attachment metadata:
 
+- `sensor_id`
 - `sensor_name`
 - `sensor_type`
+- `modality`
+- `attached_to`
+- `mount_parent`
+- `mount_site`
+- `mount_index`
+- `semantic_role_hint`
 - `topic_names`
 - `serial_number`
 - `model`
@@ -115,6 +124,8 @@ The `sensors` section must include per-sensor identity when available:
 - `calibration_ref`
 
 For RealSense cameras, serial number is required.
+
+`sensor_id` is the raw-layer stable identifier. Published dataset field names may change later, but `sensor_id` and the attachment fields should make it possible to remap old raw episodes without ambiguity.
 
 
 ## 8. Raw Layer Rule

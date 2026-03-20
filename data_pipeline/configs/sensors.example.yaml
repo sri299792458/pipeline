@@ -1,22 +1,50 @@
 sensors:
   wrist:
+    sensor_id: "cam_lightning_wrist_0"
+    modality: "rgbd_camera"
+    attached_to: "lightning"
+    mount_parent: "arm"
+    mount_site: "wrist"
+    mount_index: 0
+    semantic_role_hint: "wrist"
     serial_number: "WRIST-REALSENSE-SERIAL"
     model: "Intel RealSense D405"
     firmware_version: "5.16.x"
     calibration_ref: "calib://realsense/wrist/v1"
 
   scene:
+    sensor_id: "cam_scene_0"
+    modality: "rgbd_camera"
+    attached_to: "world"
+    mount_parent: "world"
+    mount_site: "scene"
+    mount_index: 0
+    semantic_role_hint: "scene"
     serial_number: "SCENE-REALSENSE-SERIAL"
     model: "Intel RealSense D435"
     firmware_version: "5.16.x"
     calibration_ref: "calib://realsense/scene/v1"
 
   left:
+    sensor_id: "tac_lightning_finger_left_0"
+    modality: "tactile_rgb"
+    attached_to: "lightning"
+    mount_parent: "robotiq_2f85_gripper"
+    mount_site: "finger_left"
+    mount_index: 0
+    semantic_role_hint: "tactile_finger_left"
     serial_number: "GELSIGHT-LEFT-SERIAL"
     model: "GelSight Mini"
     calibration_ref: "calib://gelsight/left/v1"
 
   right:
+    sensor_id: "tac_lightning_finger_right_0"
+    modality: "tactile_rgb"
+    attached_to: "lightning"
+    mount_parent: "robotiq_2f85_gripper"
+    mount_site: "finger_right"
+    mount_index: 0
+    semantic_role_hint: "tactile_finger_right"
     serial_number: "GELSIGHT-RIGHT-SERIAL"
     model: "GelSight Mini"
     calibration_ref: "calib://gelsight/right/v1"

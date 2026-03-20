@@ -334,6 +334,14 @@ V1 supports:
 
 The published profile only includes the sensors explicitly declared in the mapping config.
 
+The raw manifest should still preserve every recorded sensor as a sensor instance with:
+
+- `sensor_id`
+- `attached_to`
+- `mount_parent`
+- `mount_site`
+- `serial_number`
+
 ### Why
 
 Support for multiple sensors comes from the raw-first design, not from trying to cram every modality into one live fused message. The mapping profile keeps the published contract small while still allowing the raw bag to preserve richer sessions.

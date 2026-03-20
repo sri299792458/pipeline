@@ -247,17 +247,48 @@ def infer_sensor_metadata(
     sensors: list[dict[str, Any]] = []
 
     camera_specs = [
-        ("wrist", "/spark/cameras/wrist", "realsense"),
-        ("scene", "/spark/cameras/scene", "realsense"),
+        {
+            "sensor_name": "wrist",
+            "topic_prefix": "/spark/cameras/wrist",
+            "sensor_type": "realsense",
+            "sensor_id": "cam_wrist_0",
+            "modality": "rgbd_camera",
+            "attached_to": "unknown",
+            "mount_parent": "arm",
+            "mount_site": "wrist",
+            "mount_index": 0,
+            "semantic_role_hint": "wrist",
+        },
+        {
+            "sensor_name": "scene",
+            "topic_prefix": "/spark/cameras/scene",
+            "sensor_type": "realsense",
+            "sensor_id": "cam_scene_0",
+            "modality": "rgbd_camera",
+            "attached_to": "world",
+            "mount_parent": "world",
+            "mount_site": "scene",
+            "mount_index": 0,
+            "semantic_role_hint": "scene",
+        },
     ]
-    for sensor_name, topic_prefix, sensor_type in camera_specs:
+    for spec in camera_specs:
+        sensor_name = spec["sensor_name"]
+        topic_prefix = spec["topic_prefix"]
         sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
         if not sensor_topics:
             continue
 
         sensor = {
             "sensor_name": sensor_name,
-            "sensor_type": sensor_type,
+            "sensor_id": spec["sensor_id"],
+            "sensor_type": spec["sensor_type"],
+            "modality": spec["modality"],
+            "attached_to": spec["attached_to"],
+            "mount_parent": spec["mount_parent"],
+            "mount_site": spec["mount_site"],
+            "mount_index": spec["mount_index"],
+            "semantic_role_hint": spec["semantic_role_hint"],
             "topic_names": sensor_topics,
             "serial_number": None,
             "model": None,
@@ -293,20 +324,55 @@ def infer_sensor_metadata(
                 sensor["fps"] = profile_tokens[2]
 
         sensor.update(sensor_overrides.get(sensor_name, {}))
+        sensor["identity_complete"] = all(
+            sensor.get(key) not in {None, "", "unknown"}
+            for key in ("sensor_id", "attached_to", "mount_parent", "mount_site")
+        )
         sensors.append(sensor)
 
     tactile_specs = [
-        ("left", "/spark/tactile/left", "gelsight"),
-        ("right", "/spark/tactile/right", "gelsight"),
+        {
+            "sensor_name": "left",
+            "topic_prefix": "/spark/tactile/left",
+            "sensor_type": "gelsight",
+            "sensor_id": "tac_finger_left_0",
+            "modality": "tactile_rgb",
+            "attached_to": "unknown",
+            "mount_parent": "robotiq_2f85_gripper",
+            "mount_site": "finger_left",
+            "mount_index": 0,
+            "semantic_role_hint": "tactile_finger_left",
+        },
+        {
+            "sensor_name": "right",
+            "topic_prefix": "/spark/tactile/right",
+            "sensor_type": "gelsight",
+            "sensor_id": "tac_finger_right_0",
+            "modality": "tactile_rgb",
+            "attached_to": "unknown",
+            "mount_parent": "robotiq_2f85_gripper",
+            "mount_site": "finger_right",
+            "mount_index": 0,
+            "semantic_role_hint": "tactile_finger_right",
+        },
     ]
-    for sensor_name, topic_prefix, sensor_type in tactile_specs:
+    for spec in tactile_specs:
+        sensor_name = spec["sensor_name"]
+        topic_prefix = spec["topic_prefix"]
         sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
         if not sensor_topics:
             continue
 
         sensor = {
             "sensor_name": sensor_name,
-            "sensor_type": sensor_type,
+            "sensor_id": spec["sensor_id"],
+            "sensor_type": spec["sensor_type"],
+            "modality": spec["modality"],
+            "attached_to": spec["attached_to"],
+            "mount_parent": spec["mount_parent"],
+            "mount_site": spec["mount_site"],
+            "mount_index": spec["mount_index"],
+            "semantic_role_hint": spec["semantic_role_hint"],
             "topic_names": sensor_topics,
             "serial_number": None,
             "model": "GelSight Mini",
@@ -317,6 +383,10 @@ def infer_sensor_metadata(
             "calibration_ref": None,
         }
         sensor.update(sensor_overrides.get(sensor_name, {}))
+        sensor["identity_complete"] = all(
+            sensor.get(key) not in {None, "", "unknown"}
+            for key in ("sensor_id", "attached_to", "mount_parent", "mount_site")
+        )
         sensors.append(sensor)
 
     return sensors
@@ -350,6 +420,7 @@ def build_notes_template(manifest: dict[str, Any]) -> str:
         f"- operator: {manifest['operator']}",
         f"- mapping_profile: {manifest['mapping_profile']}",
         f"- clock_policy: {manifest['clock_policy']}",
+        f"- sensor_inventory_complete: {manifest.get('sensor_inventory_complete', False)}",
         "",
         "## Notes",
         "",

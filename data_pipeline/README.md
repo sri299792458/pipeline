@@ -177,4 +177,18 @@ python data_pipeline/validate_eval_set.py \
 
 `record_episode.py` can merge operator-supplied sensor metadata into the manifest with `--sensors-file`.
 
-Start from [configs/sensors.example.yaml](./configs/sensors.example.yaml) and replace the placeholder serials and calibration references with the real inventory values for the capture rig.
+Start from [configs/sensors.example.yaml](./configs/sensors.example.yaml) and replace the placeholder values with the real inventory values for the capture rig.
+
+The important rule is:
+
+- raw manifests should preserve unambiguous sensor identity
+- published dataset field names can be remapped later
+
+So the override file should record not just serials, but also:
+
+- a stable `sensor_id`
+- `attached_to` (`lightning`, `thunder`, or `world`)
+- `mount_parent` and `mount_site`
+- `calibration_ref`
+
+That keeps the raw episodes convertible even if the naming convention changes later.

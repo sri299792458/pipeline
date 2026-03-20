@@ -110,6 +110,7 @@ Notes:
 
 - RealSense serial numbers are also inferred from the running node parameters.
 - GelSight serial numbers are not inferred automatically, so put the real values in this file if you have them.
+- Fill in `sensor_id`, `attached_to`, `mount_parent`, and `mount_site` as well. Those fields are what make the raw episode remappable later if published naming changes.
 
 
 ## 3. Start The Teleop Input Devices

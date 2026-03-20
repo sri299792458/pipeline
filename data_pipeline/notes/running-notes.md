@@ -508,3 +508,29 @@
   - L515 on `/spark/cameras/scene/...`
   - D455 on `/spark/cameras_aux/extra/...`
   - all three color streams produced stamped `sensor_msgs/Image` samples concurrently
+
+### Raw sensor identity decision
+
+- The current published profile names like `wrist`, `scene`, `left`, and `right` are too narrow to treat as long-term raw identity.
+- The raw episode manifest should preserve enough information to remap old episodes later without recollecting data.
+- The chosen compromise is:
+  - keep the current runtime topic surface for now,
+  - enrich each manifest sensor record with stable raw identity fields,
+  - and let published profiles map those raw sensor identities into dataset field names.
+- Added manifest-facing sensor fields:
+  - `sensor_id`
+  - `modality`
+  - `attached_to`
+  - `mount_parent`
+  - `mount_site`
+  - `mount_index`
+  - `semantic_role_hint`
+  - `identity_complete`
+- Added top-level manifest fields:
+  - `sensor_inventory_version`
+  - `sensor_inventory_complete`
+- `sensors.example.yaml` is now the place where the operator can remove ambiguity for the current rig by filling in attachment metadata such as:
+  - `attached_to: lightning`
+  - `mount_parent: robotiq_2f85_gripper`
+  - `mount_site: finger_left`
+- This keeps the current runtime conservative while making the raw layer explicit enough to support later renaming or profile changes.

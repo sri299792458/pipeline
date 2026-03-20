@@ -168,7 +168,14 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
     sensors = [
         {
             "sensor_name": "wrist",
+            "sensor_id": "cam_lightning_wrist_0",
             "sensor_type": "realsense",
+            "modality": "rgbd_camera",
+            "attached_to": "lightning",
+            "mount_parent": "arm",
+            "mount_site": "wrist",
+            "mount_index": 0,
+            "semantic_role_hint": "wrist",
             "topic_names": [
                 "/spark/cameras/wrist/color/image_raw",
                 "/spark/cameras/wrist/depth/image_rect_raw",
@@ -180,10 +187,18 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             "fps": 20,
             "driver_node": "/spark/cameras/wrist",
             "calibration_ref": "dummy://wrist",
+            "identity_complete": True,
         },
         {
             "sensor_name": "scene",
+            "sensor_id": "cam_scene_0",
             "sensor_type": "realsense",
+            "modality": "rgbd_camera",
+            "attached_to": "world",
+            "mount_parent": "world",
+            "mount_site": "scene",
+            "mount_index": 0,
+            "semantic_role_hint": "scene",
             "topic_names": [
                 "/spark/cameras/scene/color/image_raw",
                 "/spark/cameras/scene/depth/image_rect_raw",
@@ -195,6 +210,7 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             "fps": 20,
             "driver_node": "/spark/cameras/scene",
             "calibration_ref": "dummy://scene",
+            "identity_complete": True,
         },
     ]
     if args.include_tactile:
@@ -202,7 +218,14 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             [
                 {
                     "sensor_name": "left",
+                    "sensor_id": "tac_lightning_finger_left_0",
                     "sensor_type": "gelsight",
+                    "modality": "tactile_rgb",
+                    "attached_to": "lightning",
+                    "mount_parent": "robotiq_2f85_gripper",
+                    "mount_site": "finger_left",
+                    "mount_index": 0,
+                    "semantic_role_hint": "tactile_finger_left",
                     "topic_names": ["/spark/tactile/left/color/image_raw"],
                     "serial_number": "DUMMY-GS-LEFT",
                     "model": "GelSight Mini",
@@ -211,10 +234,18 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
                     "fps": 20,
                     "driver_node": "/gelsight_left_bridge",
                     "calibration_ref": "dummy://gelsight_left",
+                    "identity_complete": True,
                 },
                 {
                     "sensor_name": "right",
+                    "sensor_id": "tac_lightning_finger_right_0",
                     "sensor_type": "gelsight",
+                    "modality": "tactile_rgb",
+                    "attached_to": "lightning",
+                    "mount_parent": "robotiq_2f85_gripper",
+                    "mount_site": "finger_right",
+                    "mount_index": 0,
+                    "semantic_role_hint": "tactile_finger_right",
                     "topic_names": ["/spark/tactile/right/color/image_raw"],
                     "serial_number": "DUMMY-GS-RIGHT",
                     "model": "GelSight Mini",
@@ -223,6 +254,7 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
                     "fps": 20,
                     "driver_node": "/gelsight_right_bridge",
                     "calibration_ref": "dummy://gelsight_right",
+                    "identity_complete": True,
                 },
             ]
         )
@@ -238,6 +270,8 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
         "end_time_ns": end_ns,
         "topics": topics,
         "topic_types": {topic: TOPIC_TYPES[topic] for topic in topics},
+        "sensor_inventory_version": 2,
+        "sensor_inventory_complete": True,
         "sensors": sensors,
         "mapping_profile": profile["profile_name"],
         "profile_version": profile["profile_version"],
