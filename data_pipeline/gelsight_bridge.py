@@ -13,6 +13,7 @@ from pathlib import Path
 import cv2
 import rclpy
 from cv_bridge import CvBridge
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.utilities import remove_ros_args
 from sensor_msgs.msg import Image
@@ -136,11 +137,12 @@ def main(argv: list[str] | None = None) -> int:
     node = GelSightBridge(args)
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
     return 0
 
 
