@@ -342,10 +342,13 @@ class GUI(Node):
         for arm in ["Thunder", "Lightning"]:
             print(f"\tStarting {arm}")
             root.update()
-            fields[arm]['db_connect'].invoke()
+            dashboard_connected = fields[arm]['db_connect'].invoke()
             time.sleep(1)
             root.update()
-            fields[arm]['db_reset'].invoke()
+            if dashboard_connected:
+                fields[arm]['db_reset'].invoke()
+            else:
+                print(f"\tSkipping startup reset for {arm}: dashboard unavailable")
             time.sleep(1)
             
         self.create_subscription(String, "/SpaceMouseThunderLog", self.thunder_sm_log, 10)

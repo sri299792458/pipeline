@@ -122,6 +122,9 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
         # Optimization Control: ------------------------------------------------------------------------
         if control_modes[arm] == 'Spark' or control_modes[arm] == 'Optimization':
             if arm.lower()+'_spark_angle' in ros_data:
+                if not URs.has_receive(arm):
+                    del ros_data[arm.lower()+'_spark_angle']
+                    continue
                 angles = ros_data[arm.lower()+'_spark_angle']
                 if ros_data[arm.lower() + '_change_mode'] == True:
                     if arm == "Thunder":
@@ -391,5 +394,3 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
             pubs[arm+"_safety_mode"].publish(Int32(data=saftey_mode))
             _publish_stable_robot_state(arm, pubs, tick_stamp, q, cartesian, norm_ft, gripper)
             # print(raw_ft)
-
-

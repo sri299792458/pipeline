@@ -42,7 +42,7 @@ class SparkNode(Node):
 
         data = con.read_until(b'\x00')[:-1]
         data = json.loads(data.decode('utf-8'))
-        ID = data['ID']
+        ID = str(data['ID']).strip().lower()
         print(f"Connected to Spark: {ID} ({dev})")
         # Get the location of this python filem
         path = os.path.dirname(os.path.abspath(__file__))

@@ -143,24 +143,30 @@ class UR:
 
     def init_arm(self, name, count=0, enable_control=True):
         # print(f"Enabling control: {enable_control}")
-        try:
-            self.mode[name] = None
-            if enable_control[name]:
+        self.mode[name] = None
+        control_ready = not enable_control[name]
+
+        if enable_control[name]:
+            try:
                 print(f"Enabling control: {name}")
                 if name in self.ur_control:
                     self.ur_control[name].disconnect()
                     self.ur_control[name].reconnect()
                 else:
                     self.ur_control[name] = rtde_control.RTDEControlInterface(self.ips[name], 500)
+                control_ready = True
+            except RuntimeError as e:
+                print(f"\tFailed to connect control to {name} at {self.ips[name]}")
+                print("\t"+str(e))
 
+        try:
             if name in self.ur_receive:
                 self.ur_receive[name].disconnect()
                 self.ur_receive[name].reconnect()
             self.ur_receive[name] = rtde_receive.RTDEReceiveInterface(self.ips[name])
-
-            print(f"Connected to {name} at {self.ips[name]}")
+            print(f"Connected state to {name} at {self.ips[name]}")
         except RuntimeError as e:
-            print(f"\tFailed to connect to {name} at {self.ips[name]}")
+            print(f"\tFailed to connect state to {name} at {self.ips[name]}")
             print("\t"+str(e))
             if count < 5:
                 return self.init_arm(name, count+1, enable_control=enable_control)
@@ -177,7 +183,7 @@ class UR:
         except RuntimeError as e:
             print(f"\tFailed to connect to {name} gripper")
             print("\t"+str(e))
-        return True
+        return control_ready
 
     def __del__(self):
         for name in self.names:

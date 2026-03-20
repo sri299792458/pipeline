@@ -44,7 +44,6 @@ class LaunchDevs(Node):
             VR_devs.append('/dev/serial/by-id/usb-HTC_Hub_Controller-if00')
 
         return spark_devs, SM_devs, VR_devs, haptic_devs
-
     def cleanup(self, modules, arms):
         for module in modules:
             module.kill()
@@ -56,7 +55,6 @@ class LaunchDevs(Node):
         # time.sleep(1)
         # rospy.init_node('Main', anonymous=True)
         path = os.path.dirname(os.path.abspath(__file__))
-
         # modules.append(subprocess.Popen(['python3', 'Force/ForceNode.py'], start_new_session=True))
         # modules.append(subprocess.Popen(['python3', 'camera/realsense.py', '/both/front/'], start_new_session=True))
         # modules.append(subprocess.Popen(['python3', 'camera/realsense.py', '/lightning/wrist/'], start_new_session=True))

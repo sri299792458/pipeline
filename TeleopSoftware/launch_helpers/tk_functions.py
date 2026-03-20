@@ -18,6 +18,9 @@ def db_connect(arm, fields, URs, colors):
     return False
 
 def db_reset(arm, fields, URs, colors, control_modes, pubs, enable_control):
+    if arm not in URs.ur_dashboard:
+        print(arm + ": Dashboard not connected")
+        return
     URs.get_dashboard(arm).unlockProtectiveStop()
     URs.get_dashboard(arm).close_popup()
     connect_fun(arm, fields, URs, colors, control_modes, enable_control)
