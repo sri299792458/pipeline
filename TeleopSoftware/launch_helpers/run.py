@@ -22,6 +22,24 @@ offset = [0,0,0,0]
 
 publish_ft = True
 JOINT_NAMES = [f"joint_{idx}" for idx in range(1, 7)]
+THUNDER_OFFSET = [
+    0.8322513103485107,
+    1.3889789581298828,
+    1.4154774993658066,
+    -2.7204548865556717,
+    -2.634120313450694,
+    -2.2259570360183716,
+    0.0,
+]
+LIGHTNING_OFFSET = [
+    -1.0215797424316406,
+    -4.490872740745544,
+    -1.4827108010649681,
+    -0.588315486907959,
+    -0.5356001891195774,
+    2.0629922747612,
+    0.0,
+]
 
 
 def _copy_stamp(dst, src) -> None:
@@ -85,6 +103,10 @@ def _publish_stable_spark_command(arm, pubs, stamp, angles, gripper) -> None:
     pubs[arm + "_teleop_cmd_gripper_state"].publish(_gripper_message(stamp, "gripper_cmd", gripper))
 
 
+def map_value(x, in_min=1.9, in_max=3.0, out_min=0, out_max=255):
+    return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min)
+
+
 def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
     if 'thunder_sm_log' in ros_data:
         fields['Thunder']['SMLog'].insert(tk.END, ros_data['thunder_sm_log'])
@@ -102,34 +124,23 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
             if arm.lower()+'_spark_angle' in ros_data:
                 angles = ros_data[arm.lower()+'_spark_angle']
                 if ros_data[arm.lower() + '_change_mode'] == True:
-                    # if arm == "Thunder":
-                    #     homes[arm] = [-np.pi, -np.pi/2, 0.0, -np.pi/2, -np.pi, 0.0, 0.0]
-                    # elif arm == "Lightning":
-                    #     homes[arm] = [0.0, -np.pi/2, 0.0, -np.pi/2, 0.0, 0.0, 0.0]
                     if arm == "Thunder":
-                        homes[arm] = [-np.pi, -np.pi/2, 0.0, -np.pi/2, -np.pi, -1/2*np.pi, 0]
+                        homes[arm] = THUNDER_OFFSET.copy()
                     elif arm == "Lightning":
-                        homes[arm] = [0.0, -np.pi/2, 0.0, -np.pi/2, 0.0, 1/2*np.pi, 0]
+                        homes[arm] = LIGHTNING_OFFSET.copy()
                     dq = [a-u+h for a, u, h in zip(angles, URs.getActualQ(arm), homes[arm])]
-                    # print("Diff: ", dq)
-                    # print("Home: ", homes[arm])
                     if dq[0] > np.pi:
                         homes[arm][0] = - 2*np.pi
-                        # print("Subbed")
                     elif dq[0] < -np.pi:
                         homes[arm][0] = + 2*np.pi
-                        # print("Added")
-                    # print("Home: ", homes[arm])
-                    # dq = [a-u+h for a, u, h in zip(angles, URs.getActualQ(arm), homes[arm])]
-                    # print("Diff: ", dq)
                     ros_data[arm.lower() + '_change_mode'] = False
                     
                 angles = [angle + homes[arm][i] for i, angle in enumerate(angles)]
-                # print(angles)
                 if arm == "Lightning":
-                    gripper = np.clip((-1.0-angles[6]*2), 0, 1)
+                    gripper = map_value(angles[6], in_min=-4.8, in_max=-2.3, out_min=0, out_max=1)
                 else:
-                    gripper = np.clip((2.1-angles[6]*2), 0, 1)
+                    gripper = map_value(angles[6], in_min=-2.71, in_max=-1.26, out_min=0, out_max=1)
+                gripper = np.clip(gripper, 0, 1)
                 gripper = round(gripper*10)/10
                 
                 # Calculate forward kinematics: 
@@ -137,21 +148,23 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
                 ur_pos = forward_6(ur_Q)[0]
                 spark_pos = forward_6(angles[:6])[0]
                 height, width, center = fields[arm]['hwc']
-                # for angle in spark_pos:
-                #     print(angle)
-                # print("-----")
+                z = spark_pos[2] - ur_pos[2]
                 if arm == 'Thunder':
                     x = -spark_pos[1] + ur_pos[1]
                     y = -spark_pos[0] + ur_pos[0]
                 elif arm == 'Lightning':
                     x = +spark_pos[1] - ur_pos[1]
                     y = +spark_pos[0] - ur_pos[0]
-                z = spark_pos[2] - ur_pos[2]
+                    x = -x
+                    z = -z
                 x = x*width/2 + center[0]
                 y = y*height/2 + center[1]
                 z = z*300 + 300
+                tmp = z
+                z = y
+                y = tmp
                 fields[arm]['Spark_plot'].itemconfig(fields[arm]['point'], fill='red' if z > 0 else 'blue')
-                fields[arm]['Spark_plot'].moveto(fields[arm]['point'], x-10, y-10)
+                fields[arm]['Spark_plot'].moveto(fields[arm]['point'], y-10, x-10)
                 fields[arm]['Spark_meter'].moveto(fields[arm]['Spark_z_meter'], 0, z)
                 # fields[arm]['Spark_meter'].resize(fields[arm]['Spark_z_meter'], 0, z)
                 # enable_topic = arm.lower() + '_spark_enable'
@@ -168,14 +181,17 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
                             if control_modes[arm] == 'Spark':
                                 command_stamp = clock.now().to_msg()
                                 URs.servoJ(arm, (angles[:6], 0.0, 0.0, ur_time, ur_lookahead_time, ur_gain))
-                                URs.get_gripper(arm).set(int(gripper*255))
+                                if URs.gripper_enabled(arm):
+                                    URs.get_gripper(arm).set(int(gripper*255))
+                                pubs[arm.lower()+"_spark_command_angles"].publish(Float32MultiArray(data=angles[:6]))
+                                pubs[arm.lower()+"_spark_command_gripper"].publish(Float32(data=gripper))
                                 _publish_stable_spark_command(arm, pubs, command_stamp, angles, gripper)
                 
                 if control_modes[arm] == 'Optimization':
                     # print("Optimization")
                     optimize.set_spark_angle(arm, angles)
                     optimize.set_enable(ros_data[enable_topic])
-                    if ros_data[enable_topic]:
+                    if ros_data[enable_topic] and URs.gripper_enabled(arm):
                         URs.get_gripper(arm).set(int(gripper*255))
                 
                 del ros_data[arm.lower()+'_spark_angle'] 
@@ -361,8 +377,10 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
             speed = URs.get_receive(arm).getActualTCPSpeed()
             pubs[arm+"_speed"].publish(Float32MultiArray(data=speed))
 
-            gripper = URs.get_gripper(arm).get_current_position()
-            pubs[arm+"_gripper"].publish(Float32(data=gripper))
+            gripper = 0.0
+            if URs.gripper_enabled(arm):
+                gripper = float(URs.get_gripper(arm).get_current_position())
+                pubs[arm+"_gripper"].publish(Int32(data=int(gripper)))
 
             enable = spark_enable[arm] if arm in spark_enable else False
             pubs[arm+"_enable"].publish(Bool(data=enable))
@@ -371,7 +389,6 @@ def ros_update(fields, ros_data, control_modes, URs, pubs, optimize, clock):
             pubs[arm+"_safety_mode"].publish(Int32(data=saftey_mode))
             _publish_stable_robot_state(arm, pubs, tick_stamp, q, cartesian, norm_ft, gripper)
             # print(raw_ft)
-
 
 
 

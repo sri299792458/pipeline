@@ -17,6 +17,11 @@ class UR:
             self.ips[name] = ip
         self.mode = {}
 
+    def gripper_enabled(self, name):
+        if isinstance(self.enable_grippers, dict):
+            return bool(self.enable_grippers.get(name, False))
+        return bool(self.enable_grippers)
+
     def zeroFtSensor(self, name):
         self.ur_control[name].zeroFtSensor()
 
@@ -162,7 +167,7 @@ class UR:
             if name not in self.ur_grippers:
                 self.ur_grippers[name] = RobotiqGripper()
                 self.ur_grippers[name].connect(self.ips[name], 63352)
-                if self.enable_grippers:
+                if self.gripper_enabled(name):
                     self.ur_grippers[name].activate()
                     print(f"Connected to {name} gripper")
                 self.ur_grippers[name].set_enable(True)

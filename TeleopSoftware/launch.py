@@ -40,14 +40,17 @@ class GUI(Node):
         thunder_ip = "10.33.55.89"
         lightning_ip = "10.33.55.90"
 
-        arms = ["Thunder", "Lightning"]
-        ips = [thunder_ip, lightning_ip]
+        arms = ["Lightning", "Thunder"]
+        ips = [lightning_ip, thunder_ip]
         enable_control = {
-            # "Thunder": False,
             "Thunder": True,
             "Lightning": True,
         }
-        URs = UR(arms, ips, enable_grippers=True)
+        enable_gripper = {
+            "Thunder": True,
+            "Lightning": True,
+        }
+        URs = UR(arms, ips, enable_grippers=enable_gripper)
         optimize = UR5eForceControl(URs)
 
         pubs = dict()
@@ -69,11 +72,17 @@ class GUI(Node):
             pubs[arm+"_q"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_q", 10)
             pubs[arm+"_cartesian"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_cartesian_eef", 10)
             pubs[arm+"_speed"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_speed", 10)
-            pubs[arm+"_gripper"] = self.create_publisher(Float32, f"/{arm.lower()}_gripper", 10)
+            pubs[arm+"_gripper"] = self.create_publisher(Int32, f"/{arm.lower()}_gripper", 10)
             pubs[arm+"_enable"] = self.create_publisher(Bool, f"/{arm.lower()}_enable", 10)
             pubs[arm+"_safety_mode"] = self.create_publisher(Int32, f"/{arm.lower()}_safety_mode", 10)
             # # Force offset
             pubs[arm+"_force_offset"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_force_offset", 10)
+            pubs[arm.lower()+"_spark_command_angles"] = self.create_publisher(
+                Float32MultiArray, f"/{arm.lower()}_spark_command_angles", 10
+            )
+            pubs[arm.lower()+"_spark_command_gripper"] = self.create_publisher(
+                Float32, f"/{arm.lower()}_spark_command_gripper", 10
+            )
             pubs[arm+"_robot_joint_state"] = self.create_publisher(
                 JointState, f"/spark/{arm.lower()}/robot/joint_state", 10
             )
@@ -94,20 +103,32 @@ class GUI(Node):
             )
 
         colors = ["light blue", "light green"]
-        spark_homes = [(+0.000, -1.15192, -2.26893, 0.244346, +1.5708, +0.000), # Thunder Not used
-                (+0.000, -2.1293, 2.44346, -3.49066, -1.5708, +0.000)] # Lightning Not used
-        # ur_homes = [(-180, -130, 130, -180, -90, 0), # Thunder
-        #            (-180, -50, -130, -0, 90, +0)] # Lightning
+        ur_homes_dict = {
+            "Thunder": (
+                3.181920289993286,
+                -0.16607506573200226,
+                0.2841489911079407,
+                -1.0576382875442505,
+                -0.10265476256608963,
+                -0.7487161755561829,
+            ),
+            "Lightning": (
+                -3.092430591583252,
+                -2.535433530807495,
+                -1.2771631479263306,
+                -1.0458279848098755,
+                -0.0320628322660923,
+                -0.025522056967020035,
+            ),
+        }
+        ur_homes = [ur_homes_dict["Lightning"], ur_homes_dict["Thunder"]]
 
-        ur_homes = [(-180, -130, 130, -180, -90, -90), # Thunder
-                    (-180, -50, -130, -0, 90, +90)] # Lightning
-        
         col = {}
         homes = {}
-        for name, color, ur_home, spark_home in zip(arms, colors, ur_homes, spark_homes):
+        for name, color, ur_home in zip(arms, colors, ur_homes):
             col[name] = color
-            homes[name] = [angle/180*3.14159 for angle in ur_home]
-            homes[name+"_spark"] = spark_home # Not used
+            homes[name] = [float(angle) for angle in ur_home]
+            homes[name+"_spark"] = list(homes[name])  # Not used
 
         root = tk.Tk()
         root.title("Teleop Control")

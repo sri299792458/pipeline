@@ -123,6 +123,16 @@
 - Added `data_pipeline/gelsight_bridge.py` as a ROS 2 node that publishes `/spark/tactile/{left,right}/color/image_raw` from the official `gsrobotics` camera path using host ROS time immediately after frame capture.
 - Added `data_pipeline/launch/gelsight_contract.launch.py` to start left and right GelSight bridge processes with explicit device-path or device-index arguments.
 
+### Teleop hardware-tuning sync pass
+
+- Compared the current `TeleopSoftware/` runtime against the hardware-tested `SPARK-Remote-data_collection` branch and ported the teleop-side calibration deltas without removing the newer stamped `/spark/...` publishers.
+- Updated arm ordering in `TeleopSoftware/launch.py` to `Lightning` then `Thunder`, matching the tested branch and the published fixed-arm ordering already used by the data pipeline profile.
+- Replaced the generic degree-based UR home positions with the measured radian home values from the tested branch.
+- Added the legacy `/{arm}_spark_command_angles` and `/{arm}_spark_command_gripper` publishers back into `TeleopSoftware/launch.py` so the legacy raw topic surface matches the tested hardware branch alongside the stable stamped topics.
+- Ported the tested Spark-to-UR offset tables, trigger calibration ranges, and Lightning visualization transform into `TeleopSoftware/launch_helpers/run.py`.
+- Updated `TeleopSoftware/UR/arms.py` so `enable_grippers` can be either a boolean or a per-arm map, matching the tested branch structure without breaking the existing call sites.
+- Intentionally left the `lightning_spark_enable` topic-selection bug unchanged for now because it exists in the tested branch as well; this sync pass is preserving calibrated behavior rather than changing control semantics.
+
 ### RealSense timestamp caveat
 
 - Reading the official `realsense-ros` source showed that its published image stamps are derived from RealSense frame timestamps rather than the exact `host_capture_time_v1` rule declared in the V1 topic contract.

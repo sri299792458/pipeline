@@ -92,22 +92,22 @@ The existing runtime currently publishes or can be made to publish the following
 | `/lightning_cartesian_eef` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | `/spark/lightning/robot/eef_pose` |
 | `/lightning_ft` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | `/spark/lightning/robot/tcp_wrench` |
 | `/lightning_raw_ft_raw` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | optional raw debug topic |
-| `/lightning_gripper` | `std_msgs/msg/Float32` | exists in `main`, unstamped | `/spark/lightning/robot/gripper_state` |
+| `/lightning_gripper` | `std_msgs/msg/Int32` | exists in current hardware-tuned runtime, unstamped | `/spark/lightning/robot/gripper_state` |
 | `/lightning_enable` | `std_msgs/msg/Bool` | exists in `main`, unstamped | optional raw debug topic |
 | `/lightning_safety_mode` | `std_msgs/msg/Int32` | exists in `main`, unstamped | optional raw debug topic |
 | `/lightning_force_offset` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | optional raw debug topic |
-| `/lightning_spark_command_angles` | `std_msgs/msg/Float32MultiArray` | exists only in `data_collection` branch | `/spark/lightning/teleop/cmd_joint_state` |
-| `/lightning_spark_command_gripper` | `std_msgs/msg/Float32` | exists only in `data_collection` branch | `/spark/lightning/teleop/cmd_gripper_state` |
+| `/lightning_spark_command_angles` | `std_msgs/msg/Float32MultiArray` | exists in current hardware-tuned runtime, unstamped | `/spark/lightning/teleop/cmd_joint_state` |
+| `/lightning_spark_command_gripper` | `std_msgs/msg/Float32` | exists in current hardware-tuned runtime, unstamped | `/spark/lightning/teleop/cmd_gripper_state` |
 | `/thunder_q` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | `/spark/thunder/robot/joint_state` |
 | `/thunder_cartesian_eef` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | `/spark/thunder/robot/eef_pose` |
 | `/thunder_ft` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | `/spark/thunder/robot/tcp_wrench` |
 | `/thunder_raw_ft_raw` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | optional raw debug topic |
-| `/thunder_gripper` | `std_msgs/msg/Float32` | exists in `main`, unstamped | `/spark/thunder/robot/gripper_state` |
+| `/thunder_gripper` | `std_msgs/msg/Int32` | exists in current hardware-tuned runtime, unstamped | `/spark/thunder/robot/gripper_state` |
 | `/thunder_enable` | `std_msgs/msg/Bool` | exists in `main`, unstamped | optional raw debug topic |
 | `/thunder_safety_mode` | `std_msgs/msg/Int32` | exists in `main`, unstamped | optional raw debug topic |
 | `/thunder_force_offset` | `std_msgs/msg/Float32MultiArray` | exists in `main`, unstamped | optional raw debug topic |
-| `/thunder_spark_command_angles` | `std_msgs/msg/Float32MultiArray` | exists only in `data_collection` branch | `/spark/thunder/teleop/cmd_joint_state` |
-| `/thunder_spark_command_gripper` | `std_msgs/msg/Float32` | exists only in `data_collection` branch | `/spark/thunder/teleop/cmd_gripper_state` |
+| `/thunder_spark_command_angles` | `std_msgs/msg/Float32MultiArray` | exists in current hardware-tuned runtime, unstamped | `/spark/thunder/teleop/cmd_joint_state` |
+| `/thunder_spark_command_gripper` | `std_msgs/msg/Float32` | exists in current hardware-tuned runtime, unstamped | `/spark/thunder/teleop/cmd_gripper_state` |
 
 
 ## Bridge Rule
