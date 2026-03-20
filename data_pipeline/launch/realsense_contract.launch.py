@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, TimerAction
 from launch.substitutions import LaunchConfiguration
 
 
@@ -59,10 +59,18 @@ def _launch_setup(context):
     wrist_serial = LaunchConfiguration("wrist_serial_no").perform(context)
     scene_serial = LaunchConfiguration("scene_serial_no").perform(context)
     actions = []
-    if not _is_unset(wrist_serial):
+    stagger_sec = float(LaunchConfiguration("camera_start_stagger_sec").perform(context))
+    wrist_enabled = not _is_unset(wrist_serial)
+    scene_enabled = not _is_unset(scene_serial)
+
+    if wrist_enabled:
         actions.append(_camera_process(context, "wrist", "wrist_serial_no"))
-    if not _is_unset(scene_serial):
-        actions.append(_camera_process(context, "scene", "scene_serial_no"))
+    if scene_enabled:
+        scene_process = _camera_process(context, "scene", "scene_serial_no")
+        if wrist_enabled and stagger_sec > 0.0:
+            actions.append(TimerAction(period=stagger_sec, actions=[scene_process]))
+        else:
+            actions.append(scene_process)
     if not actions:
         raise RuntimeError("Provide at least one of wrist_serial_no or scene_serial_no.")
     return actions
@@ -79,5 +87,6 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("scene_depth_profile", default_value="640,480,30"),
         DeclareLaunchArgument("enable_depth", default_value="true"),
         DeclareLaunchArgument("wait_for_frames_timeout_ms", default_value="5000"),
+        DeclareLaunchArgument("camera_start_stagger_sec", default_value="2.0"),
     ]
     return LaunchDescription(arguments + [OpaqueFunction(function=_launch_setup)])

@@ -3,6 +3,10 @@
 #include <ArduinoJson.h>
 #include <pins_arduino.h>
 
+#ifndef SPARK_DEVICE_ID
+#define SPARK_DEVICE_ID "lightning"
+#endif
+
 StaticJsonDocument<1024> doc;
 JsonArray encoder_values;
 JsonArray encoder_status;
@@ -43,7 +47,7 @@ void loop() {
     encoder_values[i] = encoders[i].readAngleRaw();
   }
   doc["enable_switch"] = !digitalRead(4);
-  doc["ID"] = "lightning";
+  doc["ID"] = SPARK_DEVICE_ID;
   Serial.print(doc.as<String>() + (char)0);
   delay(30);
 }

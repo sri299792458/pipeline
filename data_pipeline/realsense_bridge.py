@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import threading
+import time
 from dataclasses import dataclass
 
 import pyrealsense2 as rs
@@ -55,13 +56,26 @@ def serial_aliases(value: str) -> set[str]:
     return aliases
 
 
+def query_devices_with_retry(*, max_attempts: int = 6, delay_s: float = 1.0) -> list[rs.device]:
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return list(rs.context().query_devices())
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt == max_attempts:
+                break
+            time.sleep(delay_s)
+    raise RuntimeError(f"Failed to enumerate RealSense devices after {max_attempts} attempts: {last_error}")
+
+
 def resolve_serial(requested_serial: str) -> str:
     requested_aliases = serial_aliases(requested_serial)
-    context = rs.context()
     exact_matches: list[str] = []
     alias_matches: list[str] = []
+    devices = query_devices_with_retry()
 
-    for device in context.query_devices():
+    for device in devices:
         serial = get_camera_info(device, rs.camera_info.serial_number)
         if not serial:
             continue
@@ -84,7 +98,7 @@ def resolve_serial(requested_serial: str) -> str:
     available = sorted(
         filter(
             None,
-            (get_camera_info(device, rs.camera_info.serial_number) for device in context.query_devices()),
+            (get_camera_info(device, rs.camera_info.serial_number) for device in devices),
         )
     )
     raise RuntimeError(f"Requested RealSense serial {requested_serial!r} not found. Available serials: {available}")
@@ -142,7 +156,7 @@ class RealSenseContractBridge(Node):
                 depth_profile.fps,
             )
 
-        self._pipeline_profile = self._pipeline.start(config)
+        self._pipeline_profile = self._start_pipeline_with_retry(config)
         device = self._pipeline_profile.get_device()
         self.set_parameters(
             [
@@ -186,6 +200,25 @@ class RealSenseContractBridge(Node):
     @staticmethod
     def _format_profile(profile: StreamProfile) -> str:
         return f"{profile.width},{profile.height},{profile.fps}"
+
+    def _start_pipeline_with_retry(self, config: rs.config, *, max_attempts: int = 5, delay_s: float = 1.5):
+        last_error: Exception | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return self._pipeline.start(config)
+            except RuntimeError as exc:
+                last_error = exc
+                if attempt == max_attempts:
+                    break
+                self.get_logger().warning(
+                    f"pipeline.start failed on attempt {attempt}/{max_attempts}: {exc}; retrying in {delay_s:.1f}s"
+                )
+                try:
+                    self._pipeline.stop()
+                except Exception:
+                    pass
+                time.sleep(delay_s)
+        raise RuntimeError(f"Failed to start RealSense pipeline for serial={self.serial_no}: {last_error}")
 
     def _capture_loop(self) -> None:
         while rclpy.ok() and not self._stop_event.is_set():

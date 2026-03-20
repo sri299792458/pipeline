@@ -624,3 +624,19 @@
   - `data_pipeline/README.md`
   - `data_pipeline/docs/hardware-bringup.md`
 - Purpose is operational clarity during bring-up, not to replace the more general hardware guide.
+
+### SPARK identity and launcher fixes
+
+- Found a real long-term SPARK identity problem:
+  - `Hardware/Firmware/SparkSerialTX/src/main.cpp` in both this repo and `SPARK-Remote` hardcoded `doc["ID"] = "lightning"`.
+  - That means the repo state itself does not encode distinct Lightning vs Thunder firmware identities.
+- Added a proper firmware-level fix:
+  - `SPARK_DEVICE_ID` compile-time macro in `SparkSerialTX`
+  - PlatformIO envs for:
+    - `esp32doit-devkit-v1` -> Lightning
+    - `esp32doit-devkit-v1-thunder` -> Thunder
+- Added a launcher-side guard in `TeleopSoftware/launch_devs.py`:
+  - probes each Spark device ID before spawning child nodes
+  - refuses to launch duplicate firmware IDs silently
+  - prints an explicit reflash message instead of allowing GUI flicker/corruption
+- Also fixed `launch_devs.py` to spawn child processes with `sys.executable` instead of plain `python3`, so it stays on the intended interpreter.
