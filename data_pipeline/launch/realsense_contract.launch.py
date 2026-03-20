@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from launch import LaunchDescription
@@ -8,6 +9,7 @@ from launch.substitutions import LaunchConfiguration
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 BRIDGE_SCRIPT = REPO_ROOT / "data_pipeline" / "realsense_bridge.py"
+LOCAL_LIBREALSENSE_RELEASE = REPO_ROOT / "build" / "librealsense-v2.54.2" / "Release"
 
 
 def _is_unset(value: str) -> bool:
@@ -16,6 +18,14 @@ def _is_unset(value: str) -> bool:
 
 def _camera_process(context, camera_name: str, serial_key: str) -> ExecuteProcess:
     camera_namespace = "/" + LaunchConfiguration("camera_namespace").perform(context).strip("/")
+    pythonpath = str(LOCAL_LIBREALSENSE_RELEASE)
+    existing_pythonpath = os.environ.get("PYTHONPATH", "")
+    if existing_pythonpath:
+        pythonpath = f"{pythonpath}:{existing_pythonpath}"
+    ld_library_path = str(LOCAL_LIBREALSENSE_RELEASE)
+    existing_ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
+    if existing_ld_library_path:
+        ld_library_path = f"{ld_library_path}:{existing_ld_library_path}"
     return ExecuteProcess(
         cmd=[
             str(VENV_PYTHON),
@@ -37,7 +47,11 @@ def _camera_process(context, camera_name: str, serial_key: str) -> ExecuteProces
         ],
         output="screen",
         emulate_tty=True,
-        additional_env={"PYTHONUNBUFFERED": "1"},
+        additional_env={
+            "PYTHONUNBUFFERED": "1",
+            "PYTHONPATH": pythonpath,
+            "LD_LIBRARY_PATH": ld_library_path,
+        },
     )
 
 

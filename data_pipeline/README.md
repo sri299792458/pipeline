@@ -43,7 +43,7 @@ source .venv/bin/activate
 
 ## Launching The Sensor Contract
 
-The current intended RealSense path is the direct SDK bridge:
+The current intended RealSense path is the direct SDK bridge, backed by a local official `librealsense v2.54.2` build:
 
 ```bash
 source /opt/ros/jazzy/setup.bash

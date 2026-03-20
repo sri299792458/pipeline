@@ -39,6 +39,11 @@ Record the two serials you want to use as:
 - `WRIST_SERIAL`
 - `SCENE_SERIAL`
 
+Note:
+
+- the local `librealsense v2.54.2` runtime may report the L515 serial in shortened lowercase hex form such as `f1380660`
+- the bridge now normalizes the raw USB serial and the runtime serial, so either `00000000F1380660` or `f1380660` is acceptable at launch
+
 ### GelSight device paths
 
 List V4L camera symlinks and device names:
@@ -134,6 +139,7 @@ Expected topics:
 - `/spark/cameras/scene/depth/image_rect_raw`
 
 This bridge uses `pyrealsense2` directly and stamps both color and depth images with host ROS time immediately after `wait_for_frames()` returns.
+The setup script builds and validates the local official `librealsense v2.54.2` runtime that is currently required for L515 support on this host.
 
 
 ## 6. Start The GelSight Contract Publishers

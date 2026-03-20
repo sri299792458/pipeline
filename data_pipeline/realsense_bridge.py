@@ -42,6 +42,54 @@ def get_camera_info(device: rs.device, field: rs.camera_info) -> str:
         return ""
 
 
+def normalize_serial(value: str) -> str:
+    return value.strip().strip("'").strip('"').lower()
+
+
+def serial_aliases(value: str) -> set[str]:
+    normalized = normalize_serial(value)
+    aliases = {normalized}
+    trimmed = normalized.lstrip("0")
+    if trimmed:
+        aliases.add(trimmed)
+    return aliases
+
+
+def resolve_serial(requested_serial: str) -> str:
+    requested_aliases = serial_aliases(requested_serial)
+    context = rs.context()
+    exact_matches: list[str] = []
+    alias_matches: list[str] = []
+
+    for device in context.query_devices():
+        serial = get_camera_info(device, rs.camera_info.serial_number)
+        if not serial:
+            continue
+        normalized_serial = normalize_serial(serial)
+        if normalized_serial == normalize_serial(requested_serial):
+            exact_matches.append(serial)
+            continue
+        if serial_aliases(serial) & requested_aliases:
+            alias_matches.append(serial)
+
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+    if len(exact_matches) > 1:
+        raise RuntimeError(f"Serial {requested_serial!r} matched multiple exact devices: {exact_matches}")
+    if len(alias_matches) == 1:
+        return alias_matches[0]
+    if len(alias_matches) > 1:
+        raise RuntimeError(f"Serial {requested_serial!r} matched multiple alias devices: {alias_matches}")
+
+    available = sorted(
+        filter(
+            None,
+            (get_camera_info(device, rs.camera_info.serial_number) for device in context.query_devices()),
+        )
+    )
+    raise RuntimeError(f"Requested RealSense serial {requested_serial!r} not found. Available serials: {available}")
+
+
 class RealSenseContractBridge(Node):
     def __init__(
         self,
@@ -56,7 +104,7 @@ class RealSenseContractBridge(Node):
     ) -> None:
         super().__init__(camera_name, namespace=camera_namespace)
 
-        self.serial_no = serial_no
+        self.serial_no = resolve_serial(serial_no)
         self.color_profile = color_profile
         self.depth_profile = depth_profile
         self.enable_depth = enable_depth
@@ -65,7 +113,7 @@ class RealSenseContractBridge(Node):
         self._capture_thread: threading.Thread | None = None
         self._warned_missing_frame = False
 
-        self.declare_parameter("serial_no", serial_no)
+        self.declare_parameter("serial_no", self.serial_no)
         self.declare_parameter("device_type", "")
         self.declare_parameter("firmware_version", "")
         self.declare_parameter("color_profile", self._format_profile(color_profile))
@@ -77,7 +125,7 @@ class RealSenseContractBridge(Node):
 
         self._pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_device(serial_no)
+        config.enable_device(self.serial_no)
         config.enable_stream(
             rs.stream.color,
             color_profile.width,
@@ -114,7 +162,7 @@ class RealSenseContractBridge(Node):
         self.get_logger().info(
             "Started RealSense bridge for serial=%s model=%s color=%s depth=%s enable_depth=%s"
             % (
-                serial_no,
+                self.serial_no,
                 get_camera_info(device, rs.camera_info.name) or "<unknown>",
                 self._format_profile(color_profile),
                 self._format_profile(depth_profile),

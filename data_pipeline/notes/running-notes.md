@@ -416,3 +416,23 @@
   - published `/spark/cameras/wrist/depth/image_rect_raw`
   - `ros2 param dump /spark/cameras/wrist` exposed serial/model/firmware/profile
   - `ros2 topic hz /spark/cameras/wrist/color/image_raw` stabilized at about 30 Hz
+- Differential hardware check after adding a D455 showed:
+  - D405 and D455 enumerate in the installed `pyrealsense2` / `rs-enumerate-devices`
+  - L515 does not
+  - the failure follows the L515 across ports, so it is not a hub-port issue
+- Built an isolated official `librealsense v2.54.2` runtime with Python bindings against `.venv`, using `FORCE_RSUSB_BACKEND=ON`.
+- Validated that the locally built `pyrealsense2` from `build/librealsense-v2.54.2/Release` enumerates:
+  - D455 `213622251272`
+  - D405 `130322273305`
+  - L515 `f1380660`
+- Updated the RealSense setup/launch path so the bridge now uses that local `v2.54.2` runtime instead of the installed `2.56.x` module.
+- Added serial normalization in the bridge so the physical USB serial and the SDK-reported short L515 serial both resolve to the same device.
+- Live validation of the final target pair passed:
+  - D405 wrist `130322273305`
+  - L515 scene `f1380660`
+  - both published their contract topics at roughly 30 Hz through the local `v2.54.2` runtime
+- Three-camera stress check also passed when the D455 was launched on a temporary non-contract namespace:
+  - D405 on `/spark/cameras/wrist/...`
+  - L515 on `/spark/cameras/scene/...`
+  - D455 on `/spark/cameras_aux/extra/...`
+  - all three color streams produced stamped `sensor_msgs/Image` samples concurrently
