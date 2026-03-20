@@ -389,3 +389,30 @@
   - and the currently installed system `librealsense2` exports embedded FastDDS symbols, which is the leading conflict hypothesis.
 - The ROS-packaged `realsense2_camera` node became usable for the D405 after the manual UVC bind, but the current L515 path is still not clean in that wrapper on this host.
 - Added `data_pipeline/v4l_camera_bridge.py` and `data_pipeline/launch/realsense_v4l_contract.launch.py` as the smallest working RGB-only fallback so hardware recording can proceed for the required published color streams while the SDK/depth path is still unresolved.
+
+### Direct SDK RealSense pivot
+
+- Revisited the legacy Teleop camera path and confirmed it uses `pyrealsense2` directly rather than the ROS `realsense2_camera` wrapper.
+- Based on that and the current upstream L500/L515 support gap, switched the intended V1 RealSense runtime back to a single direct-SDK stack for all RealSense cameras.
+- Added `data_pipeline/realsense_bridge.py` as a small ROS2 publisher that:
+  - connects to one device by serial using `pyrealsense2`,
+  - publishes `/spark/cameras/<name>/color/image_raw`,
+  - publishes `/spark/cameras/<name>/depth/image_rect_raw` when enabled,
+  - stamps both streams with host ROS time immediately after `wait_for_frames()` returns,
+  - and exposes serial/model/firmware/profile parameters so the episode manifest can still infer camera metadata.
+- Updated `data_pipeline/launch/realsense_contract.launch.py` to launch one bridge process per configured camera from `.venv/bin/python`.
+- Updated `data_pipeline/setup_realsense_contract_runtime.sh` to validate the direct `.venv` runtime instead of checking for `realsense2_camera`.
+- Added `pyrealsense2==2.56.5.9235` to the shared `.venv` bootstrap so the RealSense publisher and offline converter use the same ROS-friendly Python environment.
+- Removed the RealSense metadata topics from the active recording profile because the direct bridge now produces the correct V1 header stamps directly.
+- Kept converter support for older bags that already contain official RealSense metadata topics.
+- Current direct-SDK discovery state on this host:
+  - `pyrealsense2` in `.venv` sees the D405,
+  - the L515 is visible to `lsusb` and `/dev/v4l/by-id`,
+  - but `pyrealsense2` still does not enumerate the L515 in the current session,
+  - so full two-camera hardware validation still depends on the live L515 state at bring-up time.
+- Live D405 validation of the new bridge passed:
+  - `ros2 launch data_pipeline/launch/realsense_contract.launch.py wrist_serial_no:=130322273305`
+  - published `/spark/cameras/wrist/color/image_raw`
+  - published `/spark/cameras/wrist/depth/image_rect_raw`
+  - `ros2 param dump /spark/cameras/wrist` exposed serial/model/firmware/profile
+  - `ros2 topic hz /spark/cameras/wrist/color/image_raw` stabilized at about 30 Hz

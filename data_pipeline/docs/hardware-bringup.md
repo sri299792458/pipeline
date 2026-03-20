@@ -11,8 +11,8 @@ Run these once from the repository root:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-./data_pipeline/setup_realsense_contract_runtime.sh
 ./data_pipeline/setup_converter_env.sh
+./data_pipeline/setup_realsense_contract_runtime.sh
 ```
 
 
@@ -129,19 +129,11 @@ Replace the placeholders with the serials from step 1.
 Expected topics:
 
 - `/spark/cameras/wrist/color/image_raw`
-- `/spark/cameras/wrist/color/metadata`
 - `/spark/cameras/wrist/depth/image_rect_raw`
-- `/spark/cameras/wrist/depth/metadata`
 - `/spark/cameras/scene/color/image_raw`
-- `/spark/cameras/scene/color/metadata`
 - `/spark/cameras/scene/depth/image_rect_raw`
-- `/spark/cameras/scene/depth/metadata`
 
-Important limitation for the current host:
-
-- the stock upstream ROS node currently enumerates the D405 correctly
-- the L515 scene camera is still not being discovered by the stock upstream ROS node here
-- the converter now records the official metadata topics and prefers `time_of_arrival` from those topics for RealSense alignment
+This bridge uses `pyrealsense2` directly and stamps both color and depth images with host ROS time immediately after `wait_for_frames()` returns.
 
 
 ## 6. Start The GelSight Contract Publishers
@@ -188,12 +180,6 @@ ros2 topic hz /spark/cameras/wrist/color/image_raw
 ros2 topic hz /spark/cameras/scene/color/image_raw
 ros2 topic hz /spark/lightning/robot/joint_state
 ros2 topic hz /spark/thunder/robot/joint_state
-```
-
-Also verify that the official metadata topics are present:
-
-```bash
-ros2 topic list | rg '^/spark/cameras/.*/metadata$'
 ```
 
 If tactile is enabled, also check:
@@ -327,6 +313,6 @@ Common failure boundaries:
 - RealSense failures with the official node usually mean:
   - the wrong serial number was used,
   - the upstream wrapper is not discovering that camera model on this host, or
-  - the node is up but not publishing the expected `/metadata` topics
+  - the node is up but not publishing the expected image topics
 - GelSight launch failures usually mean the wrong `/dev/v4l/by-id/...` path or camera access issues
 - converter failures after a good bag usually point to timestamp/rate/alignment issues that should be investigated from the saved diagnostics

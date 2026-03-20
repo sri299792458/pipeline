@@ -2,6 +2,15 @@
 
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV_PYTHON="${ROOT_DIR}/.venv/bin/python"
+
+if [[ ! -x "${VENV_PYTHON}" ]]; then
+  echo "Missing ${VENV_PYTHON}" >&2
+  echo "Run ./data_pipeline/setup_converter_env.sh first." >&2
+  exit 1
+fi
+
 set +u
 source /opt/ros/jazzy/setup.bash
 set -u
@@ -11,16 +20,22 @@ if ! command -v ros2 >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! ros2 pkg prefix realsense2_camera >/dev/null 2>&1; then
-  echo "realsense2_camera is not installed in the system ROS environment" >&2
-  echo "Install: sudo apt install ros-jazzy-realsense2-camera ros-jazzy-realsense2-camera-msgs" >&2
-  exit 1
-fi
+"${VENV_PYTHON}" - <<'PY'
+import pyrealsense2 as rs
+import rclpy
 
-if ! command -v rs-enumerate-devices >/dev/null 2>&1; then
-  echo "rs-enumerate-devices was not found in PATH" >&2
-  exit 1
-fi
+devices = []
+for device in rs.context().query_devices():
+    try:
+        name = device.get_info(rs.camera_info.name)
+    except Exception:
+        name = "<unknown>"
+    try:
+        serial = device.get_info(rs.camera_info.serial_number)
+    except Exception:
+        serial = "<unknown>"
+    devices.append((name, serial))
 
-echo "Using the system-installed realsense2_camera runtime from /opt/ros/jazzy."
-echo "No local build step is required for the current pipeline path."
+print("Direct RealSense runtime ready in .venv")
+print(f"Enumerated devices: {devices}")
+PY

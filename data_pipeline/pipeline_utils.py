@@ -172,8 +172,14 @@ def infer_sensor_metadata(
             sensor["serial_number"] = serial.lstrip("_")
         if "device_type" in params and params["device_type"] not in {"", "''", '""'}:
             sensor["model"] = params["device_type"]
+        if "firmware_version" in params and params["firmware_version"] not in {"", "''", '""'}:
+            sensor["firmware_version"] = params["firmware_version"]
 
-        color_profile = params.get("rgb_camera.color_profile") or params.get("depth_module.color_profile")
+        color_profile = (
+            params.get("color_profile")
+            or params.get("rgb_camera.color_profile")
+            or params.get("depth_module.color_profile")
+        )
         if isinstance(color_profile, str):
             profile_tokens = color_profile.split(",")
             if len(profile_tokens) == 3:

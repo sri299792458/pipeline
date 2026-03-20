@@ -18,10 +18,14 @@ import numpy as np
 import rosbag2_py
 import yaml
 from geometry_msgs.msg import PoseStamped, WrenchStamped
-from realsense2_camera_msgs.msg import Metadata
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from sensor_msgs.msg import Image, JointState
+
+try:
+    from realsense2_camera_msgs.msg import Metadata
+except ImportError:
+    Metadata = None
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -166,7 +170,7 @@ def parse_message(topic: str, msg: Any, bag_timestamp_ns: int, parse_value: bool
     if not parse_value:
         return ts_ns, None
 
-    if isinstance(msg, Metadata):
+    if Metadata is not None and isinstance(msg, Metadata):
         payload = json.loads(msg.json_data)
         return ts_ns, payload
 

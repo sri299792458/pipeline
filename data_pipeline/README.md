@@ -15,15 +15,15 @@ The non-hardware V1 path is in place:
 - raw episode recording as one rosbag per demo
 - raw-to-LeRobot conversion for the `multisensor_20hz` profile
 - dummy-data eval path
-- official `realsense2_camera` integration with metadata-aware conversion
+- direct `pyrealsense2` ROS2 publisher for RealSense RGB+D topics
 - GelSight ROS2 bridge process for the declared tactile topics
 
-The remaining work is live hardware validation, especially the current L515 scene-camera limitation in the stock ROS wrapper on this host.
+The remaining work is live hardware validation with the actual full sensor set attached.
 
 
 ## Runtime Split
 
-Live ROS capture should use system ROS Jazzy and `/usr/bin/python3`.
+Live ROS capture should use system ROS Jazzy. Most direct scripts use `/usr/bin/python3`; the RealSense launch wrapper starts `.venv/bin/python` so it can use both `rclpy` and `pyrealsense2` from one interpreter.
 
 Offline conversion and LeRobot export should use the local `.venv` created by:
 
@@ -43,7 +43,7 @@ source .venv/bin/activate
 
 ## Launching The Sensor Contract
 
-The current intended RealSense path is the official ROS node:
+The current intended RealSense path is the direct SDK bridge:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -53,9 +53,9 @@ ros2 launch data_pipeline/launch/realsense_contract.launch.py \
   scene_serial_no:=<SCENE_SERIAL>
 ```
 
-This wrapper records the official RealSense metadata topics and the converter prefers `time_of_arrival` from those topics for camera alignment.
+This bridge stamps `Image.header.stamp` with host ROS time immediately after `wait_for_frames()` returns, which matches the V1 topic contract directly. Older bags that include official RealSense metadata topics are still supported by the converter.
 
-See [docs/hardware-bringup.md](./docs/hardware-bringup.md) for the exact current sequence and the current L515 limitation on this machine.
+See [docs/hardware-bringup.md](./docs/hardware-bringup.md) for the exact bring-up sequence.
 
 To launch the GelSight contract publishers:
 

@@ -127,11 +127,7 @@ published:
 
 raw_only_topics:
   - /spark/cameras/wrist/depth/image_rect_raw
-  - /spark/cameras/wrist/color/metadata
-  - /spark/cameras/wrist/depth/metadata
   - /spark/cameras/scene/depth/image_rect_raw
-  - /spark/cameras/scene/color/metadata
-  - /spark/cameras/scene/depth/metadata
   - /spark/tactile/left/depth/image_raw
   - /spark/tactile/right/depth/image_raw
   - /spark/tactile/left/marker_offset
