@@ -2,6 +2,8 @@
 
 This is the step-by-step sequence for the first real capture run with the current V1 pipeline.
 
+For the current known-good Lightning-only command sequence on this machine, use [current-lightning-gelsight-runbook.md](./current-lightning-gelsight-runbook.md).
+
 Use separate terminals. For ROS-facing processes, prefer system ROS Jazzy and `/usr/bin/python3`, not Conda Python.
 
 

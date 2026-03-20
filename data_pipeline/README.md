@@ -4,7 +4,9 @@ This directory contains the V1 raw-capture and LeRobot conversion stack.
 
 The implementation contract lives in [V1_SPEC.md](./V1_SPEC.md). The running implementation log lives in [notes/running-notes.md](./notes/running-notes.md).
 
-For a concrete first real-data bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-bringup.md).
+For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-bringup.md).
+
+For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).
 
 
 ## Current Scope

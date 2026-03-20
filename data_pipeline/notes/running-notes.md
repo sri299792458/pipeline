@@ -611,3 +611,16 @@
 - Important operational note:
   - for this IDE/browser environment, `localhost:3000` is not the reliable access path
   - use the machine IP URL above instead
+
+### Machine-specific command runbook
+
+- Added a concrete machine-specific runbook at `data_pipeline/docs/current-lightning-gelsight-runbook.md`.
+- Scope of that runbook is intentionally narrow:
+  - `lightning` only
+  - D405 wrist + D455 scene
+  - one left GelSight
+  - raw record -> convert -> browser visualizer
+- Linked that runbook from:
+  - `data_pipeline/README.md`
+  - `data_pipeline/docs/hardware-bringup.md`
+- Purpose is operational clarity during bring-up, not to replace the more general hardware guide.
