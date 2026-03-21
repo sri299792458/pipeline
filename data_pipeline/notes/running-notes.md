@@ -1303,3 +1303,29 @@
 - Result:
   - the Qt app can now be terminated from the terminal with `Ctrl+C`
   - backend cleanup still goes through the normal window/application shutdown path
+
+### Qt frontend reset to v1 composition
+
+- Backed out the experimental parallel `v2` frontend after reviewing the composition more critically.
+- Reworked the main `data_pipeline/operator_console_qt.py` instead of introducing more parallel UIs.
+- The revised direction keeps the original three-column hierarchy:
+  - left:
+    - `Preset & Task`
+    - `Sensor Inputs`
+    - `Session Actions`
+    - `Latest Artifacts`
+  - middle:
+    - full-height `Subsystem Health`
+  - right:
+    - `Selected Process`
+    - `Process Logs`
+    - `Action Output`
+- Visual changes stayed frontend-only:
+  - calmer header band
+  - compact semantic status chips on cards instead of showing raw color words
+  - neutral cards with stronger typography and less colored chrome
+  - clearer separation of task setup versus sensor inputs
+- Validation:
+  - `python3 -m py_compile data_pipeline/operator_console_qt.py`
+  - `QT_QPA_PLATFORM=offscreen timeout 5s python data_pipeline/operator_console_qt.py`
+  - app starts and stays up for the smoke window with only the expected offscreen Qt warning

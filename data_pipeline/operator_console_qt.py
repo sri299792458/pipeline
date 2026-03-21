@@ -52,7 +52,35 @@ STATUS_STYLES = {
     "yellow": "background:#fff3c4;color:#5b4a06;border:1px solid #d8c670;",
     "red": "background:#f8d6d6;color:#5b1818;border:1px solid #d39b9b;",
     "off": "background:#eceff2;color:#495057;border:1px solid #cbd3db;",
+    "info": "background:#e7eef8;color:#29415f;border:1px solid #c3d3ea;",
 }
+
+
+def apply_chip_style(label: QLabel, tone: str) -> None:
+    label.setStyleSheet(
+        STATUS_STYLES.get(tone, STATUS_STYLES["off"]) + "border-radius:10px;padding:5px 10px;font-weight:600;"
+    )
+
+
+def card_status_text(status: str, summary: str) -> tuple[str, str]:
+    lowered = summary.lower()
+    if status == "green":
+        return "Healthy", "green"
+    if status == "red":
+        return "Failed", "red"
+    if status == "off":
+        return "Idle", "off"
+    if "starting" in lowered:
+        return "Starting", "yellow"
+    if "static" in lowered:
+        return "Static", "yellow"
+    if "ready" in lowered:
+        return "Ready", "yellow"
+    if "complete" in lowered:
+        return "Complete", "yellow"
+    if "running" in lowered:
+        return "Running", "yellow"
+    return "Attention", "yellow"
 
 
 class HealthCard(QFrame):
@@ -72,13 +100,17 @@ class HealthCard(QFrame):
         self.title_label.setObjectName("cardTitle")
         title_row.addWidget(self.title_label)
         title_row.addStretch(1)
+        self.status_chip = QLabel("Idle")
+        self.status_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_chip.setMinimumWidth(92)
+        apply_chip_style(self.status_chip, "off")
+        title_row.addWidget(self.status_chip)
         layout.addLayout(title_row)
 
         self.summary_label = QLabel("Unknown")
         self.summary_label.setWordWrap(True)
         self.summary_label.setObjectName("cardSummary")
-        self.summary_label.setMinimumHeight(34)
-        self.summary_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self.summary_label.setMinimumHeight(28)
         layout.addWidget(self.summary_label)
 
         self.details_label = QLabel("")
@@ -96,10 +128,10 @@ class HealthCard(QFrame):
         layout.addLayout(button_row)
 
     def set_status(self, status: str, summary: str, details: list[str]) -> None:
+        chip_text, chip_tone = card_status_text(status, summary)
+        self.status_chip.setText(chip_text)
+        apply_chip_style(self.status_chip, chip_tone)
         self.summary_label.setText(summary)
-        self.summary_label.setStyleSheet(
-            STATUS_STYLES.get(status, STATUS_STYLES["off"]) + "border-radius:10px;padding:8px 10px;"
-        )
         self.details_label.setText("\n".join(details) if details else "")
 
 
@@ -128,29 +160,40 @@ class OperatorConsoleQtWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(12, 12, 12, 12)
+        root_layout.setContentsMargins(14, 14, 14, 14)
         root_layout.setSpacing(12)
         self.setCentralWidget(central)
 
         header = QFrame()
+        header.setObjectName("headerBand")
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(6, 2, 6, 2)
+        header_layout.setContentsMargins(18, 16, 18, 16)
+        header_layout.setSpacing(16)
+
+        title_column = QVBoxLayout()
+        title_column.setSpacing(4)
         title = QLabel("Operator Console")
         title_font = QFont()
-        title_font.setPointSize(20)
+        title_font.setPointSize(21)
         title_font.setBold(True)
         title.setFont(title_font)
-        header_layout.addWidget(title)
-        header_layout.addStretch(1)
+        title.setObjectName("headerTitle")
+        subtitle = QLabel("Capture workflow and subsystem supervision")
+        subtitle.setObjectName("headerSubtitle")
+        title_column.addWidget(title)
+        title_column.addWidget(subtitle)
+        header_layout.addLayout(title_column, 1)
 
         state_column = QVBoxLayout()
-        state_column.setSpacing(2)
-        self.session_state_label = QLabel("State: idle")
-        self.session_state_label.setObjectName("headerState")
+        state_column.setSpacing(8)
+        self.session_state_label = QLabel("Session: idle")
         self.validation_state_label = QLabel("Validation: not_run")
-        self.validation_state_label.setObjectName("headerSubstate")
-        state_column.addWidget(self.session_state_label, alignment=Qt.AlignmentFlag.AlignRight)
-        state_column.addWidget(self.validation_state_label, alignment=Qt.AlignmentFlag.AlignRight)
+        self.session_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.validation_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        apply_chip_style(self.session_state_label, "off")
+        apply_chip_style(self.validation_state_label, "off")
+        state_column.addWidget(self.session_state_label)
+        state_column.addWidget(self.validation_state_label)
         header_layout.addLayout(state_column)
         root_layout.addWidget(header)
 
@@ -184,7 +227,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 0)
         splitter.setStretchFactor(2, 1)
-        splitter.setSizes([510, 480, 760])
+        splitter.setSizes([480, 560, 760])
 
     def _make_scroll_area(self, widget: QWidget) -> QScrollArea:
         scroll = QScrollArea()
@@ -195,12 +238,21 @@ class OperatorConsoleQtWindow(QMainWindow):
         return scroll
 
     def _build_form_panel(self) -> QWidget:
-        box = QGroupBox("Session")
-        layout = QVBoxLayout(box)
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        form = QFormLayout()
-        form.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._build_task_box())
+        layout.addWidget(self._build_sensor_box())
+        layout.addWidget(self._build_session_actions_box())
+        layout.addWidget(self._build_artifacts_box())
+        layout.addStretch(1)
+        return container
+
+    def _build_task_box(self) -> QWidget:
+        box = QGroupBox("Preset & Task")
+        form = QFormLayout(box)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
@@ -219,6 +271,25 @@ class OperatorConsoleQtWindow(QMainWindow):
         active_arms = QComboBox()
         active_arms.addItems(["lightning", "thunder", "lightning,thunder"])
         self.form_widgets["active_arms"] = active_arms
+
+        for label, key in [
+            ("Dataset ID", "dataset_id"),
+            ("Robot ID", "robot_id"),
+            ("Task Name", "task_name"),
+            ("Language", "language_instruction"),
+            ("Operator", "operator"),
+            ("Active Arms", "active_arms"),
+        ]:
+            form.addRow(label, self.form_widgets[key])
+        return box
+
+    def _build_sensor_box(self) -> QWidget:
+        box = QGroupBox("Sensor Inputs")
+        form = QFormLayout(box)
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+
         self.form_widgets["sensors_file"] = QLineEdit("data_pipeline/configs/sensors.local.yaml")
         self.form_widgets["wrist_serial_no"] = QLineEdit()
         self.form_widgets["scene_serial_no"] = QLineEdit()
@@ -228,12 +299,6 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.form_widgets["extra_topics"] = QLineEdit()
 
         for label, key in [
-            ("Dataset ID", "dataset_id"),
-            ("Robot ID", "robot_id"),
-            ("Task Name", "task_name"),
-            ("Language", "language_instruction"),
-            ("Operator", "operator"),
-            ("Active Arms", "active_arms"),
             ("Sensors File", "sensors_file"),
             ("Wrist Serial", "wrist_serial_no"),
             ("Scene Serial", "scene_serial_no"),
@@ -247,23 +312,24 @@ class OperatorConsoleQtWindow(QMainWindow):
         gelsight_checkbox = QCheckBox("Enable GelSight")
         self.form_widgets["gelsight_enabled"] = gelsight_checkbox
         form.addRow("", gelsight_checkbox)
+        return box
 
-        layout.addLayout(form)
-
-        button_grid = QGridLayout()
-        button_grid.setContentsMargins(0, 0, 0, 0)
-        button_grid.setSpacing(8)
+    def _build_session_actions_box(self) -> QWidget:
+        box = QGroupBox("Session Actions")
+        layout = QGridLayout(box)
+        layout.setSpacing(8)
         self.start_session_button = QPushButton("Start Session")
         self.start_session_button.clicked.connect(self._start_session)
         self.stop_session_button = QPushButton("Stop Session")
         self.stop_session_button.clicked.connect(self._stop_session)
         self.validate_button = QPushButton("Validate")
         self.validate_button.clicked.connect(self._validate)
-        button_grid.addWidget(self.start_session_button, 0, 0)
-        button_grid.addWidget(self.stop_session_button, 0, 1)
-        button_grid.addWidget(self.validate_button, 1, 0)
-        layout.addLayout(button_grid)
+        layout.addWidget(self.start_session_button, 0, 0)
+        layout.addWidget(self.stop_session_button, 0, 1)
+        layout.addWidget(self.validate_button, 1, 0, 1, 2)
+        return box
 
+    def _build_artifacts_box(self) -> QWidget:
         artifacts_box = QGroupBox("Latest Artifacts")
         artifacts_layout = QFormLayout(artifacts_box)
         artifacts_layout.setSpacing(8)
@@ -279,16 +345,22 @@ class OperatorConsoleQtWindow(QMainWindow):
         artifacts_layout.addRow("Episode", self.latest_episode_label)
         artifacts_layout.addRow("Dataset", self.latest_dataset_label)
         artifacts_layout.addRow("Viewer", self.latest_viewer_label)
-        layout.addWidget(artifacts_box)
-        layout.addStretch(1)
-        return box
+        return artifacts_box
 
     def _build_health_panel(self) -> QWidget:
         box = QGroupBox("Subsystem Health")
         layout = QVBoxLayout(box)
         layout.setSpacing(10)
+        display_names = {
+            "spark_devices": "SPARK Devices",
+            "teleop_gui": "Teleop GUI",
+            "realsense_contract": "RealSense",
+            "gelsight_contract": "GelSight",
+            "recorder": "Recorder",
+            "converter": "Converter",
+        }
         for name in ["spark_devices", "teleop_gui", "realsense_contract", "gelsight_contract", "recorder", "converter"]:
-            card = HealthCard(name.replace("_", " ").title())
+            card = HealthCard(display_names[name])
             card.primary_button.clicked.connect(lambda _checked=False, process=name: self._start_named_process(process))
             card.secondary_button.clicked.connect(lambda _checked=False, process=name: self._stop_named_process(process))
             self.health_cards[name] = card
@@ -297,9 +369,12 @@ class OperatorConsoleQtWindow(QMainWindow):
         return box
 
     def _build_command_panel(self) -> QWidget:
-        box = QGroupBox("Selected Process Command")
+        box = QGroupBox("Selected Process")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(10, 10, 10, 10)
+        self.selected_process_label = QLabel("Process: spark_devices")
+        self.selected_process_label.setObjectName("selectedProcessLabel")
+        layout.addWidget(self.selected_process_label)
         self.command_label = QLabel("")
         self.command_label.setWordWrap(True)
         self.command_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -332,12 +407,24 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow {
-                background: #f6f7fb;
+                background: #eef2f6;
+            }
+            QFrame#headerBand {
+                background: #ffffff;
+                border: 1px solid #d9e0ea;
+                border-radius: 18px;
+            }
+            QLabel#headerTitle {
+                color: #1f2a37;
+            }
+            QLabel#headerSubtitle {
+                color: #5d6a79;
+                font-size: 13px;
             }
             QGroupBox {
-                font-weight: 600;
+                font-weight: 700;
                 border: 1px solid #d8dde6;
-                border-radius: 14px;
+                border-radius: 16px;
                 margin-top: 10px;
                 background: #ffffff;
             }
@@ -357,15 +444,15 @@ class OperatorConsoleQtWindow(QMainWindow):
                 font-weight: 700;
                 color: #1f2a37;
             }
+            QLabel#cardSummary {
+                color: #233245;
+                font-weight: 600;
+            }
             QLabel#cardDetails {
-                color: #556372;
+                color: #5d6a79;
             }
-            QLabel#headerState {
-                font-size: 16px;
-                font-weight: 700;
-                color: #1f2a37;
-            }
-            QLabel#headerSubstate {
+            QLabel#selectedProcessLabel {
+                font-weight: 600;
                 color: #5d6a79;
             }
             QLineEdit, QComboBox, QPlainTextEdit {
@@ -382,7 +469,7 @@ class OperatorConsoleQtWindow(QMainWindow):
                 padding: 6px 12px;
             }
             QPushButton:hover {
-                background: #eef4ff;
+                background: #edf4ff;
             }
             QPushButton:disabled {
                 color: #9aa3af;
@@ -502,8 +589,12 @@ class OperatorConsoleQtWindow(QMainWindow):
         config = self._config()
         self.backend.request_health_refresh(config)
         snapshot = self.backend.snapshot(config)
-        self.session_state_label.setText(f"State: {snapshot.get('session_state', 'idle')}")
-        self.validation_state_label.setText(f"Validation: {snapshot.get('validation_state', 'not_run')}")
+        session_state = str(snapshot.get("session_state", "idle"))
+        validation_state = str(snapshot.get("validation_state", "not_run"))
+        self.session_state_label.setText(f"Session: {session_state}")
+        self.validation_state_label.setText(f"Validation: {validation_state}")
+        apply_chip_style(self.session_state_label, self._session_chip_tone(session_state))
+        apply_chip_style(self.validation_state_label, self._validation_chip_tone(validation_state))
         self.latest_episode_label.setText(snapshot.get("latest_episode_id") or "")
         self.latest_dataset_label.setText(snapshot.get("latest_dataset_id") or "")
         self.latest_viewer_label.setText(snapshot.get("latest_viewer_url") or "")
@@ -526,6 +617,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         logs = self.backend.get_process_logs(selected)
         rendered = "\n".join(logs[-200:])
         process = snapshot.get("processes", {}).get(selected, {})
+        self.selected_process_label.setText(f"Process: {selected}")
         self.command_label.setText(str(process.get("command", "")))
         if rendered == self.last_log_render:
             return
@@ -560,6 +652,24 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.output_text.setPlainText(rendered)
         scrollbar = self.output_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+
+    def _session_chip_tone(self, state: str) -> str:
+        if state in {"ready_to_record", "converted", "review_ready"}:
+            return "green"
+        if state in {"bringing_up", "ready_for_dry_run", "recording", "converting"}:
+            return "yellow"
+        if state == "degraded":
+            return "red"
+        return "off"
+
+    def _validation_chip_tone(self, state: str) -> str:
+        if state == "passed":
+            return "green"
+        if state in {"running", "stale"}:
+            return "yellow"
+        if state == "failed":
+            return "red"
+        return "off"
 
     def _update_button_states(self, snapshot: dict[str, object]) -> None:
         config = self._config()
