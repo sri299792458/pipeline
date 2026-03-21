@@ -86,6 +86,7 @@ class OperatorConsoleBackend:
         self.latest_conversion_output = ""
         self.latest_recording_ok: bool | None = None
         self.latest_recording_check_output = ""
+        self.recording_check_running = False
         self.latest_recording_config: dict[str, Any] | None = None
         self.pending_conversion_dataset_id: str | None = None
         self.topic_probe_cache: dict[str, tuple[float, bool]] = {}
@@ -167,6 +168,7 @@ class OperatorConsoleBackend:
             "latest_conversion_output": self.latest_conversion_output,
             "latest_recording_ok": self.latest_recording_ok,
             "latest_recording_check_output": self.latest_recording_check_output,
+            "recording_check_running": self.recording_check_running,
         }
 
     def validation_state(self, config: dict[str, Any]) -> str:
@@ -251,6 +253,7 @@ class OperatorConsoleBackend:
         self.latest_episode_id = episode_id
         self.latest_recording_ok = None
         self.latest_recording_check_output = ""
+        self.recording_check_running = False
         self.latest_recording_config = json.loads(json.dumps(config))
         command = self._build_record_command(config, episode_id=episode_id, dry_run=False)
         self._start_process("recorder", command)
@@ -519,6 +522,12 @@ class OperatorConsoleBackend:
                 "status": "red",
                 "summary": f"Recorder failed with exit code {process.exit_code}",
                 "details": [],
+            }
+        if self.recording_check_running:
+            return {
+                "status": "yellow",
+                "summary": "Analyzing last recording",
+                "details": [self.latest_episode_id] if self.latest_episode_id else [],
             }
         if self.latest_episode_id and self.latest_recording_ok is False:
             return {
@@ -937,19 +946,23 @@ class OperatorConsoleBackend:
         success_codes = {0, -signal.SIGINT, -signal.SIGTERM, 130, 143}
         if exit_code not in success_codes or not self.latest_episode_id or self.latest_recording_config is None:
             return
-        ok, output = self._analyze_recording(self.latest_episode_id, self.latest_recording_config)
-        self.latest_recording_ok = ok
-        self.latest_recording_check_output = output
-        if not ok:
-            self.last_action_error = "Recording integrity check failed."
-        self._record_event(
-            "recording_check",
-            {
-                "episode_id": self.latest_episode_id,
-                "ok": ok,
-                "output": output,
-            },
-        )
+        self.recording_check_running = True
+        try:
+            ok, output = self._analyze_recording(self.latest_episode_id, self.latest_recording_config)
+            self.latest_recording_ok = ok
+            self.latest_recording_check_output = output
+            if not ok:
+                self.last_action_error = "Recording integrity check failed."
+            self._record_event(
+                "recording_check",
+                {
+                    "episode_id": self.latest_episode_id,
+                    "ok": ok,
+                    "output": output,
+                },
+            )
+        finally:
+            self.recording_check_running = False
 
     def _analyze_recording(self, episode_id: str, config: dict[str, Any]) -> tuple[bool, str]:
         metadata_path = REPO_ROOT / "raw_episodes" / episode_id / "bag" / "metadata.yaml"

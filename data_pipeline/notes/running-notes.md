@@ -1029,3 +1029,21 @@
   - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
   - viewer target resolution for the tactile dataset still returns:
     - `('spark_multisensor_lightning_tactile_v1', 2, 'http://10.33.55.65:3000/local/spark_multisensor_lightning_tactile_v1/episode_2')`
+
+### Recorder post-stop analyzing state
+
+- Fixed a small but misleading recorder-card transition in the Operator Console:
+  - after `Stop`, the recorder process would exit immediately
+  - then the post-stop integrity check would run
+  - during that gap the UI briefly fell back to the default `Record` state before changing to `Convert` / `Record New`
+- Added an explicit backend flag `recording_check_running` in `data_pipeline/operator_console_backend.py`.
+- The recorder health card now reports:
+  - `Analyzing last recording`
+  while the post-stop bag integrity check is still running.
+- The recorder card buttons in `data_pipeline/operator_console.py` now show a neutral disabled state during that window:
+  - `Analyzing`
+  - `Wait`
+- This keeps the UI honest and removes the brief flash of the wrong next action.
+- Validation:
+  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
+  - `timeout 5s python3 data_pipeline/operator_console.py`

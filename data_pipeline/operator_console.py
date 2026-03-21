@@ -368,6 +368,7 @@ class OperatorConsoleApp:
         recorder_state = processes.get("recorder", {}).get("state")
         converter_state = processes.get("converter", {}).get("state")
         recording_ready = bool(snapshot.get("latest_episode_id")) and snapshot.get("latest_recording_ok") is True
+        recording_check_running = bool(snapshot.get("recording_check_running"))
         session_running = any(
             str(processes.get(name, {}).get("state", "stopped")) in {"running", "starting", "stopping", "failed"}
             for name in ("spark_devices", "teleop_gui", "realsense_contract", "gelsight_contract", "recorder")
@@ -397,6 +398,7 @@ class OperatorConsoleApp:
                     converter_state=str(converter_state),
                     can_record=bool(can_record),
                     recording_ready=recording_ready,
+                    recording_check_running=recording_check_running,
                 )
                 continue
             start_button.configure(state="normal" if start_enabled else "disabled")
@@ -411,10 +413,16 @@ class OperatorConsoleApp:
         converter_state: str,
         can_record: bool,
         recording_ready: bool,
+        recording_check_running: bool,
     ) -> None:
         if recorder_state == "running":
             start_button.configure(text="Record", command=self._start_recording, state="disabled")
             stop_button.configure(text="Stop", command=self._stop_recording, state="normal")
+            return
+
+        if recording_check_running:
+            start_button.configure(text="Analyzing", command=self._start_recording, state="disabled")
+            stop_button.configure(text="Wait", command=self._stop_recording, state="disabled")
             return
 
         if recording_ready:
