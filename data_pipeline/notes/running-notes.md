@@ -1047,3 +1047,14 @@
 - Validation:
   - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
   - `timeout 5s python3 data_pipeline/operator_console.py`
+
+### Recorder analyzing-state transition fix
+
+- Follow-up to the previous recorder analyzing-state change:
+  - the first version still let one UI refresh slip through with the default `Record` state
+  - reason: `recording_check_running` was being set inside `_finalize_recording_after_exit(...)`, after the recorder process had already been marked `stopped`
+- Fixed the transition point in `data_pipeline/operator_console_backend.py`:
+  - the backend now sets `recording_check_running = True` immediately after the recorder subprocess exits successfully, before flipping the visible recorder state to `stopped`
+- This is a timing correction, not a new state-model change.
+- Validation:
+  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`

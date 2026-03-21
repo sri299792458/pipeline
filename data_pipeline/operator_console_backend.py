@@ -792,6 +792,13 @@ class OperatorConsoleBackend:
         for line in popen.stdout:
             process.append_log(line)
         exit_code = popen.wait()
+        if (
+            name == "recorder"
+            and exit_code in {0, -signal.SIGINT, -signal.SIGTERM, 130, 143}
+            and self.latest_episode_id
+            and self.latest_recording_config is not None
+        ):
+            self.recording_check_running = True
         process.exit_code = exit_code
         if process.state == "stopping" and exit_code in {0, -signal.SIGINT, -signal.SIGTERM, 130, 143}:
             process.state = "stopped"
@@ -946,7 +953,6 @@ class OperatorConsoleBackend:
         success_codes = {0, -signal.SIGINT, -signal.SIGTERM, 130, 143}
         if exit_code not in success_codes or not self.latest_episode_id or self.latest_recording_config is None:
             return
-        self.recording_check_running = True
         try:
             ok, output = self._analyze_recording(self.latest_episode_id, self.latest_recording_config)
             self.latest_recording_ok = ok
