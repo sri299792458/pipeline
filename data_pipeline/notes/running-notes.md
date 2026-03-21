@@ -679,3 +679,19 @@
 - Updated `data_pipeline/launch/realsense_contract.launch.py` so the RealSense bridge now launches with `/usr/bin/python3`, not `.venv/bin/python`.
 - Updated `data_pipeline/setup_realsense_contract_runtime.sh` so it now builds the local `pyrealsense2` binding for system Python and validates imports without relying on `query_devices()`.
 - Kept the earlier `data_pipeline/realsense_bridge.py` fix that removes upfront `query_devices()` dependence and instead canonicalizes the provided serials before per-camera startup.
+
+### Operator Console spec pass
+
+- Added `data_pipeline/docs/operator-console-spec.md` as the contract for the planned lab-facing capture GUI.
+- Kept the boundary explicit:
+  - the Operator Console is separate from `TeleopSoftware/launch.py`
+  - Teleop remains untouched in V1
+- Wrote the console spec in the same contract-oriented style as `data_pipeline/V1_SPEC.md`:
+  - explicit goal
+  - boundary
+  - runtime base
+  - readiness contract
+  - workflow state model
+  - metadata / record / convert contracts
+  - acceptance criteria
+- Linked the new spec from `data_pipeline/README.md`.

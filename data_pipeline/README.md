@@ -8,6 +8,8 @@ For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-
 
 For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).
 
+For the planned lab-facing capture GUI, use [docs/operator-console-spec.md](./docs/operator-console-spec.md).
+
 
 ## Current Scope
 
