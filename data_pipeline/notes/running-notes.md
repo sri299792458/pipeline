@@ -1183,6 +1183,21 @@
     - the Qt frontend starts and stays up for the smoke window
     - only the expected offscreen-plugin `propagateSizeHints()` warnings appeared
 
+### Qt X11 dependency fix
+
+- The first real desktop launch of `data_pipeline/operator_console_qt.py` failed on this Ubuntu/X11 machine with:
+  - `Could not load the Qt platform plugin "xcb"`
+  - Qt explicitly pointed at the missing runtime package:
+    - `libxcb-cursor0`
+- Installed the missing system dependency:
+  - `sudo apt-get install -y libxcb-cursor0`
+- Re-tested the real X11 launch:
+  - `source .venv/bin/activate && timeout 5s python data_pipeline/operator_console_qt.py`
+  - result:
+    - no Qt plugin crash
+    - process stays up for the timeout window
+- Added the Ubuntu/X11 dependency note to `data_pipeline/README.md`.
+
 ### Spec cleanup after frontend decision
 
 - Removed the now-resolved frontend-toolkit question from `data_pipeline/docs/operator-console-spec.md`.

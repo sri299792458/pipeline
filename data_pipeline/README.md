@@ -18,6 +18,12 @@ pip install -r data_pipeline/requirements-operator-console.txt
 python data_pipeline/operator_console_qt.py
 ```
 
+On Ubuntu/X11, the Qt frontend also needs the system package:
+
+```bash
+sudo apt-get install -y libxcb-cursor0
+```
+
 The older Tk prototype is still available as a fallback/reference:
 
 ```bash
