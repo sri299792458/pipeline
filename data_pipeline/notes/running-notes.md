@@ -929,3 +929,20 @@
 - Validation:
   - `python3 -m py_compile data_pipeline/operator_console.py data_pipeline/operator_console_backend.py`
   - `timeout 5s python3 data_pipeline/operator_console.py`
+
+### Console conversion command assembly fix
+
+- Found a real operator-console bug in `data_pipeline/operator_console_backend.py`:
+  - when the current preset provided a `dataset_id`, the backend built the conversion shell command with
+    `--published-dataset-id ...--published-root ...`
+    as one concatenated token
+  - the symptom at runtime was the exact argparse failure:
+    `error: unrecognized arguments: /home/srinivas/Desktop/pipeline/published`
+- Fixed `_build_convert_command(...)` to assemble the converter invocation from an argument list and join it once, instead of relying on fragile string concatenation.
+- Validation:
+  - printed the generated command for `episode-20260321-001038`
+  - confirmed it now contains:
+    - `--published-dataset-id spark_multisensor_lightning_tactile_v1`
+    - `--published-root /home/srinivas/Desktop/pipeline/published`
+    as separate flags
+  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`

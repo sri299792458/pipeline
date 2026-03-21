@@ -796,19 +796,15 @@ class OperatorConsoleBackend:
         episode_dir = REPO_ROOT / "raw_episodes" / episode_id
         published_root = REPO_ROOT / "published"
         dataset_id = str(config.get("dataset_id", "")).strip()
-        dataset_arg = (
-            f" --published-dataset-id {shlex.quote(dataset_id)}"
-            if dataset_id
-            else ""
-        )
-        return (
-            f"source {shlex.quote(ROS_SETUP)} && "
-            f"{shlex.quote(str(CONVERTER_PYTHON))} "
-            f"data_pipeline/convert_episode_bag_to_lerobot.py "
-            f"{shlex.quote(str(episode_dir))} "
-            f"{dataset_arg}"
-            f"--published-root {shlex.quote(str(published_root))}"
-        )
+        args = [
+            shlex.quote(str(CONVERTER_PYTHON)),
+            "data_pipeline/convert_episode_bag_to_lerobot.py",
+            shlex.quote(str(episode_dir)),
+        ]
+        if dataset_id:
+            args.extend(["--published-dataset-id", shlex.quote(dataset_id)])
+        args.extend(["--published-root", shlex.quote(str(published_root))])
+        return f"source {shlex.quote(ROS_SETUP)} && " + " ".join(args)
 
     def _required_record_topics(self, config: dict[str, Any]) -> list[str]:
         topics: list[str] = []
