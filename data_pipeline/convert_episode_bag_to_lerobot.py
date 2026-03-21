@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import imageio.v2 as imageio
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -43,6 +44,19 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
     write_json,
 )
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
+
+MAX_DEPTH_U16 = 0x10000
+REALSENSE_COLOR_MAP_STEPS = 4000
+REALSENSE_JET_STOPS = np.asarray(
+    [
+        [0.0, 0.0, 255.0],
+        [0.0, 255.0, 255.0],
+        [255.0, 255.0, 0.0],
+        [255.0, 0.0, 0.0],
+        [50.0, 0.0, 0.0],
+    ],
+    dtype=np.float32,
+)
 
 
 @dataclass
@@ -206,6 +220,45 @@ def encode_depth_png16(depth: np.ndarray) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def build_realsense_color_map_cache() -> np.ndarray:
+    last_stop = REALSENSE_JET_STOPS.shape[0] - 1
+    positions = np.linspace(0.0, float(last_stop), REALSENSE_COLOR_MAP_STEPS + 1, dtype=np.float32)
+    lower = np.floor(positions).astype(np.int32)
+    upper = np.clip(lower + 1, 0, last_stop)
+    local_t = (positions - lower).reshape(-1, 1)
+    cache = REALSENSE_JET_STOPS[lower] * (1.0 - local_t) + REALSENSE_JET_STOPS[upper] * local_t
+    return np.rint(cache).astype(np.uint8)
+
+
+REALSENSE_JET_CACHE = build_realsense_color_map_cache()
+
+
+def colorize_depth_realsense_preview(depth: np.ndarray) -> np.ndarray:
+    if depth.dtype != np.uint16:
+        raise ValueError(f"Expected uint16 depth array, got {depth.dtype}")
+    if depth.ndim != 2:
+        raise ValueError(f"Expected 2D depth array for preview colorization, got shape {depth.shape}")
+
+    histogram = np.bincount(depth.reshape(-1), minlength=MAX_DEPTH_U16).astype(np.int64, copy=False)
+    cumulative = np.empty_like(histogram)
+    cumulative[0] = histogram[0]
+    cumulative[1:] = np.cumsum(histogram[1:], dtype=np.int64)
+    total_colored_pixels = int(cumulative[-1])
+
+    rgb = np.zeros((depth.shape[0], depth.shape[1], 3), dtype=np.uint8)
+    if total_colored_pixels <= 0:
+        return rgb
+
+    valid_mask = depth > 0
+    if not np.any(valid_mask):
+        return rgb
+
+    normalized = cumulative[depth[valid_mask]].astype(np.float32) / float(total_colored_pixels)
+    cache_indices = np.clip((normalized * REALSENSE_COLOR_MAP_STEPS).astype(np.int32), 0, REALSENSE_COLOR_MAP_STEPS)
+    rgb[valid_mask] = REALSENSE_JET_CACHE[cache_indices]
+    return rgb
 
 
 def extract_message_timestamp_ns(msg: Any, bag_timestamp_ns: int) -> int:
@@ -803,6 +856,7 @@ def write_depth_sidecar(
     depth_specs: list[dict[str, Any]],
     depth_selections: dict[str, list[DepthSelection]],
     depth_arrays: dict[str, list[np.ndarray]],
+    depth_preview_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     depth_root = dataset_root / "depth"
     depth_root.mkdir(parents=True, exist_ok=True)
@@ -875,6 +929,22 @@ def write_depth_sidecar(
         "grid_fps": int(fps),
         "selector": "nearest",
     }
+    if depth_preview_summary:
+        depth_info["preview_videos"] = {
+            "encoding": "mp4_h264_rgb8",
+            "chunking": {
+                "mode": "per_episode_file",
+                "chunk": "chunk-000",
+                "filename_pattern": "file-{episode_index:03d}.mp4",
+            },
+            "colorizer": {
+                "source": "librealsense::colorizer",
+                "visual_preset": "Dynamic",
+                "color_scheme": "Jet",
+                "histogram_equalization": True,
+                "zero_depth": "black",
+            },
+        }
     existing_indices = set(depth_info.get("episode_indices_present", []))
     existing_indices.update(episode_indices_present)
     depth_info["episode_indices_present"] = sorted(existing_indices)
@@ -890,6 +960,59 @@ def write_depth_sidecar(
     return {
         "root": str(depth_root),
         "info_path": str(info_path),
+        "fields": field_info,
+    }
+
+
+def write_depth_preview_videos(
+    dataset_root: Path,
+    dataset_episode_index: int,
+    fps: int,
+    depth_specs: list[dict[str, Any]],
+    depth_arrays: dict[str, list[np.ndarray]],
+) -> dict[str, Any]:
+    preview_root = dataset_root / "depth_preview"
+    preview_root.mkdir(parents=True, exist_ok=True)
+
+    field_info: dict[str, Any] = {}
+
+    for depth_spec in depth_specs:
+        field = depth_spec["field"]
+        arrays = depth_arrays.get(field, [])
+        if not arrays:
+            continue
+
+        field_dir = preview_root / field / "chunk-000"
+        field_dir.mkdir(parents=True, exist_ok=True)
+        file_path = field_dir / f"file-{dataset_episode_index:03d}.mp4"
+        if file_path.exists():
+            raise RuntimeError(
+                f"Depth preview video already exists for {field} episode_index={dataset_episode_index}: {file_path}"
+            )
+
+        writer = imageio.get_writer(
+            file_path,
+            fps=fps,
+            codec="libx264",
+            format="FFMPEG",
+            macro_block_size=None,
+            ffmpeg_log_level="error",
+            ffmpeg_params=["-pix_fmt", "yuv420p"],
+        )
+        try:
+            for depth_array in arrays:
+                writer.append_data(colorize_depth_realsense_preview(depth_array))
+        finally:
+            writer.close()
+
+        field_info[field] = {
+            "source_topic": depth_spec["topic"],
+            "path": str(file_path.relative_to(dataset_root)),
+            "frame_count": len(arrays),
+        }
+
+    return {
+        "root": str(preview_root),
         "fields": field_info,
     }
 
@@ -1005,11 +1128,19 @@ def main(argv: list[str] | None = None) -> int:
         reloaded.finalize()
 
     depth_sidecar_summary: dict[str, Any] | None = None
+    depth_preview_summary: dict[str, Any] | None = None
     if selected_depth_specs:
         depth_arrays = extract_depth_arrays(
             bag_dir=bag_dir,
             storage_id=bag_storage_id,
             depth_selections=depth_selections,
+        )
+        depth_preview_summary = write_depth_preview_videos(
+            dataset_root=dataset_root,
+            dataset_episode_index=dataset_episode_index,
+            fps=int(profile["dataset"]["fps"]),
+            depth_specs=selected_depth_specs,
+            depth_arrays=depth_arrays,
         )
         depth_sidecar_summary = write_depth_sidecar(
             dataset_root=dataset_root,
@@ -1019,6 +1150,7 @@ def main(argv: list[str] | None = None) -> int:
             depth_specs=selected_depth_specs,
             depth_selections=depth_selections,
             depth_arrays=depth_arrays,
+            depth_preview_summary=depth_preview_summary,
         )
 
     diagnostics = {
@@ -1032,6 +1164,7 @@ def main(argv: list[str] | None = None) -> int:
         "summary_status": summary_status,
         "topic_diagnostics": {topic: series[topic].diagnostics() for topic in sorted(series)},
         "depth_sidecar": depth_sidecar_summary,
+        "depth_preview": depth_preview_summary,
         **alignment_diagnostics,
     }
     summary = {
@@ -1046,6 +1179,7 @@ def main(argv: list[str] | None = None) -> int:
         "selected_image_fields": image_fields,
         "selected_depth_fields": [spec["field"] for spec in selected_depth_specs],
         "depth_sidecar_root": depth_sidecar_summary["root"] if depth_sidecar_summary else None,
+        "depth_preview_root": depth_preview_summary["root"] if depth_preview_summary else None,
     }
     write_conversion_artifacts(artifact_dir, diagnostics, effective_profile, summary)
 

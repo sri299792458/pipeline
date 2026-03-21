@@ -67,7 +67,6 @@ Add RealSense depth to the published dataset in a way that is:
 - point cloud publication
 - normal maps
 - tactile marker offsets
-- viewer integration for depth in this step
 - training-loader integration in this step
 
 
@@ -91,8 +90,24 @@ published/<dataset_id>/
       chunk-000/
         file-000000.parquet
         file-000001.parquet
+  depth_preview/
+    observation.depth.wrist/
+      chunk-000/
+        file-000000.mp4
+    observation.depth.scene/
+      chunk-000/
+        file-000000.mp4
   meta/depth_info.json
 ```
+
+`depth/` is the canonical lossless payload.
+
+`depth_preview/` is a viewer-oriented companion only:
+
+- generated from the canonical depth sidecar
+- not a replacement for it
+- allowed to be lossy because it is not the training/storage source of truth
+- intended to match the default `realsense-viewer` preview semantics
 
 
 ## Row Contract
@@ -198,11 +213,10 @@ If depth fails alignment:
 
 ## Non-Goals
 
-- Do not encode depth as H.264/H.265 MP4 in this step.
 - Do not normalize depth into RGB-like images in this step.
 - Do not add a private `depth_image` feature type inside LeRobot in this step.
 - Do not publish tactile-derived depth in this step.
-- Do not add a custom viewer for depth in this step.
+- Do not replace the canonical lossless sidecar with preview video.
 
 
 ## Follow-On Work
@@ -213,7 +227,7 @@ If depth fails alignment:
    - row counts
    - depth alignment diagnostics
    - per-field shape and source-topic metadata
-4. Decide later whether to add:
+4. Keep the viewer-specific preview path aligned with the default `realsense-viewer` preview behavior.
+5. Decide later whether to add:
    - depth-aware loaders
-   - viewer support
    - an upstream LeRobot contribution once the sidecar contract is stable

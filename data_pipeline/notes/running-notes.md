@@ -1479,3 +1479,29 @@
     - `local/spark_multisensor_lightning_tactile_depth_eval/episode_0?t=5`
     - both depth cards now advance correctly to `frame 100`
 - Kept the existing RGB video player unchanged; depth is rendered as an extra synchronized section in the Episodes tab rather than being forced through the MP4 path.
+
+### Depth preview video follow-up
+
+- The browser-side PNG16 decode path was functionally correct but not operationally good:
+  - initial depth load was slower than the RGB cards
+  - stepping during playback visibly glitched because each frame required parquet read + PNG decode + colorization on the client
+- Switched the viewing path to a cleaner split:
+  - keep `depth/` as the canonical lossless sidecar
+  - generate `depth_preview/` MP4 companions during conversion for the UI only
+- The preview colorization now mirrors the default `realsense-viewer` path:
+  - source logic: `librealsense::colorizer`
+  - visual preset: `Dynamic`
+  - color scheme: `Jet`
+  - histogram equalization: enabled
+  - zero depth: black
+- Implemented the same cumulative-histogram + Jet lookup logic in `convert_episode_bag_to_lerobot.py` and wrote preview videos per depth field.
+- Simplified `DepthStreamViewer` in `lerobot-dataset-visualizer` to stop decoding `png16_bytes` in the browser:
+  - it now follows passive time-synced preview videos instead of doing per-frame depth rendering on the client
+  - removed the `fast-png` dependency from the visualizer
+- Validation:
+  - converted `episode-20260321-120141` into `spark_multisensor_lightning_tactile_depth_preview_eval`
+  - generated:
+    - `depth_preview/observation.depth.scene/chunk-000/file-000.mp4`
+    - `depth_preview/observation.depth.wrist/chunk-000/file-000.mp4`
+  - Playwright screenshot confirmed the visualizer renders the new depth preview section on:
+    - `local/spark_multisensor_lightning_tactile_depth_preview_eval/episode_0?t=5`
