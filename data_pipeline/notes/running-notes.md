@@ -1210,3 +1210,11 @@
 - Re-tested on the desktop:
   - the `Converter` tile is now reachable without resizing the window or depending on a taller monitor
   - the right-side logs/output column remains fixed-height and does not scroll with the forms/cards
+
+### Viewer stale-process fix
+
+- Traced a false `Episode 3 not found in metadata` viewer error to a stale viewer server process:
+  - the published dataset on disk contained `episode_index=3`
+  - but the running viewer process was not being restarted when `Open Viewer` targeted a newer dataset/episode
+- Fixed `data_pipeline/operator_console_backend.py` so `Open Viewer` no longer returns early just because `:3000` is reachable.
+- The backend now checks whether the currently managed viewer process matches the desired dataset/episode command and restarts it when the target changes.

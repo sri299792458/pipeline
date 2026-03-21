@@ -391,18 +391,24 @@ class OperatorConsoleBackend:
 
     def _ensure_viewer_server(self, config: dict[str, Any], dataset_id: str, episode_index: int) -> None:
         viewer_base_url = str(config.get("viewer_base_url", "")).strip().rstrip("/")
-        if self._url_reachable(viewer_base_url, timeout_s=1.5):
-            return
-
         command = self._build_viewer_server_command(config, dataset_id, episode_index)
         process = self.processes["viewer_server"]
-        if process.process is not None and process.process.poll() is None and process.command != command:
+        process_running = process.process is not None and process.process.poll() is None
+
+        if process_running and process.command != command:
             self._stop_process("viewer_server")
             deadline = time.time() + 5.0
             while time.time() < deadline:
                 if process.process is None or process.process.poll() is not None:
                     break
                 time.sleep(0.1)
+
+        if process.process is not None and process.process.poll() is None and process.command == command:
+            if self._url_reachable(viewer_base_url, timeout_s=1.5):
+                return
+
+        if self._url_reachable(viewer_base_url, timeout_s=1.5):
+            return
 
         self._start_process("viewer_server", command)
         deadline = time.time() + 15.0
