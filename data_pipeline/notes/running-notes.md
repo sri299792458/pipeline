@@ -1329,3 +1329,14 @@
   - `python3 -m py_compile data_pipeline/operator_console_qt.py`
   - `QT_QPA_PLATFORM=offscreen timeout 5s python data_pipeline/operator_console_qt.py`
   - app starts and stays up for the smoke window with only the expected offscreen Qt warning
+
+### Removed the oversized Qt title band
+
+- The big `Operator Console` title band was not adding operational value and was taking vertical space away from the real workflow.
+- Removed it from `data_pipeline/operator_console_qt.py`.
+- Replaced it with a slim top row that only keeps the two useful state chips:
+  - `Session`
+  - `Validation`
+- Validation:
+  - `python3 -m py_compile data_pipeline/operator_console_qt.py`
+  - `QT_QPA_PLATFORM=offscreen timeout 5s python data_pipeline/operator_console_qt.py`

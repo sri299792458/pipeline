@@ -10,7 +10,6 @@ from pathlib import Path
 
 try:
     from PySide6.QtCore import QSocketNotifier, QTimer, Qt
-    from PySide6.QtGui import QFont
     from PySide6.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -161,41 +160,24 @@ class OperatorConsoleQtWindow(QMainWindow):
         central = QWidget()
         root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(14, 14, 14, 14)
-        root_layout.setSpacing(12)
+        root_layout.setSpacing(10)
         self.setCentralWidget(central)
 
-        header = QFrame()
-        header.setObjectName("headerBand")
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(18, 16, 18, 16)
-        header_layout.setSpacing(16)
-
-        title_column = QVBoxLayout()
-        title_column.setSpacing(4)
-        title = QLabel("Operator Console")
-        title_font = QFont()
-        title_font.setPointSize(21)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        title.setObjectName("headerTitle")
-        subtitle = QLabel("Capture workflow and subsystem supervision")
-        subtitle.setObjectName("headerSubtitle")
-        title_column.addWidget(title)
-        title_column.addWidget(subtitle)
-        header_layout.addLayout(title_column, 1)
-
-        state_column = QVBoxLayout()
-        state_column.setSpacing(8)
+        state_row = QFrame()
+        state_row.setObjectName("stateRow")
+        state_layout = QHBoxLayout(state_row)
+        state_layout.setContentsMargins(0, 0, 0, 0)
+        state_layout.setSpacing(8)
+        state_layout.addStretch(1)
         self.session_state_label = QLabel("Session: idle")
         self.validation_state_label = QLabel("Validation: not_run")
         self.session_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.validation_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         apply_chip_style(self.session_state_label, "off")
         apply_chip_style(self.validation_state_label, "off")
-        state_column.addWidget(self.session_state_label)
-        state_column.addWidget(self.validation_state_label)
-        header_layout.addLayout(state_column)
-        root_layout.addWidget(header)
+        state_layout.addWidget(self.session_state_label)
+        state_layout.addWidget(self.validation_state_label)
+        root_layout.addWidget(state_row)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
@@ -409,17 +391,8 @@ class OperatorConsoleQtWindow(QMainWindow):
             QMainWindow {
                 background: #eef2f6;
             }
-            QFrame#headerBand {
-                background: #ffffff;
-                border: 1px solid #d9e0ea;
-                border-radius: 18px;
-            }
-            QLabel#headerTitle {
-                color: #1f2a37;
-            }
-            QLabel#headerSubtitle {
-                color: #5d6a79;
-                font-size: 13px;
+            QFrame#stateRow {
+                background: transparent;
             }
             QGroupBox {
                 font-weight: 700;
