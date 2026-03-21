@@ -282,6 +282,7 @@ def infer_sensor_metadata(
         {
             "sensor_name": "left",
             "topic_prefix": "/spark/tactile/left",
+            "node_name": "gelsight_left_bridge",
             "sensor_id": "tac_finger_left_0",
             "modality": "tactile_rgb",
             "attached_to": "unknown",
@@ -291,6 +292,7 @@ def infer_sensor_metadata(
         {
             "sensor_name": "right",
             "topic_prefix": "/spark/tactile/right",
+            "node_name": "gelsight_right_bridge",
             "sensor_id": "tac_finger_right_0",
             "modality": "tactile_rgb",
             "attached_to": "unknown",
@@ -315,6 +317,60 @@ def infer_sensor_metadata(
             "model": spec["model"],
             "calibration_ref": None,
         }
+        try:
+            params = read_param_dump(spec["node_name"])
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            params = {}
+
+        device_path = str(params.get("device_path", "")).strip()
+        if device_path and device_path not in {"''", '""'}:
+            sensor["device_path"] = device_path
+
+        device_index = params.get("device_index")
+        if isinstance(device_index, (int, float)) and int(device_index) >= 0:
+            sensor["device_index"] = int(device_index)
+
+        frame_id = str(params.get("frame_id", "")).strip()
+        if frame_id and frame_id not in {"''", '""'}:
+            sensor["frame_id"] = frame_id
+
+        encoding = str(params.get("encoding", "")).strip()
+        if encoding and encoding not in {"''", '""'}:
+            sensor["encoding"] = encoding
+
+        fps = params.get("fps")
+        if isinstance(fps, (int, float)):
+            sensor["fps"] = float(fps)
+
+        capture_width = params.get("capture_width")
+        if isinstance(capture_width, (int, float)) and int(capture_width) > 0:
+            sensor["capture_width"] = int(capture_width)
+
+        capture_height = params.get("capture_height")
+        if isinstance(capture_height, (int, float)) and int(capture_height) > 0:
+            sensor["capture_height"] = int(capture_height)
+
+        output_width = params.get("output_width")
+        if isinstance(output_width, (int, float)) and int(output_width) > 0:
+            sensor["output_width"] = int(output_width)
+
+        output_height = params.get("output_height")
+        if isinstance(output_height, (int, float)) and int(output_height) > 0:
+            sensor["output_height"] = int(output_height)
+
+        border_fraction = params.get("border_fraction")
+        crop_applied = params.get("crop_applied")
+        preprocessing_pipeline = str(params.get("preprocessing_pipeline", "")).strip()
+        preprocessing: dict[str, Any] = {}
+        if preprocessing_pipeline and preprocessing_pipeline not in {"''", '""'}:
+            preprocessing["pipeline"] = preprocessing_pipeline
+        if isinstance(border_fraction, (int, float)):
+            preprocessing["border_fraction"] = float(border_fraction)
+        if isinstance(crop_applied, bool):
+            preprocessing["crop_applied"] = crop_applied
+        if preprocessing:
+            sensor["preprocessing"] = preprocessing
+
         sensor.update(sensor_overrides.get(sensor_name, {}))
         sensors.append(sensor)
 

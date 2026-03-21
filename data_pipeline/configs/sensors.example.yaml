@@ -22,6 +22,7 @@ sensors:
     serial_number: "GELSIGHT-LEFT-SERIAL"
     model: "GelSight Mini"
     calibration_ref: "calib://gelsight/left/v1"
+    gel_type: "marker"  # or "plain"
 
   right:
     sensor_id: "tac_lightning_finger_right_0"
@@ -30,3 +31,4 @@ sensors:
     serial_number: "GELSIGHT-RIGHT-SERIAL"
     model: "GelSight Mini"
     calibration_ref: "calib://gelsight/right/v1"
+    gel_type: "marker"  # or "plain"

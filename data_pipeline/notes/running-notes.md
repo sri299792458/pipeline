@@ -1218,3 +1218,24 @@
   - but the running viewer process was not being restarted when `Open Viewer` targeted a newer dataset/episode
 - Fixed `data_pipeline/operator_console_backend.py` so `Open Viewer` no longer returns early just because `:3000` is reachable.
 - The backend now checks whether the currently managed viewer process matches the desired dataset/episode command and restarts it when the target changes.
+
+### Minimal tactile provenance in raw manifests
+
+- Revisited what tactile metadata is actually meaningful to preserve if the goal is:
+  - keep only the source tactile image in the bag
+  - avoid storing derived depth / marker / slip products
+  - still make later reprocessing defensible
+- Tightened the scope to only runtime-available provenance from the current GelSight bridge:
+  - `device_path` / `device_index`
+  - `frame_id`
+  - `encoding`
+  - `fps`
+  - `capture_width` / `capture_height`
+  - `output_width` / `output_height`
+  - preprocessing summary:
+    - `pipeline`
+    - `border_fraction`
+    - `crop_applied`
+- Added these fields to the raw manifest inference path by declaring them as ROS params in `data_pipeline/gelsight_bridge.py` and reading them in `data_pipeline/pipeline_utils.py`.
+- Updated `data_pipeline/V1_SPEC.md` to state that this tactile provenance extension is intentionally narrow and should not be replaced with fake calibration placeholders or derived tactile outputs.
+- Updated `data_pipeline/configs/sensors.example.yaml` to show `gel_type` as an explicit manual inventory field (`marker` vs `plain`).

@@ -60,8 +60,22 @@ class GelSightBridge(Node):
             raise RuntimeError(f"Could not open GelSight device: {self.device}")
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+        capture_width = int(round(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH)))
+        capture_height = int(round(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
         frame_id = args.frame_id or f"spark_tactile_{args.sensor_name}_optical_frame"
         self.frame_id = frame_id
+        self.declare_parameter("device_path", args.device_path)
+        self.declare_parameter("device_index", int(args.device_index))
+        self.declare_parameter("capture_width", capture_width)
+        self.declare_parameter("capture_height", capture_height)
+        self.declare_parameter("output_width", int(args.width))
+        self.declare_parameter("output_height", int(args.height))
+        self.declare_parameter("border_fraction", float(args.border_fraction))
+        self.declare_parameter("fps", float(args.fps))
+        self.declare_parameter("frame_id", self.frame_id)
+        self.declare_parameter("encoding", "rgb8")
+        self.declare_parameter("preprocessing_pipeline", "crop_and_resize")
+        self.declare_parameter("crop_applied", bool(args.border_fraction > 0.0))
         self.timer = self.create_timer(1.0 / args.fps, self._publish_frame)
         self._consecutive_errors = 0
 

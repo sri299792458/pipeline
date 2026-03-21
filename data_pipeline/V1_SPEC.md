@@ -116,6 +116,27 @@ The `sensors` section should stay minimal and include only:
 
 For RealSense cameras, serial number is required.
 
+For tactile sensors, the raw manifest may also include a small provenance extension when available at capture time:
+
+- `device_path` or `device_index`
+- `frame_id`
+- `encoding`
+- `fps`
+- `capture_width`
+- `capture_height`
+- `output_width`
+- `output_height`
+- `preprocessing`
+  - `pipeline`
+  - `border_fraction`
+  - `crop_applied`
+
+This tactile extension is intentionally narrow:
+
+- keep the source tactile image as the canonical raw signal
+- record only the preprocessing needed to understand that signal later
+- do not require derived depth, marker offsets, slip fields, or vague placeholder calibration labels with no backing artifact
+
 `sensor_id` is the raw-layer stable identifier. Published dataset field names may change later, but `sensor_id` and the attachment fields should make it possible to remap old raw episodes without ambiguity.
 
 If `language_instruction` is present, the converter should use it as the published task string. Otherwise it should fall back to `task_name`.
