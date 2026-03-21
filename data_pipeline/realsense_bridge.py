@@ -85,60 +85,17 @@ def serial_aliases(value: str) -> set[str]:
     return aliases
 
 
-def query_devices_with_retry(*, max_attempts: int = 6, delay_s: float = 1.0) -> list[rs.device]:
-    last_error: Exception | None = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return list(rs.context().query_devices())
-        except RuntimeError as exc:
-            last_error = exc
-            if attempt == max_attempts:
-                break
-            time.sleep(delay_s)
-    raise RuntimeError(f"Failed to enumerate RealSense devices after {max_attempts} attempts: {last_error}")
-
-
-def resolve_serial_from_devices(requested_serial: str, devices: list[rs.device]) -> str:
-    requested_aliases = serial_aliases(requested_serial)
-    exact_matches: list[str] = []
-    alias_matches: list[str] = []
-
-    for device in devices:
-        serial = get_camera_info(device, rs.camera_info.serial_number)
-        if not serial:
-            continue
-        normalized_serial = normalize_serial(serial)
-        if normalized_serial == normalize_serial(requested_serial):
-            exact_matches.append(serial)
-            continue
-        if serial_aliases(serial) & requested_aliases:
-            alias_matches.append(serial)
-
-    if len(exact_matches) == 1:
-        return exact_matches[0]
-    if len(exact_matches) > 1:
-        raise RuntimeError(f"Serial {requested_serial!r} matched multiple exact devices: {exact_matches}")
-    if len(alias_matches) == 1:
-        return alias_matches[0]
-    if len(alias_matches) > 1:
-        raise RuntimeError(f"Serial {requested_serial!r} matched multiple alias devices: {alias_matches}")
-
-    available = sorted(
-        filter(
-            None,
-            (get_camera_info(device, rs.camera_info.serial_number) for device in devices),
-        )
-    )
-    raise RuntimeError(f"Requested RealSense serial {requested_serial!r} not found. Available serials: {available}")
+def canonical_serial(value: str) -> str:
+    aliases = sorted(serial_aliases(value), key=len)
+    return aliases[0]
 
 
 def resolve_camera_specs(camera_specs: list[CameraSpec]) -> list[CameraSpec]:
-    devices = query_devices_with_retry()
     resolved_specs: list[CameraSpec] = []
     resolved_serials: set[str] = set()
 
     for spec in camera_specs:
-        resolved_serial = resolve_serial_from_devices(spec.serial_no, devices)
+        resolved_serial = canonical_serial(spec.serial_no)
         if resolved_serial in resolved_serials:
             raise RuntimeError(
                 f"Multiple camera specs resolved to the same physical serial {resolved_serial!r}. "

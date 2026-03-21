@@ -28,7 +28,8 @@ Current published dataset identifiers for this embodiment:
 
 - `dataset_id=spark_multisensor_lightning_v1`
 - `robot_id=spark_lightning`
-- `profile=multisensor_20hz_lightning` (auto-selected by the recorder)
+- `profile=multisensor_20hz_lightning`
+- `active_arms=lightning`
 
 
 ## 0. Shell Shortcut
@@ -83,6 +84,10 @@ ros2 launch data_pipeline/launch/realsense_contract.launch.py \
   scene_serial_no:=213622251272
 ```
 
+Note:
+
+- the launch wrapper now runs the RealSense bridge under system ROS Python and the local `build/librealsense-v2.54.2/Release` runtime; it does not rely on `.venv` for camera capture
+
 
 ## 4. Start GelSight Contract Publisher
 
@@ -127,6 +132,7 @@ spark
   --language-instruction "pick up the object and place it in the target area" \
   --robot-id spark_lightning \
   --operator srinivas \
+  --active-arms lightning \
   --sensors-file data_pipeline/configs/sensors.local.yaml \
   --dry-run
 ```
@@ -152,6 +158,7 @@ spark
   --language-instruction "pick up the object and place it in the target area" \
   --robot-id spark_lightning \
   --operator srinivas \
+  --active-arms lightning \
   --sensors-file data_pipeline/configs/sensors.local.yaml
 ```
 

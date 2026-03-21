@@ -3,15 +3,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_PYTHON="${ROOT_DIR}/.venv/bin/python"
+SYSTEM_PYTHON="/usr/bin/python3"
 UPSTREAM_LIBREALSENSE_DIR="${ROOT_DIR}/librealsense"
 WORKTREE_DIR="${ROOT_DIR}/librealsense-v2.54.2"
 BUILD_DIR="${ROOT_DIR}/build/librealsense-v2.54.2"
 RELEASE_DIR="${BUILD_DIR}/Release"
 
-if [[ ! -x "${VENV_PYTHON}" ]]; then
-  echo "Missing ${VENV_PYTHON}" >&2
-  echo "Run ./data_pipeline/setup_converter_env.sh first." >&2
+if [[ ! -x "${SYSTEM_PYTHON}" ]]; then
+  echo "Missing ${SYSTEM_PYTHON}" >&2
   exit 1
 fi
 
@@ -41,7 +40,7 @@ cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="${ROOT_DIR}/local/librealsense-2.54.2" \
   -DBUILD_PYTHON_BINDINGS=ON \
-  -DPYTHON_EXECUTABLE="${VENV_PYTHON}" \
+  -DPYTHON_EXECUTABLE="${SYSTEM_PYTHON}" \
   -DBUILD_EXAMPLES=OFF \
   -DBUILD_TOOLS=OFF \
   -DBUILD_UNIT_TESTS=OFF \
@@ -54,22 +53,13 @@ cmake --build "${BUILD_DIR}" --target pyrealsense2 -j"$(nproc)"
 export PYTHONPATH="${RELEASE_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 export LD_LIBRARY_PATH="${RELEASE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
-"${VENV_PYTHON}" - <<'PY'
+"${SYSTEM_PYTHON}" - <<'PY'
+import sys
 import pyrealsense2 as rs
 import rclpy
 
-devices = []
-for device in rs.context().query_devices():
-    try:
-        name = device.get_info(rs.camera_info.name)
-    except Exception:
-        name = "<unknown>"
-    try:
-        serial = device.get_info(rs.camera_info.serial_number)
-    except Exception:
-        serial = "<unknown>"
-    devices.append((name, serial))
-
 print("Direct RealSense runtime ready from local librealsense v2.54.2 build")
-print(f"Enumerated devices: {devices}")
+print(f"Python executable: {sys.executable}")
+print(f"pyrealsense2 module: {rs.__file__}")
+print(f"rclpy module: {rclpy.__file__}")
 PY

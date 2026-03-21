@@ -7,7 +7,7 @@ from launch.substitutions import LaunchConfiguration
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+SYSTEM_PYTHON = Path("/usr/bin/python3")
 BRIDGE_SCRIPT = REPO_ROOT / "data_pipeline" / "realsense_bridge.py"
 LOCAL_LIBREALSENSE_RELEASE = REPO_ROOT / "build" / "librealsense-v2.54.2" / "Release"
 
@@ -44,7 +44,7 @@ def _launch_setup(context):
         ld_library_path = f"{ld_library_path}:{existing_ld_library_path}"
 
     cmd = [
-        str(VENV_PYTHON),
+        str(SYSTEM_PYTHON),
         str(BRIDGE_SCRIPT),
         "--camera-namespace",
         "/" + LaunchConfiguration("camera_namespace").perform(context).strip("/"),

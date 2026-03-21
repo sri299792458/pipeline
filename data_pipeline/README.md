@@ -43,13 +43,13 @@ So the intended published split is:
 Current implementation note:
 
 - the shipped default config file remains the bimanual `multisensor_20hz.yaml`
-- raw recording now infers active arms and stamps the matching published profile into the manifest
+- raw recording now requires explicit `--active-arms` and stamps the matching published profile into the manifest
 - conversion defaults to the manifest-selected profile when `--profile` is omitted
 
 
 ## Runtime Split
 
-Live ROS capture should use system ROS Jazzy. Most direct scripts use `/usr/bin/python3`; the RealSense launch wrapper starts `.venv/bin/python` so it can use both `rclpy` and `pyrealsense2` from one interpreter.
+Live ROS capture should use system ROS Jazzy and `/usr/bin/python3`. The RealSense launch wrapper now starts system Python with ROS sourced and injects the local `build/librealsense-v2.54.2/Release` runtime through `PYTHONPATH` and `LD_LIBRARY_PATH`.
 
 Offline conversion and LeRobot export should use the local `.venv` created by:
 
@@ -78,6 +78,8 @@ ros2 launch data_pipeline/launch/realsense_contract.launch.py \
   wrist_serial_no:=<WRIST_SERIAL> \
   scene_serial_no:=<SCENE_SERIAL>
 ```
+
+That setup script builds the local `pyrealsense2` binding for system ROS Python, not for `.venv`.
 
 This bridge stamps `Image.header.stamp` with host ROS time immediately after `wait_for_frames()` returns, which matches the V1 topic contract directly. Older bags that include official RealSense metadata topics are still supported by the converter.
 
@@ -112,6 +114,7 @@ Dry-run the topic selection first:
   --language-instruction "pick up the object and place it in the target area" \
   --robot-id <robot_id_for_this_run> \
   --operator <operator_name> \
+  --active-arms <lightning|thunder|lightning,thunder> \
   --sensors-file data_pipeline/configs/sensors.example.yaml \
   --dry-run
 ```
@@ -125,6 +128,7 @@ Record one episode:
   --language-instruction "pick up the object and place it in the target area" \
   --robot-id <robot_id_for_this_run> \
   --operator <operator_name> \
+  --active-arms <lightning|thunder|lightning,thunder> \
   --sensors-file data_pipeline/configs/sensors.example.yaml
 ```
 
@@ -134,7 +138,7 @@ Each episode is written under `raw_episodes/<episode_id>/` with:
 - `episode_manifest.json`
 - `notes.md`
 
-When `--active-arms` is left at its default `auto`, the recorder probes which `/spark/{arm}/robot/joint_state` topics are actually producing messages and selects:
+`--active-arms` is now explicit for recording runs. The recorder uses that value to select:
 
 - `multisensor_20hz`
   - if both arms are active

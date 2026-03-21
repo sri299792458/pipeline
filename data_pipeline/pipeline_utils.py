@@ -78,31 +78,6 @@ def profile_required_arms(profile: dict[str, Any]) -> list[str]:
     return normalize_active_arms(arm_sources)
 
 
-def topic_has_message(topic: str, timeout_s: float = 1.5) -> bool:
-    try:
-        result = subprocess.run(
-            ["ros2", "topic", "echo", "--once", topic],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=timeout_s,
-        )
-    except subprocess.TimeoutExpired:
-        return False
-    return result.returncode == 0
-
-
-def infer_active_arms(live_topics: dict[str, str], probe_timeout_s: float = 1.5) -> list[str]:
-    active_arms: list[str] = []
-    for arm in ARM_ORDER:
-        topic = f"/spark/{arm}/robot/joint_state"
-        if topic not in live_topics:
-            continue
-        if topic_has_message(topic, timeout_s=probe_timeout_s):
-            active_arms.append(arm)
-    return active_arms
-
-
 def resolve_profile_for_active_arms(
     profile_ref: str | Path | None,
     active_arms: list[str] | tuple[str, ...] | set[str],
@@ -177,13 +152,18 @@ def required_topics_from_profile(profile: dict[str, Any]) -> list[str]:
     return sorted(required)
 
 
-def run_command(cmd: list[str], cwd: str | Path | None = None) -> subprocess.CompletedProcess[str]:
+def run_command(
+    cmd: list[str],
+    cwd: str | Path | None = None,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=str(cwd) if cwd is not None else None,
         check=True,
         text=True,
         capture_output=True,
+        timeout=timeout,
     )
 
 
@@ -203,7 +183,7 @@ def list_live_topics() -> dict[str, str]:
 
 
 def read_param_dump(node_name: str) -> dict[str, Any]:
-    result = run_command(["ros2", "param", "dump", node_name])
+    result = run_command(["ros2", "param", "dump", node_name], timeout=3.0)
     data = yaml.safe_load(result.stdout) or {}
     node_params = data.get(node_name, {})
     ros_params = node_params.get("ros__parameters", {})
@@ -286,7 +266,7 @@ def infer_sensor_metadata(
 
         try:
             params = read_param_dump(topic_prefix)
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             params = {}
 
         serial = str(params.get("serial_no", "")).strip()

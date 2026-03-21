@@ -654,3 +654,28 @@
 - Kept the useful runtime fixes:
   - `launch_devs.py` still uses `sys.executable`
   - `SparkNode.py` now tolerates ESP32 boot chatter / delayed first JSON packet instead of crashing at startup
+
+### Recorder simplification: explicit active arms
+
+- Removed `--active-arms auto` from `data_pipeline/record_episode.py`.
+- Recording now requires an explicit embodiment declaration:
+  - `--active-arms lightning`
+  - `--active-arms thunder`
+  - `--active-arms lightning,thunder`
+- Reason:
+  - the auto-detection path introduced avoidable hardware flakiness during bring-up
+  - explicit active-arm selection is simpler and more reliable for real collection
+- Removed the now-unused active-arm probe helpers from `data_pipeline/pipeline_utils.py`.
+
+### Capture/runtime split for RealSense
+
+- Confirmed the stable machine boundary is:
+  - live capture: system ROS Python `/usr/bin/python3`
+  - offline conversion / LeRobot: local `.venv`
+- Reason:
+  - `lerobot` requires Python `>=3.12`
+  - the stable local RealSense runtime on this host is the official `librealsense v2.54.2` build wired into system ROS Python
+  - mixing both into one environment created repeated `pyrealsense2` packaging and enumeration failures
+- Updated `data_pipeline/launch/realsense_contract.launch.py` so the RealSense bridge now launches with `/usr/bin/python3`, not `.venv/bin/python`.
+- Updated `data_pipeline/setup_realsense_contract_runtime.sh` so it now builds the local `pyrealsense2` binding for system Python and validates imports without relying on `query_devices()`.
+- Kept the earlier `data_pipeline/realsense_bridge.py` fix that removes upfront `query_devices()` dependence and instead canonicalizes the provided serials before per-camera startup.

@@ -36,7 +36,7 @@ Why:
 Current implementation note:
 
 - the shipped default config file `data_pipeline/configs/multisensor_20hz.yaml` is still the bimanual profile
-- the recorder now probes active robot-state topics and stamps the matching published profile into the raw manifest
+- the recorder now requires explicit `--active-arms` and stamps the matching published profile into the raw manifest
 - the converter now defaults to the manifest-selected profile when `--profile` is omitted
 
 
@@ -140,7 +140,7 @@ Use the GUI to connect to the UR arms and bring the system into the control mode
 
 Notes:
 
-- The current local bring-up path uses `.venv` because that environment now contains both ROS-compatible Python packages and `ur_rtde`.
+- The current local Teleop bring-up path still uses `.venv` because that environment contains the Teleop Python dependencies such as `ur_rtde`.
 - If the GUI logs `Please enable remote control on the robot!`, the dashboard connection succeeded but UR RTDE control was refused by the robot-side remote-control setting.
 
 Expected V1 robot topics come from this process:
@@ -180,7 +180,7 @@ Expected topics:
 - `/spark/cameras/scene/depth/image_rect_raw`
 
 This bridge uses `pyrealsense2` directly and stamps both color and depth images with host ROS time immediately after `wait_for_frames()` returns.
-The setup script builds and validates the local official `librealsense v2.54.2` runtime that is currently required for L515 support on this host.
+The setup script builds and validates the local official `librealsense v2.54.2` runtime for system ROS Python, which is currently required for stable L515 support on this host.
 
 
 ## 6. Start The GelSight Contract Publishers
@@ -246,6 +246,7 @@ source /opt/ros/jazzy/setup.bash
   --language-instruction "pick up the object and place it in the target area" \
   --robot-id <robot_id_for_this_run> \
   --operator <operator_name> \
+  --active-arms <lightning|thunder|lightning,thunder> \
   --sensors-file data_pipeline/configs/sensors.local.yaml \
   --dry-run
 ```
@@ -272,6 +273,7 @@ source /opt/ros/jazzy/setup.bash
   --language-instruction "pick up the object and place it in the target area" \
   --robot-id <robot_id_for_this_run> \
   --operator <operator_name> \
+  --active-arms <lightning|thunder|lightning,thunder> \
   --sensors-file data_pipeline/configs/sensors.local.yaml
 ```
 
