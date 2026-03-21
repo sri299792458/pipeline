@@ -1471,4 +1471,11 @@
   - Playwright screenshot/DOM check against the real dataset route:
     - `local/spark_multisensor_lightning_tactile_depth_eval/episode_0`
     - confirmed both depth images render at `640x480` in the browser
+- Follow-up fix:
+  - depth initially appeared pinned to `frame 0`
+  - root cause was time-base mismatch: depth sidecar timestamps are absolute epoch seconds, while the viewer playback clock is episode-relative seconds
+  - normalized depth timestamps to the episode-relative clock before nearest-frame selection
+  - re-verified with Playwright on:
+    - `local/spark_multisensor_lightning_tactile_depth_eval/episode_0?t=5`
+    - both depth cards now advance correctly to `frame 100`
 - Kept the existing RGB video player unchanged; depth is rendered as an extra synchronized section in the Episodes tab rather than being forced through the MP4 path.
