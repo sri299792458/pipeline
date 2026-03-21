@@ -741,3 +741,17 @@
   - `Validate` failed for the real reason:
     - timed out waiting for `/spark/tactile/left/color/image_raw`
   - the health card also surfaced the underlying launch failure for the GelSight bridge process
+
+### Operator Console readiness-model correction
+
+- Follow-up observation from real use:
+  - the earlier backend run was not a full success signal because the robot was not actually turned on
+  - and the active preset incorrectly assumed a connected GelSight when the tactile device was absent
+- Adjusted the console accordingly:
+  - added a `lightning_d405_d455_no_tactile` preset so the default path does not flag a missing GelSight unnecessarily
+  - restored representative message-flow probes for continuous health, but with caching and startup grace instead of probing every refresh cycle
+  - kept the stronger end-to-end stream probe in `Validate`
+- Result:
+  - GelSight can now be removed from the required set cleanly by preset
+  - Teleop and SPARK no longer become green purely from process spawn plus topic presence
+  - the console health model is closer to "runtime up vs actually validated" instead of collapsing those into one signal

@@ -1,4 +1,25 @@
 presets:
+  lightning_d405_d455_no_tactile:
+    label: "Lightning + D405 + D455"
+    active_arms: "lightning"
+    dataset_id: "spark_multisensor_lightning_v1"
+    robot_id: "spark_lightning"
+    task_name: "pick_place"
+    language_instruction: "pick up the object and place it in the target area"
+    operator: ""
+    sensors_file: "data_pipeline/configs/sensors.local.yaml"
+    realsense:
+      enabled: true
+      wrist_serial_no: "130322273305"
+      scene_serial_no: "213622251272"
+    gelsight:
+      enabled: false
+      enable_left: false
+      enable_right: false
+      left_device_path: ""
+      right_device_path: ""
+    viewer_base_url: "http://10.33.55.65:3000"
+
   lightning_d405_d455_left_gelsight:
     label: "Lightning + D405 + D455 + Left GelSight"
     active_arms: "lightning"

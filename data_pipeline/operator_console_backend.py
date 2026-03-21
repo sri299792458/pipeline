@@ -78,6 +78,7 @@ class OperatorConsoleBackend:
         self.latest_viewer_url: str | None = None
         self.latest_conversion_output = ""
         self.pending_conversion_dataset_id: str | None = None
+        self.topic_probe_cache: dict[str, tuple[float, bool]] = {}
         self.session_id = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.session_events: list[dict[str, Any]] = []
         self.session_log_dir = STATE_DIR / "sessions"
@@ -292,17 +293,21 @@ class OperatorConsoleBackend:
     def _spark_health(self, config: dict[str, Any], live_topics: dict[str, str]) -> dict[str, Any]:
         arms = self._active_arm_list(config)
         required_topics = []
+        sample_topics = []
         for arm in arms:
             required_topics.extend([f"/Spark_angle/{arm}", f"/Spark_enable/{arm}"])
+            sample_topics.append(f"/Spark_angle/{arm}")
         return self._build_health_card(
             process_name="spark_devices",
             live_topics=live_topics,
             required_topics=required_topics,
+            sample_topics=sample_topics,
         )
 
     def _teleop_health(self, config: dict[str, Any], live_topics: dict[str, str]) -> dict[str, Any]:
         arms = self._active_arm_list(config)
         required_topics = []
+        sample_topics = []
         for arm in arms:
             required_topics.extend(
                 [
@@ -314,10 +319,12 @@ class OperatorConsoleBackend:
                     f"/spark/{arm}/teleop/cmd_gripper_state",
                 ]
             )
+            sample_topics.append(f"/spark/{arm}/robot/joint_state")
         card = self._build_health_card(
             process_name="teleop_gui",
             live_topics=live_topics,
             required_topics=required_topics,
+            sample_topics=sample_topics,
         )
         if card["status"] == "yellow":
             card["summary"] = "Teleop running; connect robot in Teleop GUI"
@@ -334,6 +341,7 @@ class OperatorConsoleBackend:
             process_name="realsense_contract",
             live_topics=live_topics,
             required_topics=required_topics,
+            sample_topics=list(required_topics),
         )
 
     def _gelsight_health(self, config: dict[str, Any], live_topics: dict[str, str]) -> dict[str, Any]:
@@ -348,6 +356,7 @@ class OperatorConsoleBackend:
             process_name="gelsight_contract",
             live_topics=live_topics,
             required_topics=required_topics,
+            sample_topics=list(required_topics),
         )
 
     def _recorder_health(self) -> dict[str, Any]:
@@ -368,12 +377,18 @@ class OperatorConsoleBackend:
         process_name: str,
         live_topics: dict[str, str],
         required_topics: list[str],
+        sample_topics: list[str],
     ) -> dict[str, Any]:
         process = self.processes[process_name]
         missing_topics = [topic for topic in required_topics if topic not in live_topics]
+        dead_sample_topics = [
+            topic for topic in sample_topics if topic in live_topics and not self._topic_has_message_cached(topic)
+        ]
         details = []
         if missing_topics:
             details.append("Missing topics: " + ", ".join(missing_topics))
+        if dead_sample_topics:
+            details.append("No messages on: " + ", ".join(dead_sample_topics))
         startup_grace = self.STARTUP_GRACE_S.get(process_name, 0.0)
         within_grace = process.started_at is not None and (time.time() - process.started_at) < startup_grace
         log_hint = self._latest_log_hint(process)
@@ -386,7 +401,7 @@ class OperatorConsoleBackend:
                 "summary": f"{process.display_name} failed",
                 "details": details or [f"Exit code {process.exit_code}"],
             }
-        if missing_topics:
+        if missing_topics or dead_sample_topics:
             if process.state == "running" and within_grace:
                 return {
                     "status": "yellow",
@@ -452,6 +467,17 @@ class OperatorConsoleBackend:
         except subprocess.TimeoutExpired:
             return False
         return result.returncode == 0
+
+    def _topic_has_message_cached(self, topic: str, timeout_s: float = 0.8, ttl_s: float = 5.0) -> bool:
+        cached = self.topic_probe_cache.get(topic)
+        now = time.time()
+        if cached is not None:
+            ts, value = cached
+            if (now - ts) < ttl_s:
+                return value
+        value = self._topic_has_message(topic, timeout_s=timeout_s)
+        self.topic_probe_cache[topic] = (now, value)
+        return value
 
     def _run_validation(self, config: dict[str, Any]) -> None:
         self.last_validation_ok = False
