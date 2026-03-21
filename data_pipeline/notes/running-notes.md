@@ -755,3 +755,26 @@
   - GelSight can now be removed from the required set cleanly by preset
   - Teleop and SPARK no longer become green purely from process spawn plus topic presence
   - the console health model is closer to "runtime up vs actually validated" instead of collapsing those into one signal
+
+### Operator Console explicit validation state and per-process controls
+
+- Continued the console without changing the overall layout:
+  - added explicit validation-state reporting in the header
+  - added per-card Start/Stop controls for the existing subsystem cards
+- Backend changes:
+  - added `validation_state(config)` with explicit states:
+    - `not_run`
+    - `running`
+    - `passed`
+    - `failed`
+    - `stale`
+  - added `start_named_process(...)` and `stop_named_process(...)` so the UI can restart one subsystem without tearing down the whole session
+  - made validation re-entrant safe by ignoring duplicate validate clicks while a validation thread is already running
+- UI changes:
+  - header now shows both session state and validation state
+  - subsystem cards now expose lightweight Start/Stop controls
+  - recorder controls now respect the explicit validation state rather than only the old boolean flag
+- Smoke validation:
+  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
+  - `timeout 5s python3 data_pipeline/operator_console.py`
+  - both passed without Tk/runtime errors

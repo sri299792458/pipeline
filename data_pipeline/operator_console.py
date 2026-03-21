@@ -54,12 +54,13 @@ class OperatorConsoleApp:
         }
 
         self.session_state_var = tk.StringVar(value="idle")
+        self.validation_state_var = tk.StringVar(value="Validation: not_run")
         self.latest_episode_var = tk.StringVar(value="")
         self.latest_dataset_var = tk.StringVar(value="")
         self.latest_viewer_var = tk.StringVar(value="")
         self.command_var = tk.StringVar(value="")
 
-        self.health_cards: dict[str, tuple[tk.Label, tk.Label]] = {}
+        self.health_cards: dict[str, tuple[tk.Label, tk.Label, tk.Button, tk.Button]] = {}
 
         self._build_ui()
         self._load_first_preset()
@@ -75,7 +76,10 @@ class OperatorConsoleApp:
         header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=10)
         header.grid_columnconfigure(1, weight=1)
         tk.Label(header, text="Operator Console", font=("Helvetica", 20, "bold")).grid(row=0, column=0, sticky="w")
-        tk.Label(header, textvariable=self.session_state_var, font=("Helvetica", 14)).grid(row=0, column=1, sticky="e")
+        state_frame = tk.Frame(header)
+        state_frame.grid(row=0, column=1, sticky="e")
+        tk.Label(state_frame, textvariable=self.session_state_var, font=("Helvetica", 14)).pack(anchor="e")
+        tk.Label(state_frame, textvariable=self.validation_state_var, font=("Helvetica", 11)).pack(anchor="e")
 
         left = tk.Frame(self.root)
         left.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=(0, 10))
@@ -177,7 +181,14 @@ class OperatorConsoleApp:
             summary.pack(fill="x", padx=6, pady=(6, 4))
             details = tk.Label(card, text="", anchor="w", justify="left", wraplength=360)
             details.pack(fill="x", padx=6, pady=(0, 6))
-            self.health_cards[name] = (summary, details)
+            controls = tk.Frame(card)
+            controls.pack(fill="x", padx=6, pady=(0, 6))
+            start_button = tk.Button(controls, text="Start", width=10, command=lambda process=name: self._start_named_process(process))
+            start_button.pack(side="left", padx=(0, 6))
+            stop_button = tk.Button(controls, text="Stop", width=10, command=lambda process=name: self._stop_named_process(process))
+            stop_button.pack(side="left")
+            self.health_cards[name] = (summary, details, start_button, stop_button)
+        frame.grid_columnconfigure(0, weight=1)
 
     def _build_logs(self, parent: tk.Widget) -> None:
         command_frame = tk.LabelFrame(parent, text="Selected Process Command")
@@ -277,11 +288,18 @@ class OperatorConsoleApp:
     def _open_viewer(self) -> None:
         self.backend.open_viewer(self._config())
 
+    def _start_named_process(self, name: str) -> None:
+        self.backend.start_named_process(name, self._config())
+
+    def _stop_named_process(self, name: str) -> None:
+        self.backend.stop_named_process(name)
+
     def _tick(self) -> None:
         config = self._config()
         self.backend.request_health_refresh(config)
         snapshot = self.backend.snapshot(config)
         self.session_state_var.set(f"State: {snapshot['session_state']}")
+        self.validation_state_var.set(f"Validation: {snapshot.get('validation_state', 'not_run')}")
         self.latest_episode_var.set(snapshot.get("latest_episode_id") or "")
         self.latest_dataset_var.set(snapshot.get("latest_dataset_id") or "")
         self.latest_viewer_var.set(snapshot.get("latest_viewer_url") or "")
@@ -293,7 +311,7 @@ class OperatorConsoleApp:
 
     def _render_health(self, health: dict[str, dict[str, object]]) -> None:
         for name, widgets in self.health_cards.items():
-            summary_widget, details_widget = widgets
+            summary_widget, details_widget, _start_button, _stop_button = widgets
             card = health.get(name, {"status": "off", "summary": "Unknown", "details": []})
             status = str(card.get("status", "off"))
             summary_widget.configure(text=str(card.get("summary", "Unknown")), bg=STATUS_COLORS.get(status, "#e0e0e0"))
@@ -342,10 +360,12 @@ class OperatorConsoleApp:
 
     def _update_button_states(self, snapshot: dict[str, object]) -> None:
         session_state = str(snapshot.get("session_state", "idle"))
+        validation_state = str(snapshot.get("validation_state", "not_run"))
         ready = session_state in {"ready_for_dry_run", "ready_to_record", "recorded", "converted", "review_ready"}
-        can_record = bool(snapshot.get("last_validation_ok")) and session_state in {"ready_to_record", "recorded", "converted", "review_ready"}
-        recorder_state = snapshot.get("processes", {}).get("recorder", {}).get("state")
-        converter_state = snapshot.get("processes", {}).get("converter", {}).get("state")
+        can_record = validation_state == "passed" and session_state in {"ready_to_record", "recorded", "converted", "review_ready"}
+        processes = snapshot.get("processes", {})
+        recorder_state = processes.get("recorder", {}).get("state")
+        converter_state = processes.get("converter", {}).get("state")
 
         self.validate_button.configure(state="normal" if ready or session_state == "bringing_up" else "disabled")
         self.record_button.configure(state="normal" if can_record else "disabled")
@@ -356,6 +376,19 @@ class OperatorConsoleApp:
         self.viewer_button.configure(
             state="normal" if snapshot.get("latest_dataset_id") else "disabled"
         )
+        for name, widgets in self.health_cards.items():
+            _summary_widget, _details_widget, start_button, stop_button = widgets
+            state = str(processes.get(name, {}).get("state", "stopped"))
+            start_enabled = state not in {"running", "starting", "stopping"}
+            stop_enabled = state in {"running", "starting", "failed"}
+            if name == "gelsight_contract" and not self.form_vars["gelsight_enabled"].get():
+                start_enabled = False
+                stop_enabled = False
+            if name == "recorder":
+                start_enabled = bool(can_record)
+                stop_enabled = recorder_state == "running"
+            start_button.configure(state="normal" if start_enabled else "disabled")
+            stop_button.configure(state="normal" if stop_enabled else "disabled")
 
 
 def main() -> int:

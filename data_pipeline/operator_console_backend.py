@@ -69,6 +69,7 @@ class OperatorConsoleBackend:
         self.process_lock = threading.Lock()
         self.last_health: dict[str, dict[str, Any]] = {}
         self.health_refresh_in_flight = False
+        self.validation_running = False
         self.last_validation_ok = False
         self.last_validation_output = ""
         self.last_validation_signature = ""
@@ -136,6 +137,7 @@ class OperatorConsoleBackend:
     def snapshot(self, config: dict[str, Any]) -> dict[str, Any]:
         return {
             "session_state": self.session_state(config),
+            "validation_state": self.validation_state(config),
             "processes": {
                 name: {
                     "display_name": proc.display_name,
@@ -156,11 +158,51 @@ class OperatorConsoleBackend:
             "latest_conversion_output": self.latest_conversion_output,
         }
 
+    def validation_state(self, config: dict[str, Any]) -> str:
+        if self.validation_running:
+            return "running"
+        if self.last_validation_ok and self.last_validation_signature == self._config_signature(config):
+            return "passed"
+        if self.last_validation_output and not self.last_validation_ok:
+            return "failed"
+        if self.last_validation_ok and self.last_validation_signature != self._config_signature(config):
+            return "stale"
+        return "not_run"
+
     def get_process_logs(self, name: str) -> list[str]:
         process = self.processes.get(name)
         if process is None:
             return []
         return process.get_logs()
+
+    def start_named_process(self, name: str, config: dict[str, Any]) -> None:
+        if name == "spark_devices":
+            self._start_process("spark_devices", self._build_spark_devices_command())
+        elif name == "teleop_gui":
+            self._start_process("teleop_gui", self._build_teleop_gui_command())
+        elif name == "realsense_contract":
+            self._start_process("realsense_contract", self._build_realsense_command(config))
+        elif name == "gelsight_contract":
+            if config.get("gelsight_enabled", False):
+                self._start_process("gelsight_contract", self._build_gelsight_command(config))
+        elif name == "recorder":
+            self.start_recording(config)
+            return
+        elif name == "converter":
+            self.start_conversion(config)
+            return
+        else:
+            raise ValueError(f"Unsupported process name: {name}")
+        self._record_event("start_process", {"name": name})
+
+    def stop_named_process(self, name: str) -> None:
+        if name == "recorder":
+            self.stop_recording()
+            return
+        if name not in self.processes:
+            raise ValueError(f"Unsupported process name: {name}")
+        self._stop_process(name)
+        self._record_event("stop_process", {"name": name})
 
     def start_session(self, config: dict[str, Any]) -> None:
         self.last_action_error = ""
@@ -180,6 +222,8 @@ class OperatorConsoleBackend:
         self._record_event("stop_session", {})
 
     def start_validation(self, config: dict[str, Any]) -> None:
+        if self.validation_running:
+            return
         thread = threading.Thread(target=self._run_validation, args=(config,), daemon=True)
         thread.start()
 
@@ -480,6 +524,7 @@ class OperatorConsoleBackend:
         return value
 
     def _run_validation(self, config: dict[str, Any]) -> None:
+        self.validation_running = True
         self.last_validation_ok = False
         self.last_validation_signature = ""
         probe_errors = self._probe_required_streams(config)
@@ -494,6 +539,7 @@ class OperatorConsoleBackend:
                     "output": self.last_validation_output,
                 },
             )
+            self.validation_running = False
             return
 
         command = self._build_record_command(config, episode_id="", dry_run=True)
@@ -524,6 +570,8 @@ class OperatorConsoleBackend:
             self.last_validation_signature = ""
             self.last_validation_output = str(exc)
             self.last_action_error = f"Validate failed: {exc}"
+        finally:
+            self.validation_running = False
 
     def _probe_required_streams(self, config: dict[str, Any]) -> list[str]:
         errors: list[str] = []
