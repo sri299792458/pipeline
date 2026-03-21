@@ -90,8 +90,8 @@ class HealthCard(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
 
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
@@ -109,7 +109,6 @@ class HealthCard(QFrame):
         self.summary_label = QLabel("Unknown")
         self.summary_label.setWordWrap(True)
         self.summary_label.setObjectName("cardSummary")
-        self.summary_label.setMinimumHeight(28)
         layout.addWidget(self.summary_label)
 
         self.details_label = QLabel("")
@@ -119,7 +118,7 @@ class HealthCard(QFrame):
 
         button_row = QHBoxLayout()
         button_row.setContentsMargins(0, 2, 0, 0)
-        button_row.setSpacing(8)
+        button_row.setSpacing(6)
         self.primary_button = QPushButton("Start")
         self.secondary_button = QPushButton("Stop")
         button_row.addWidget(self.primary_button)
@@ -186,8 +185,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(12)
         right_layout.addWidget(self._build_command_panel())
-        right_layout.addWidget(self._build_logs_panel(), 1)
-        right_layout.addWidget(self._build_output_panel(), 1)
+        right_layout.addWidget(self._build_logs_panel(), 3)
+        right_layout.addWidget(self._build_output_panel(), 2)
         splitter.addWidget(right_panel)
 
         splitter.setStretchFactor(0, 0)
@@ -211,6 +210,12 @@ class OperatorConsoleQtWindow(QMainWindow):
 
         layout.addWidget(self._build_task_box())
         layout.addWidget(self._build_sensor_box())
+        self.advanced_toggle_button = QPushButton("Show Advanced")
+        self.advanced_toggle_button.clicked.connect(self._toggle_advanced_box)
+        layout.addWidget(self.advanced_toggle_button)
+        self.advanced_box = self._build_advanced_box()
+        self.advanced_box.setVisible(False)
+        layout.addWidget(self.advanced_box)
         layout.addWidget(self._build_session_actions_box())
         layout.addWidget(self._build_artifacts_box())
         layout.addStretch(1)
@@ -261,8 +266,6 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.form_widgets["scene_serial_no"] = QLineEdit()
         self.form_widgets["gelsight_left_device_path"] = QLineEdit()
         self.form_widgets["viewer_base_url"] = QLineEdit("http://10.33.55.65:3000")
-        self.form_widgets["notes"] = QLineEdit()
-        self.form_widgets["extra_topics"] = QLineEdit()
 
         for label, key in [
             ("Sensors File", "sensors_file"),
@@ -270,8 +273,6 @@ class OperatorConsoleQtWindow(QMainWindow):
             ("Scene Serial", "scene_serial_no"),
             ("GelSight Left Path", "gelsight_left_device_path"),
             ("Viewer Base URL", "viewer_base_url"),
-            ("Notes", "notes"),
-            ("Extra Topics", "extra_topics"),
         ]:
             form.addRow(label, self.form_widgets[key])
 
@@ -279,6 +280,24 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.form_widgets["gelsight_enabled"] = gelsight_checkbox
         form.addRow("", gelsight_checkbox)
         return box
+
+    def _build_advanced_box(self) -> QWidget:
+        box = QGroupBox("Advanced")
+        form = QFormLayout(box)
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.form_widgets["notes"] = QLineEdit()
+        self.form_widgets["extra_topics"] = QLineEdit()
+        form.addRow("Notes", self.form_widgets["notes"])
+        form.addRow("Extra Topics", self.form_widgets["extra_topics"])
+        return box
+
+    def _toggle_advanced_box(self) -> None:
+        visible = not self.advanced_box.isVisible()
+        self.advanced_box.setVisible(visible)
+        self.advanced_toggle_button.setText("Hide Advanced" if visible else "Show Advanced")
 
     def _build_session_actions_box(self) -> QWidget:
         box = QGroupBox("Session Actions")
@@ -344,6 +363,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.command_label = QLabel("")
         self.command_label.setWordWrap(True)
         self.command_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.command_label.setMaximumHeight(66)
         layout.addWidget(self.command_label)
         return box
 
