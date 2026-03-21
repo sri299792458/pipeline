@@ -175,7 +175,23 @@ The frontend must:
 - trigger validate / record / convert / review actions
 - expose logs and exact failure points
 
-Framework choice is secondary. The backend contract and state model matter more than Tk vs Qt vs local web UI.
+V1 implementation decision:
+
+- the production frontend should be `PySide6` / Qt
+- it remains a local Python desktop app
+- it must not become a browser/server application
+
+The backend contract and state model remain more important than presentation details, but the frontend toolkit is no longer open-ended for V1.
+
+The existing Tk implementation is a prototype/reference only until the Qt frontend reaches feature parity.
+
+Qt migration must preserve:
+
+- the same backend supervisor
+- the same named-process model
+- the same readiness gates
+- the same record / convert / review workflow
+- the same failure visibility or better
 
 
 ## 9. Process Model

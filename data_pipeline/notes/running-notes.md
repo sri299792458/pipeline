@@ -1083,28 +1083,6 @@
   - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
   - `timeout 5s python3 data_pipeline/operator_console.py`
 
-### SPARK health flicker suppression
-
-- Found a real SPARK health-model issue in the Operator Console:
-  - the `spark_devices` card could briefly report `running but not ready`
-  - then flip back to `healthy` too quickly
-  - which hid an intermittent or stalled Spark stream while the Teleop GUI still failed to move on `Run Spark`
-- Tightened only the SPARK path in `data_pipeline/operator_console_backend.py`:
-  - SPARK sample probes now cover both:
-    - `/Spark_angle/{arm}`
-    - `/Spark_enable/{arm}`
-  - SPARK sample-topic probe cache TTL reduced to `0.5s`
-    - instead of reusing stale positive probe results for too long
-  - added a short SPARK-only recovery hold:
-    - after a bad sample, the card stays yellow as `SPARK Devices recovering` for `3s`
-    - instead of immediately flipping green on the next single good sample
-- Scope intentionally kept narrow:
-  - no global health-system rewrite
-  - only the SPARK card got the shorter cache and recovery hold behavior
-- Validation:
-  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
-  - `timeout 5s python3 data_pipeline/operator_console.py`
-
 ### SPARK health simplification
 
 - Follow-up simplification after reviewing the semantics of the SPARK health check:
@@ -1124,3 +1102,64 @@
     - `3s` recovery hold before returning to green
 - Validation:
   - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
+
+### SPARK static-stream detection
+
+- Rechecked the live failure case directly instead of guessing from the health card:
+  - `/Spark_angle/lightning` was publishing at about `28-30 Hz`
+  - but a direct sample probe showed the angle vector was completely unchanged across 12 messages
+  - that explains the observed behavior:
+    - SPARK card could report `healthy`
+    - while the Spark GUI itself did not move
+- Implemented a Spark-specific dynamic probe path:
+  - extended `data_pipeline/ros_topic_probe.py` with optional support for:
+    - `--min-messages`
+    - `--require-float-array-change`
+    - `--min-max-delta`
+  - added cached `Float32MultiArray` change detection in `data_pipeline/operator_console_backend.py`
+  - SPARK health now uses this only after the normal liveness check passes
+- New SPARK card behavior:
+  - green:
+    - topics present
+    - messages flowing
+    - angle vector changes over a short sample window
+  - yellow:
+    - `SPARK Devices live but static`
+    - when the stream is publishing but the angle vector is unchanged
+  - red:
+    - missing topics or dead stream
+- This keeps the health card honest without pretending it knows whether the operator is pressing the pedal.
+- Validation:
+  - `source /opt/ros/jazzy/setup.bash && /usr/bin/python3 data_pipeline/ros_topic_probe.py --topic /Spark_angle/lightning --topic-type std_msgs/msg/Float32MultiArray --timeout 1.0 --min-messages 8 --require-float-array-change --min-max-delta 1e-6`
+    returned `rc:1` on the current bad static stream
+  - `python3 -m py_compile data_pipeline/ros_topic_probe.py data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
+  - `timeout 5s python3 data_pipeline/operator_console.py`
+
+### SPARK health-model correction
+
+- Removed the earlier SPARK-specific cache-shortening and recovery-hold behavior.
+- Reason:
+  - after rechecking the live failure, that was not the real problem
+  - the real issue was a static Spark angle stream, not a transient health-card flicker problem
+- Final SPARK model is now simpler again:
+  - required topics:
+    - `/Spark_angle/{arm}`
+    - `/Spark_enable/{arm}`
+  - liveness sample:
+    - `/Spark_angle/{arm}`
+  - dynamic-state check:
+    - if the angle stream is alive but unchanged over a short sampled window, show:
+      - `SPARK Devices live but static`
+- Validation:
+  - `python3 -m py_compile data_pipeline/ros_topic_probe.py data_pipeline/operator_console_backend.py data_pipeline/operator_console.py`
+
+### Operator Console frontend decision
+
+- Updated `data_pipeline/docs/operator-console-spec.md` to make the frontend choice explicit instead of leaving it open-ended.
+- New decision:
+  - production Operator Console frontend should be `PySide6` / Qt
+  - it remains a local Python desktop app
+  - it must not become a browser/server app
+- Also clarified the migration rule:
+  - the current Tk console is a prototype/reference only
+  - Qt migration must preserve the same backend supervisor, process model, readiness gates, and operator workflow
