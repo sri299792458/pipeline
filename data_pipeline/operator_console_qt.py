@@ -23,6 +23,7 @@ try:
         QMainWindow,
         QPushButton,
         QPlainTextEdit,
+        QScrollArea,
         QSizePolicy,
         QSplitter,
         QVBoxLayout,
@@ -159,14 +160,14 @@ class OperatorConsoleQtWindow(QMainWindow):
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
-        left_layout.addWidget(self._build_form_panel(), 1)
+        left_layout.addWidget(self._make_scroll_area(self._build_form_panel()), 1)
         splitter.addWidget(left_panel)
 
         center_panel = QWidget()
         center_layout = QVBoxLayout(center_panel)
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(12)
-        center_layout.addWidget(self._build_health_panel(), 1)
+        center_layout.addWidget(self._make_scroll_area(self._build_health_panel()), 1)
         splitter.addWidget(center_panel)
 
         right_panel = QWidget()
@@ -182,6 +183,14 @@ class OperatorConsoleQtWindow(QMainWindow):
         splitter.setStretchFactor(1, 0)
         splitter.setStretchFactor(2, 1)
         splitter.setSizes([510, 480, 760])
+
+    def _make_scroll_area(self, widget: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(widget)
+        return scroll
 
     def _build_form_panel(self) -> QWidget:
         box = QGroupBox("Session")

@@ -1202,3 +1202,11 @@
 
 - Removed the now-resolved frontend-toolkit question from `data_pipeline/docs/operator-console-spec.md`.
 - The spec already names Qt / `PySide6` as the chosen production frontend, so leaving `Tk vs Qt vs local web app?` in the open-questions list was no longer accurate.
+
+### Qt scroll fix for smaller screens
+
+- Verified on a real desktop screenshot that the initial Qt layout clipped the lower health cards and left the `Converter` tile below the fold with no practical access path.
+- Wrapped the left session form column and the center subsystem-health column in vertical `QScrollArea`s.
+- Re-tested on the desktop:
+  - the `Converter` tile is now reachable without resizing the window or depending on a taller monitor
+  - the right-side logs/output column remains fixed-height and does not scroll with the forms/cards
