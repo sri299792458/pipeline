@@ -199,6 +199,11 @@ python data_pipeline/convert_episode_bag_to_lerobot.py \
   --published-root published
 ```
 
+If the selected profile declares `published_depth`, the converter also writes a lossless depth sidecar under:
+
+- `published/<dataset_id>/depth/`
+- `published/<dataset_id>/meta/depth_info.json`
+
 ## Standing Eval
 
 Run the no-hardware eval path:

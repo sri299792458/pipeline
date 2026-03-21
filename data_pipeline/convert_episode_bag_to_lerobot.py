@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import io
 import json
 import math
 import sys
@@ -15,9 +16,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 import rosbag2_py
 import yaml
 from geometry_msgs.msg import PoseStamped, WrenchStamped
+from PIL import Image as PILImage
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from sensor_msgs.msg import Image, JointState
@@ -75,6 +79,13 @@ class TopicSeries:
         ts_ns = self.timestamps_ns[idx]
         return self.values[idx], target_ns - ts_ns
 
+    def latest_before_index(self, target_ns: int) -> tuple[int, int] | None:
+        idx = bisect_right(self.timestamps_ns, target_ns) - 1
+        if idx < 0:
+            return None
+        ts_ns = self.timestamps_ns[idx]
+        return idx, target_ns - ts_ns
+
     def nearest(self, target_ns: int) -> tuple[Any, int] | None:
         idx = bisect_left(self.timestamps_ns, target_ns)
         candidates: list[tuple[Any, int]] = []
@@ -82,6 +93,17 @@ class TopicSeries:
             candidates.append((self.values[idx], abs(self.timestamps_ns[idx] - target_ns)))
         if idx > 0:
             candidates.append((self.values[idx - 1], abs(self.timestamps_ns[idx - 1] - target_ns)))
+        if not candidates:
+            return None
+        return min(candidates, key=lambda item: item[1])
+
+    def nearest_index(self, target_ns: int) -> tuple[int, int] | None:
+        idx = bisect_left(self.timestamps_ns, target_ns)
+        candidates: list[tuple[int, int]] = []
+        if idx < len(self.timestamps_ns):
+            candidates.append((idx, abs(self.timestamps_ns[idx] - target_ns)))
+        if idx > 0:
+            candidates.append((idx - 1, abs(self.timestamps_ns[idx - 1] - target_ns)))
         if not candidates:
             return None
         return min(candidates, key=lambda item: item[1])
@@ -115,6 +137,16 @@ class AlignmentFailure:
     frame_index: int
     timestamp_ns: int
     reason: str
+
+
+@dataclass
+class DepthSelection:
+    field: str
+    topic: str
+    sample_index: int
+    frame_index: int
+    timestamp_ns: int
+    skew_ms: float
 
 
 def stamp_to_ns(stamp) -> int:
@@ -156,6 +188,24 @@ def decode_image_to_rgb(msg: Image) -> np.ndarray:
         array = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width)
         return np.repeat(array[:, :, None], 3, axis=2)
     raise ValueError(f"Unsupported image encoding for published RGB conversion: {msg.encoding}")
+
+
+def decode_image_to_depth(msg: Image) -> np.ndarray:
+    encoding = msg.encoding.lower()
+    if encoding in {"16uc1", "mono16"}:
+        return np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width).copy()
+    raise ValueError(f"Unsupported image encoding for published depth conversion: {msg.encoding}")
+
+
+def encode_depth_png16(depth: np.ndarray) -> bytes:
+    if depth.dtype != np.uint16:
+        raise ValueError(f"Expected uint16 depth array, got {depth.dtype}")
+    if depth.ndim != 2:
+        raise ValueError(f"Expected 2D depth array, got shape {depth.shape}")
+    image = PILImage.fromarray(depth)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def extract_message_timestamp_ns(msg: Any, bag_timestamp_ns: int) -> int:
@@ -243,6 +293,14 @@ def build_selected_image_specs(profile: dict[str, Any], topics_with_data: set[st
     for image_spec in profile["published"]["images"]:
         if image_spec["required"] or image_spec["topic"] in topics_with_data:
             selected_specs.append(copy.deepcopy(image_spec))
+    return selected_specs
+
+
+def build_selected_depth_specs(profile: dict[str, Any], topics_with_data: set[str]) -> list[dict[str, Any]]:
+    selected_specs: list[dict[str, Any]] = []
+    for depth_spec in profile.get("published_depth", []):
+        if depth_spec["required"] or depth_spec["topic"] in topics_with_data:
+            selected_specs.append(copy.deepcopy(depth_spec))
     return selected_specs
 
 
@@ -344,9 +402,14 @@ def ensure_series_present(series: dict[str, TopicSeries], topics: list[str]) -> 
         raise RuntimeError(f"Bag is missing required topics or samples: {missing}")
 
 
-def build_effective_profile(profile: dict[str, Any], selected_image_specs: list[dict[str, Any]]) -> dict[str, Any]:
+def build_effective_profile(
+    profile: dict[str, Any],
+    selected_image_specs: list[dict[str, Any]],
+    selected_depth_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
     effective = copy.deepcopy(profile)
     effective["published"]["images"] = selected_image_specs
+    effective["published_depth"] = selected_depth_specs
     return effective
 
 
@@ -452,9 +515,10 @@ def align_episode(
     series: dict[str, TopicSeries],
     profile: dict[str, Any],
     selected_image_specs: list[dict[str, Any]],
+    selected_depth_specs: list[dict[str, Any]],
     task_name: str,
     language_instruction: str | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
+) -> tuple[list[dict[str, Any]], dict[str, list[DepthSelection]], dict[str, Any], str]:
     arm_order = profile["notes"]["arm_order"]
     fps = int(profile["dataset"]["fps"])
     published = profile["published"]
@@ -471,6 +535,7 @@ def align_episode(
         required_topics.extend(state_sources[arm].values())
         required_topics.extend(action_sources[arm].values())
     required_topics.extend(spec["topic"] for spec in selected_image_specs)
+    required_topics.extend(spec["topic"] for spec in selected_depth_specs)
 
     ensure_series_present(series, required_topics)
 
@@ -493,6 +558,8 @@ def align_episode(
         for topic in action_sources[arm].values()
     }
     image_alignment: dict[str, list[float]] = {spec["field"]: [] for spec in selected_image_specs}
+    depth_alignment: dict[str, list[float]] = {spec["field"]: [] for spec in selected_depth_specs}
+    depth_selections: dict[str, list[DepthSelection]] = {spec["field"]: [] for spec in selected_depth_specs}
 
     state_topic_order = []
     for arm in arm_order:
@@ -518,6 +585,7 @@ def align_episode(
         state_parts: list[np.ndarray] = []
         action_parts: list[np.ndarray] = []
         image_values: dict[str, np.ndarray] = {}
+        depth_frame_selections: list[DepthSelection] = []
         failure_reason: str | None = None
 
         for topic in state_topic_order:
@@ -560,6 +628,30 @@ def align_episode(
                 image_alignment[image_spec["field"]].append(skew_ns / 1e6)
                 image_values[image_spec["field"]] = value
 
+        if failure_reason is None:
+            for depth_spec in selected_depth_specs:
+                topic = depth_spec["topic"]
+                result = series[topic].nearest_index(t_ns)
+                if result is None:
+                    failure_reason = f"missing nearest depth sample for {topic}"
+                    break
+                sample_index, skew_ns = result
+                depth_skew_ns = int(round(float(depth_spec.get("max_skew_ms", 25)) * 1_000_000.0))
+                if skew_ns > depth_skew_ns:
+                    failure_reason = f"depth sample too far from grid for {topic}: {skew_ns / 1e6:.2f} ms"
+                    break
+                depth_alignment[depth_spec["field"]].append(skew_ns / 1e6)
+                depth_frame_selections.append(
+                    DepthSelection(
+                        field=depth_spec["field"],
+                        topic=topic,
+                        sample_index=sample_index,
+                        frame_index=len(frames),
+                        timestamp_ns=t_ns,
+                        skew_ms=skew_ns / 1e6,
+                    )
+                )
+
         if failure_reason is not None:
             failures.append(AlignmentFailure(frame_index=frame_index, timestamp_ns=t_ns, reason=failure_reason))
             continue
@@ -581,6 +673,8 @@ def align_episode(
             **image_values,
         }
         frames.append(frame)
+        for selection in depth_frame_selections:
+            depth_selections[selection.field].append(selection)
 
     if not frames:
         raise RuntimeError("No valid published frames remained after alignment.")
@@ -615,11 +709,16 @@ def align_episode(
                 spec["field"]: float(spec.get("max_skew_ms", 25))
                 for spec in selected_image_specs
             },
+            "depth_max_skew_ms": {
+                spec["field"]: float(spec.get("max_skew_ms", 25))
+                for spec in selected_depth_specs
+            },
         },
         "alignment_error_ms": {
             "state_topics": {topic: summarize_errors(values) for topic, values in state_alignment.items()},
             "action_topics": {topic: summarize_errors(values) for topic, values in action_alignment.items()},
             "image_fields": {field: summarize_errors(values) for field, values in image_alignment.items()},
+            "depth_fields": {field: summarize_errors(values) for field, values in depth_alignment.items()},
         },
         "action_hold_diagnostics": {
             "topics": {
@@ -633,7 +732,7 @@ def align_episode(
         },
         "failures": [failure.__dict__ for failure in failures[:25]],
     }
-    return frames, diagnostics, summary_status
+    return frames, depth_selections, diagnostics, summary_status
 
 
 def image_shapes_from_frames(frames: list[dict[str, Any]], image_fields: list[str]) -> dict[str, tuple[int, int, int]]:
@@ -645,6 +744,154 @@ def image_shapes_from_frames(frames: list[dict[str, Any]], image_fields: list[st
             raise RuntimeError(f"Image field {field} is not a 3D numpy array.")
         shapes[field] = tuple(int(dim) for dim in value.shape)
     return shapes
+
+
+def extract_depth_arrays(
+    bag_dir: Path,
+    storage_id: str,
+    depth_selections: dict[str, list[DepthSelection]],
+) -> dict[str, list[np.ndarray]]:
+    topic_to_requested_indices: dict[str, set[int]] = {}
+    for selections in depth_selections.values():
+        for selection in selections:
+            topic_to_requested_indices.setdefault(selection.topic, set()).add(selection.sample_index)
+
+    if not topic_to_requested_indices:
+        return {field: [] for field in depth_selections}
+
+    reader = rosbag2_py.SequentialReader()
+    storage_options = rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id=storage_id)
+    converter_options = rosbag2_py.ConverterOptions("", "")
+    reader.open(storage_options, converter_options)
+
+    topic_types = {topic.name: topic.type for topic in reader.get_all_topics_and_types()}
+    message_types = {
+        topic: get_message(topic_types[topic]) for topic in topic_to_requested_indices if topic in topic_types
+    }
+
+    topic_indices = {topic: 0 for topic in topic_to_requested_indices}
+    extracted: dict[tuple[str, int], np.ndarray] = {}
+
+    while reader.has_next():
+        topic, data, _ = reader.read_next()
+        if topic not in topic_to_requested_indices:
+            continue
+        topic_index = topic_indices[topic]
+        topic_indices[topic] += 1
+        if topic_index not in topic_to_requested_indices[topic]:
+            continue
+        msg = deserialize_message(data, message_types[topic])
+        extracted[(topic, topic_index)] = decode_image_to_depth(msg)
+
+    rows_by_field: dict[str, list[np.ndarray]] = {}
+    for field, selections in depth_selections.items():
+        rows: list[np.ndarray] = []
+        for selection in selections:
+            key = (selection.topic, selection.sample_index)
+            if key not in extracted:
+                raise RuntimeError(f"Missing extracted depth sample for {selection.topic} index={selection.sample_index}")
+            rows.append(extracted[key])
+        rows_by_field[field] = rows
+    return rows_by_field
+
+
+def write_depth_sidecar(
+    dataset_root: Path,
+    dataset_id: str,
+    dataset_episode_index: int,
+    fps: int,
+    depth_specs: list[dict[str, Any]],
+    depth_selections: dict[str, list[DepthSelection]],
+    depth_arrays: dict[str, list[np.ndarray]],
+) -> dict[str, Any]:
+    depth_root = dataset_root / "depth"
+    depth_root.mkdir(parents=True, exist_ok=True)
+
+    field_info: dict[str, Any] = {}
+    episode_indices_present: set[int] = set()
+
+    for depth_spec in depth_specs:
+        field = depth_spec["field"]
+        selections = depth_selections.get(field, [])
+        arrays = depth_arrays.get(field, [])
+        if len(selections) != len(arrays):
+            raise RuntimeError(
+                f"Depth selection/data length mismatch for {field}: selections={len(selections)} arrays={len(arrays)}"
+            )
+
+        field_dir = depth_root / field / "chunk-000"
+        field_dir.mkdir(parents=True, exist_ok=True)
+        file_path = field_dir / f"file-{dataset_episode_index:03d}.parquet"
+        if file_path.exists():
+            raise RuntimeError(f"Depth sidecar already exists for {field} episode_index={dataset_episode_index}: {file_path}")
+
+        rows = []
+        for selection, depth_array in zip(selections, arrays, strict=False):
+            png_bytes = encode_depth_png16(depth_array)
+            rows.append(
+                {
+                    "episode_index": int(dataset_episode_index),
+                    "frame_index": int(selection.frame_index),
+                    "timestamp": float(selection.timestamp_ns / 1_000_000_000.0),
+                    "png16_bytes": png_bytes,
+                    "height": int(depth_array.shape[0]),
+                    "width": int(depth_array.shape[1]),
+                    "unit": str(depth_spec.get("unit", "millimeters")),
+                    "source_topic": selection.topic,
+                }
+            )
+
+        table = pa.Table.from_pylist(rows)
+        pq.write_table(table, file_path)
+        episode_indices_present.add(dataset_episode_index)
+        field_info[field] = {
+            "source_topic": depth_spec["topic"],
+            "unit": str(depth_spec.get("unit", "millimeters")),
+            "max_skew_ms": float(depth_spec.get("max_skew_ms", 25)),
+            "path": str(file_path.relative_to(dataset_root)),
+            "row_count": len(rows),
+        }
+
+    info_path = dataset_root / "meta" / "depth_info.json"
+    if info_path.is_file():
+        with info_path.open("r", encoding="utf-8") as handle:
+            depth_info = json.load(handle)
+    else:
+        depth_info = {
+            "dataset_id": dataset_id,
+            "encoding": "png16_gray",
+            "unit": "millimeters",
+            "chunking": {
+                "mode": "per_episode_file",
+                "chunk": "chunk-000",
+                "filename_pattern": "file-{episode_index:03d}.parquet",
+            },
+            "episode_indices_present": [],
+            "depth_fields": {},
+        }
+
+    depth_info["dataset_id"] = dataset_id
+    depth_info["alignment_policy"] = {
+        "grid_fps": int(fps),
+        "selector": "nearest",
+    }
+    existing_indices = set(depth_info.get("episode_indices_present", []))
+    existing_indices.update(episode_indices_present)
+    depth_info["episode_indices_present"] = sorted(existing_indices)
+    for field, info in field_info.items():
+        depth_info.setdefault("depth_fields", {})[field] = {
+            "source_topic": info["source_topic"],
+            "unit": info["unit"],
+            "max_skew_ms": info["max_skew_ms"],
+        }
+
+    write_json(info_path, depth_info)
+
+    return {
+        "root": str(depth_root),
+        "info_path": str(info_path),
+        "fields": field_info,
+    }
 
 
 def write_conversion_artifacts(
@@ -709,12 +956,14 @@ def main(argv: list[str] | None = None) -> int:
     topics_with_data = {topic for topic, values in series.items() if values.timestamps_ns}
 
     selected_image_specs = build_selected_image_specs(profile, topics_with_data)
-    effective_profile = build_effective_profile(profile, selected_image_specs)
+    selected_depth_specs = build_selected_depth_specs(profile, topics_with_data)
+    effective_profile = build_effective_profile(profile, selected_image_specs, selected_depth_specs)
 
-    frames, alignment_diagnostics, summary_status = align_episode(
+    frames, depth_selections, alignment_diagnostics, summary_status = align_episode(
         series=series,
         profile=effective_profile,
         selected_image_specs=selected_image_specs,
+        selected_depth_specs=selected_depth_specs,
         task_name=manifest["task_name"],
         language_instruction=manifest.get("language_instruction"),
     )
@@ -755,6 +1004,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         reloaded.finalize()
 
+    depth_sidecar_summary: dict[str, Any] | None = None
+    if selected_depth_specs:
+        depth_arrays = extract_depth_arrays(
+            bag_dir=bag_dir,
+            storage_id=bag_storage_id,
+            depth_selections=depth_selections,
+        )
+        depth_sidecar_summary = write_depth_sidecar(
+            dataset_root=dataset_root,
+            dataset_id=dataset_id,
+            dataset_episode_index=dataset_episode_index,
+            fps=int(profile["dataset"]["fps"]),
+            depth_specs=selected_depth_specs,
+            depth_selections=depth_selections,
+            depth_arrays=depth_arrays,
+        )
+
     diagnostics = {
         "episode_id": manifest["episode_id"],
         "manifest_dataset_id": manifest["dataset_id"],
@@ -765,6 +1031,7 @@ def main(argv: list[str] | None = None) -> int:
         "bag_storage_id": bag_storage_id,
         "summary_status": summary_status,
         "topic_diagnostics": {topic: series[topic].diagnostics() for topic in sorted(series)},
+        "depth_sidecar": depth_sidecar_summary,
         **alignment_diagnostics,
     }
     summary = {
@@ -777,6 +1044,8 @@ def main(argv: list[str] | None = None) -> int:
         "published_frame_count": len(frames),
         "status": summary_status,
         "selected_image_fields": image_fields,
+        "selected_depth_fields": [spec["field"] for spec in selected_depth_specs],
+        "depth_sidecar_root": depth_sidecar_summary["root"] if depth_sidecar_summary else None,
     }
     write_conversion_artifacts(artifact_dir, diagnostics, effective_profile, summary)
 

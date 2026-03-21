@@ -97,6 +97,21 @@ raw_only_topics:
   - /spark/tactile/left/marker_offset
   - /spark/tactile/right/marker_offset
 
+published_depth:
+  - field: observation.depth.wrist
+    topic: /spark/cameras/wrist/depth/image_rect_raw
+    align: nearest
+    max_skew_ms: 25
+    required: true
+    unit: millimeters
+
+  - field: observation.depth.scene
+    topic: /spark/cameras/scene/depth/image_rect_raw
+    align: nearest
+    max_skew_ms: 25
+    required: true
+    unit: millimeters
+
 conversion:
   frame_grid:
     start_rule: max_of_first_required_timestamps

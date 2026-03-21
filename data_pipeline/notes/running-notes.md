@@ -1424,3 +1424,31 @@
   - viewer support
   - training-loader integration
   - custom LeRobot feature types
+
+### Published depth sidecar implementation
+
+- Implemented the first converter-side depth export slice without changing the core LeRobot RGB/state/action dataset path.
+- Added `published_depth` declarations to the main published profiles:
+  - `multisensor_20hz`
+  - `multisensor_20hz_lightning`
+  - `multisensor_20hz_thunder`
+- The converter now:
+  - aligns RealSense depth to the same published frame grid as RGB/state/action
+  - applies field-level nearest-frame skew checks for depth
+  - fails conversion if published depth cannot align cleanly
+  - writes lossless depth sidecars under `published/<dataset_id>/depth/`
+  - writes `meta/depth_info.json`
+- To avoid loading whole raw depth streams into memory, the converter uses a two-pass approach:
+  - first pass: timestamps for all topics, values only for the main published streams
+  - second pass: decode only the selected aligned depth samples
+- Validation:
+  - `python -m py_compile data_pipeline/convert_episode_bag_to_lerobot.py`
+  - synthetic episode conversion emitted:
+    - `depth/observation.depth.wrist/chunk-000/file-000.parquet`
+    - `depth/observation.depth.scene/chunk-000/file-000.parquet`
+    - `meta/depth_info.json`
+  - real MCAP episode `episode-20260321-120141` converted successfully into a throwaway dataset root with depth sidecars
+- Observed real-episode depth sidecar sizes for `episode-20260321-120141`:
+  - wrist depth parquet: about `30.9 MB`
+  - scene depth parquet: about `22.1 MB`
+  - total dataset root with RGB + state/action + depth sidecars: about `51 MB`
