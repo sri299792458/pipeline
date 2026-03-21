@@ -1239,3 +1239,39 @@
 - Added these fields to the raw manifest inference path by declaring them as ROS params in `data_pipeline/gelsight_bridge.py` and reading them in `data_pipeline/pipeline_utils.py`.
 - Updated `data_pipeline/V1_SPEC.md` to state that this tactile provenance extension is intentionally narrow and should not be replaced with fake calibration placeholders or derived tactile outputs.
 - Updated `data_pipeline/configs/sensors.example.yaml` to show `gel_type` as an explicit manual inventory field (`marker` vs `plain`).
+
+### Raw bag storage migration to MCAP
+
+- Wrote down the storage decision in `data_pipeline/docs/raw-storage.md`:
+  - raw episode bags should default to `mcap`
+  - use `zstd_fast`
+  - keep the raw layer lossless
+  - do not conflate this with any published-depth design decision
+- Updated the checked-in recorder defaults in `data_pipeline/record_episode.py`:
+  - `--storage-id` now defaults to `mcap`
+  - added `--storage-preset-profile`, defaulting to `zstd_fast`
+  - when using MCAP, `ros2 bag record` now receives `--storage-preset-profile zstd_fast`
+  - raw manifests now stamp:
+    - `bag_storage_id`
+    - `bag_storage_preset_profile`
+- Added shared helpers in `data_pipeline/pipeline_utils.py`:
+  - `read_bag_metadata(...)`
+  - `detect_bag_storage_id(...)`
+- Removed the old sqlite-only assumption from `data_pipeline/convert_episode_bag_to_lerobot.py`:
+  - conversion now reads `bag/metadata.yaml`
+  - detects `storage_identifier`
+  - opens the bag with the correct backend instead of hardcoding `sqlite3`
+  - conversion artifacts now also stamp `bag_storage_id`
+- Updated `data_pipeline/generate_dummy_episode.py` to follow the same storage defaults and stamp the same manifest fields.
+- Validation:
+  - generated a synthetic raw episode at:
+    - `/tmp/pipeline_mcap_eval/raw/episode-mcap-test`
+  - verified the raw bag is really MCAP:
+    - `bag/metadata.yaml` reports `storage_identifier: mcap`
+    - the bag file is `bag_0.mcap`
+  - converted that MCAP episode successfully with the normal converter path:
+    - output dataset:
+      - `/tmp/pipeline_mcap_eval/published/dummy_mcap_eval`
+    - conversion summary reports:
+      - `bag_storage_id: mcap`
+      - `status: pass`

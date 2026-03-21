@@ -31,7 +31,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from data_pipeline.pipeline_utils import load_profile, normalize_active_arms, profile_required_arms, write_json  # noqa: E402
+from data_pipeline.pipeline_utils import (  # noqa: E402
+    detect_bag_storage_id,
+    load_profile,
+    normalize_active_arms,
+    profile_required_arms,
+    write_json,
+)
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 
 
@@ -254,9 +260,10 @@ def read_topic_series(
     bag_dir: Path,
     topics_to_read: set[str],
     parse_topics: set[str],
+    storage_id: str,
 ) -> dict[str, TopicSeries]:
     reader = rosbag2_py.SequentialReader()
-    storage_options = rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id="sqlite3")
+    storage_options = rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id=storage_id)
     converter_options = rosbag2_py.ConverterOptions("", "")
     reader.open(storage_options, converter_options)
 
@@ -696,7 +703,8 @@ def main(argv: list[str] | None = None) -> int:
     topic_types = manifest.get("topic_types", {})
     value_topics = build_value_topics(profile) & all_topics_to_read
     parse_topics = build_parse_topics(all_topics_to_read, topic_types, value_topics)
-    series = read_topic_series(bag_dir, all_topics_to_read, parse_topics)
+    bag_storage_id = detect_bag_storage_id(bag_dir)
+    series = read_topic_series(bag_dir, all_topics_to_read, parse_topics, storage_id=bag_storage_id)
     apply_realsense_metadata_timestamps(series)
     topics_with_data = {topic for topic, values in series.items() if values.timestamps_ns}
 
@@ -754,6 +762,7 @@ def main(argv: list[str] | None = None) -> int:
         "dataset_root": str(dataset_root),
         "dataset_episode_index": dataset_episode_index,
         "clock_policy": manifest["clock_policy"],
+        "bag_storage_id": bag_storage_id,
         "summary_status": summary_status,
         "topic_diagnostics": {topic: series[topic].diagnostics() for topic in sorted(series)},
         **alignment_diagnostics,
@@ -764,6 +773,7 @@ def main(argv: list[str] | None = None) -> int:
         "dataset_id": dataset_id,
         "dataset_root": str(dataset_root),
         "dataset_episode_index": dataset_episode_index,
+        "bag_storage_id": bag_storage_id,
         "published_frame_count": len(frames),
         "status": summary_status,
         "selected_image_fields": image_fields,

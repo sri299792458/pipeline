@@ -20,6 +20,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.pipeline_utils import (  # noqa: E402
+    DEFAULT_BAG_STORAGE_ID,
+    DEFAULT_BAG_STORAGE_PRESET_PROFILE,
     DEFAULT_PROFILE_PATH,
     DEFAULT_RAW_EPISODES_DIR,
     build_notes_template,
@@ -66,6 +68,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--episode-id", default="")
     parser.add_argument("--duration-s", type=float, default=5.0)
     parser.add_argument("--include-tactile", action="store_true")
+    parser.add_argument("--storage-id", default=DEFAULT_BAG_STORAGE_ID)
+    parser.add_argument("--storage-preset-profile", default=DEFAULT_BAG_STORAGE_PRESET_PROFILE)
     return parser
 
 
@@ -237,6 +241,10 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
         "mapping_profile": profile["profile_name"],
         "profile_version": profile["profile_version"],
         "clock_policy": profile["dataset"]["clock_policy"],
+        "bag_storage_id": args.storage_id,
+        "bag_storage_preset_profile": (
+            args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
+        ),
         "git_commit": "dummy",
     }
 
@@ -253,7 +261,11 @@ def main(argv: list[str] | None = None) -> int:
     bag_dir = episode_dir / "bag"
     episode_dir.mkdir(parents=True, exist_ok=False)
 
-    storage_options = rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id="sqlite3")
+    storage_options = rosbag2_py.StorageOptions(
+        uri=str(bag_dir),
+        storage_id=args.storage_id,
+        storage_preset_profile=(args.storage_preset_profile if args.storage_id == "mcap" else ""),
+    )
     converter_options = rosbag2_py.ConverterOptions("", "")
     writer = rosbag2_py.SequentialWriter()
     writer.open(storage_options, converter_options)

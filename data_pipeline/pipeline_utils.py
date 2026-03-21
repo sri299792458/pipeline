@@ -19,6 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIGS_DIR = REPO_ROOT / "data_pipeline" / "configs"
 DEFAULT_PROFILE_PATH = REPO_ROOT / "data_pipeline" / "configs" / "multisensor_20hz.yaml"
 DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
+DEFAULT_BAG_STORAGE_ID = "mcap"
+DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
 ARM_ORDER = ("lightning", "thunder")
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
@@ -54,6 +56,30 @@ def load_profile(path: str | Path = DEFAULT_PROFILE_PATH) -> dict[str, Any]:
     if candidate.exists():
         return load_yaml(candidate)
     return load_yaml(profile_path_for_name(path_str))
+
+
+def read_bag_metadata(bag_dir: str | Path) -> dict[str, Any]:
+    metadata_path = Path(bag_dir) / "metadata.yaml"
+    if not metadata_path.is_file():
+        raise FileNotFoundError(f"Missing rosbag metadata: {metadata_path}")
+    return load_yaml(metadata_path)
+
+
+def detect_bag_storage_id(bag_dir: str | Path) -> str:
+    bag_path = Path(bag_dir)
+    metadata_path = bag_path / "metadata.yaml"
+    if metadata_path.is_file():
+        metadata = read_bag_metadata(bag_path)
+        bag_info = metadata.get("rosbag2_bagfile_information", {})
+        storage_id = bag_info.get("storage_identifier")
+        if storage_id:
+            return str(storage_id)
+
+    if list(bag_path.glob("*.mcap")):
+        return "mcap"
+    if list(bag_path.glob("*.db3")):
+        return "sqlite3"
+    raise RuntimeError(f"Unable to detect rosbag storage backend under {bag_path}")
 
 
 def normalize_active_arms(active_arms: list[str] | tuple[str, ...] | set[str]) -> list[str]:

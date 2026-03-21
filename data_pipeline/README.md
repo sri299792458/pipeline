@@ -4,6 +4,8 @@ This directory contains the V1 raw-capture and LeRobot conversion stack.
 
 The implementation contract lives in [V1_SPEC.md](./V1_SPEC.md). The running implementation log lives in [notes/running-notes.md](./notes/running-notes.md).
 
+The raw bag storage decision lives in [docs/raw-storage.md](./docs/raw-storage.md).
+
 For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-bringup.md).
 
 For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).
@@ -159,6 +161,13 @@ Each episode is written under `raw_episodes/<episode_id>/` with:
 - `bag/`
 - `episode_manifest.json`
 - `notes.md`
+
+Raw bag storage now defaults to:
+
+- `mcap`
+- `zstd_fast`
+
+This raw capture compression is lossless.
 
 `--active-arms` is now explicit for recording runs. The recorder uses that value to select:
 

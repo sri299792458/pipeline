@@ -101,6 +101,8 @@ raw_episodes/
 - `mapping_profile`
 - `profile_version`
 - `clock_policy`
+- `bag_storage_id`
+- `bag_storage_preset_profile`
 - `git_commit`
 
 The `sensors` section should stay minimal and include only:
@@ -140,6 +142,12 @@ This tactile extension is intentionally narrow:
 `sensor_id` is the raw-layer stable identifier. Published dataset field names may change later, but `sensor_id` and the attachment fields should make it possible to remap old raw episodes without ambiguity.
 
 If `language_instruction` is present, the converter should use it as the published task string. Otherwise it should fall back to `task_name`.
+
+Raw bag storage defaults are defined in [docs/raw-storage.md](./docs/raw-storage.md):
+
+- record raw bags as `mcap`
+- use `zstd_fast`
+- keep the raw layer lossless
 
 
 ## 8. Raw Layer Rule

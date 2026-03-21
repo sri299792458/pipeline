@@ -16,6 +16,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.pipeline_utils import (
+    DEFAULT_BAG_STORAGE_ID,
+    DEFAULT_BAG_STORAGE_PRESET_PROFILE,
     DEFAULT_RAW_EPISODES_DIR,
     build_notes_template,
     collect_candidate_topics,
@@ -43,7 +45,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", default="auto")
     parser.add_argument("--raw-root", default=str(DEFAULT_RAW_EPISODES_DIR))
     parser.add_argument("--episode-id", default="")
-    parser.add_argument("--storage-id", default="sqlite3")
+    parser.add_argument("--storage-id", default=DEFAULT_BAG_STORAGE_ID)
+    parser.add_argument("--storage-preset-profile", default=DEFAULT_BAG_STORAGE_PRESET_PROFILE)
     parser.add_argument("--sensors-file", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--dry-run", action="store_true")
@@ -100,6 +103,10 @@ def build_manifest(
         "mapping_profile": profile_name,
         "profile_version": profile_version,
         "clock_policy": profile["dataset"]["clock_policy"],
+        "bag_storage_id": args.storage_id,
+        "bag_storage_preset_profile": (
+            args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
+        ),
         "git_commit": get_git_commit(),
     }
 
@@ -110,8 +117,16 @@ def ensure_episode_dir(raw_root: Path, episode_id: str) -> Path:
     return episode_dir
 
 
-def run_recorder(bag_dir: Path, topics: list[str], storage_id: str) -> int:
-    cmd = ["ros2", "bag", "record", "--output", str(bag_dir), "--storage", storage_id, *topics]
+def run_recorder(
+    bag_dir: Path,
+    topics: list[str],
+    storage_id: str,
+    storage_preset_profile: str,
+) -> int:
+    cmd = ["ros2", "bag", "record", "--output", str(bag_dir), "--storage", storage_id]
+    if storage_id == "mcap" and storage_preset_profile:
+        cmd.extend(["--storage-preset-profile", storage_preset_profile])
+    cmd.extend(topics)
     process = subprocess.Popen(cmd, preexec_fn=os.setsid)
     try:
         return process.wait()
@@ -149,6 +164,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"active_arms={','.join(active_arms)}")
         print(f"mapping_profile={profile['profile_name']}")
         print(f"profile_path={resolved_profile_path}")
+        print(f"bag_storage_id={args.storage_id}")
+        if args.storage_id == "mcap" and args.storage_preset_profile:
+            print(f"bag_storage_preset_profile={args.storage_preset_profile}")
         print(f"language_instruction={dry_run_manifest['language_instruction'] or ''}")
         print(f"bag_topics={len(selected_topics)}")
         for sensor in dry_run_manifest["sensors"]:
@@ -188,12 +206,21 @@ def main(argv: list[str] | None = None) -> int:
     write_json(manifest_path, manifest)
 
     print(f"Recording episode {args.episode_id} into {episode_dir}")
+    print(
+        "Raw bag storage: "
+        f"{args.storage_id}"
+        + (
+            f" ({args.storage_preset_profile})"
+            if args.storage_id == "mcap" and args.storage_preset_profile
+            else ""
+        )
+    )
     print("Topics:")
     for topic in selected_topics:
         print(f"  {topic} [{live_topics[topic]}]")
     print("Press Ctrl+C to stop recording.")
 
-    return_code = run_recorder(bag_dir, selected_topics, args.storage_id)
+    return_code = run_recorder(bag_dir, selected_topics, args.storage_id, args.storage_preset_profile)
     end_time_ns = now_ns()
 
     final_manifest = build_manifest(
