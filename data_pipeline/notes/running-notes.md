@@ -695,3 +695,22 @@
   - metadata / record / convert contracts
   - acceptance criteria
 - Linked the new spec from `data_pipeline/README.md`.
+
+### Operator Console Phase 1 skeleton
+
+- Added the first separate Operator Console implementation:
+  - `data_pipeline/operator_console.py`
+  - `data_pipeline/operator_console_backend.py`
+  - `data_pipeline/configs/operator_console_presets.yaml`
+- Kept the Teleop boundary intact:
+  - the console launches or stops the existing Teleop processes
+  - it does not modify `TeleopSoftware/launch.py`
+- Current Phase 1 scope of the implementation:
+  - preset selection
+  - metadata form
+  - process orchestration for SPARK, Teleop, RealSense, GelSight, recorder, and converter
+  - subsystem health cards
+  - validate / record / convert / open-viewer actions
+  - per-process log view
+- The first prototype is intentionally operational rather than polished.
+- Added `.operator_console/` to `.gitignore` because the backend now persists local session state there.

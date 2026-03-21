@@ -25,6 +25,7 @@ Thumbs.db
 *.stl
 raw_episodes/
 published/
+.operator_console/
 
 # Local upstream checkouts used for reference/integration work
 lerobot/

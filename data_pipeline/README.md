@@ -10,6 +10,12 @@ For the current exact Lightning-only command sequence on this machine, use [docs
 
 For the planned lab-facing capture GUI, use [docs/operator-console-spec.md](./docs/operator-console-spec.md).
 
+An early local prototype of that GUI can be launched with:
+
+```bash
+python3 data_pipeline/operator_console.py
+```
+
 
 ## Current Scope
 
