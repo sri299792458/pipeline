@@ -103,6 +103,7 @@ raw_episodes/
 - `clock_policy`
 - `bag_storage_id`
 - `bag_storage_preset_profile`
+- `raw_trim`
 - `git_commit`
 
 The `sensors` section should stay minimal and include only:

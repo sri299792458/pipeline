@@ -1376,3 +1376,33 @@
   - selected combo-box text is visible
   - the native arrow is back
   - the white overlay bug is gone
+
+### Raw bag head/tail trim by teleop command activity
+
+- After validating MCAP on real hardware, the next storage win was not another container change; it was obvious idle time at the beginning and end of raw recordings.
+- For real episodes like `episode-20260321-120141`, the published usable interval started much later than raw recording start because the teleop command topics only began once the operator actually started driving:
+  - raw recording began first
+  - `/spark/lightning/teleop/cmd_*` started later
+  - converter therefore published only the overlap window
+- Chose a narrow raw-trim policy for storage reduction:
+  - basis: first and last teleop command topic activity
+  - no dependency on foot-pedal state
+  - do not split on mid-episode command gaps
+  - apply a small fixed pad before and after the active window
+- Implemented this in `data_pipeline/record_episode.py` as a post-record rewrite of the just-recorded bag:
+  - default pad before: `1.0 s`
+  - default pad after: `1.0 s`
+  - default behavior: enabled after successful recording
+  - opt-out flag: `--disable-command-trim`
+- The recorder now stamps the result into `episode_manifest.json` under `raw_trim`, including:
+  - activity topics used
+  - pad values
+  - status
+  - whether trimming was applied
+  - pre/post message counts
+  - pre/post bag sizes
+  - bag/activity/trim timestamp bounds
+- Updated the storage contract in `data_pipeline/docs/raw-storage.md`:
+  - MCAP + `zstd_fast` remains the raw storage default
+  - automatic head/tail trimming is now part of the raw storage policy
+  - mid-episode pauses are explicitly not split by this step

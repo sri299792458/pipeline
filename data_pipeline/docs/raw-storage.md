@@ -10,6 +10,10 @@ Keep raw episode capture lossless while reducing bag size and removing the old `
   - `storage_id: mcap`
   - `storage_preset_profile: zstd_fast`
 - This compression is lossless.
+- After recording completes successfully, the raw bag is trimmed to the first and last teleop command message activity with a small fixed pad:
+  - basis: `/spark/<arm>/teleop/cmd_*`
+  - policy: trim only head and tail idle time
+  - default padding: `1.0 s` before and after
 - Published LeRobot export remains unchanged:
   - parquet for low-dimensional data
   - MP4 for RGB image fields
@@ -22,6 +26,7 @@ Keep raw episode capture lossless while reducing bag size and removing the old `
   - topic semantics
   - published dataset schema
   - depth publication policy
+- It does not split episodes on mid-run gaps in command activity.
 
 ## Requirements
 
@@ -29,19 +34,22 @@ Keep raw episode capture lossless while reducing bag size and removing the old `
 - Raw episode manifests must stamp:
   - `bag_storage_id`
   - `bag_storage_preset_profile`
+- Raw episode manifests must stamp the applied trim policy and outcome under `raw_trim`.
 - Conversion must auto-detect bag storage from `bag/metadata.yaml` and must not assume `sqlite3`.
 - Recording integrity checks must continue to use `bag/metadata.yaml`, which is backend-agnostic.
+- If teleop command topics are missing entirely, automatic raw trimming must skip rather than guess.
 
 ## Non-Goals
 
 - Do not invent a custom depth-in-MP4 export path.
 - Do not change the published LeRobot RGB/state/action design in this step.
 - Do not add lossy raw capture compression in this step.
+- Do not gate live recording start/stop directly on foot-pedal state.
 
 ## Follow-On Work
 
 - Re-evaluate raw bag size after MCAP migration.
-- If raw bags are still too large, tune:
+- If raw bags are still too large after head/tail trimming, tune:
   - depth rate
   - depth resolution
   - optional modality presets

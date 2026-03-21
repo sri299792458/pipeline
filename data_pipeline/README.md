@@ -169,6 +169,14 @@ Raw bag storage now defaults to:
 
 This raw capture compression is lossless.
 
+After a successful recording, the saved raw bag is also trimmed automatically to the first and last teleop command activity, with a `1.0 s` pad before and after. This reduces head/tail idle storage without splitting mid-episode pauses. The applied result is recorded in `episode_manifest.json` under `raw_trim`.
+
+If you need to keep the full untrimmed bag, pass:
+
+```bash
+--disable-command-trim
+```
+
 `--active-arms` is now explicit for recording runs. The recorder uses that value to select:
 
 - `multisensor_20hz`

@@ -7,9 +7,13 @@ from __future__ import annotations
 import argparse
 import os
 import signal
+import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+import rosbag2_py
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -34,6 +38,9 @@ from data_pipeline.pipeline_utils import (
     write_json,
 )
 
+DEFAULT_COMMAND_TRIM_PAD_BEFORE_S = 1.0
+DEFAULT_COMMAND_TRIM_PAD_AFTER_S = 1.0
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -52,6 +59,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-topics", default="")
     parser.add_argument("--active-arms", required=True)
+    parser.add_argument("--disable-command-trim", action="store_true")
+    parser.add_argument("--command-trim-pad-before-s", type=float, default=DEFAULT_COMMAND_TRIM_PAD_BEFORE_S)
+    parser.add_argument("--command-trim-pad-after-s", type=float, default=DEFAULT_COMMAND_TRIM_PAD_AFTER_S)
     return parser
 
 
@@ -117,6 +127,154 @@ def ensure_episode_dir(raw_root: Path, episode_id: str) -> Path:
     return episode_dir
 
 
+def bag_dir_size_bytes(bag_dir: Path) -> int:
+    return sum(path.stat().st_size for path in bag_dir.rglob("*") if path.is_file())
+
+
+def build_command_activity_topics(profile: dict, active_arms: list[str]) -> list[str]:
+    action_sources = profile.get("published", {}).get("action", {}).get("sources", {})
+    topics: list[str] = []
+    for arm in active_arms:
+        arm_sources = action_sources.get(arm, {})
+        topics.extend(topic for topic in arm_sources.values() if topic)
+    return sorted(set(topics))
+
+
+def trim_bag_to_command_activity(
+    bag_dir: Path,
+    command_topics: list[str],
+    storage_id: str,
+    storage_preset_profile: str,
+    pad_before_s: float,
+    pad_after_s: float,
+) -> dict[str, object]:
+    trim_result: dict[str, object] = {
+        "policy": "teleop_command_head_tail_v1",
+        "activity_topics": command_topics,
+        "pad_before_s": float(pad_before_s),
+        "pad_after_s": float(pad_after_s),
+        "status": "disabled",
+        "applied": False,
+    }
+    if not command_topics:
+        trim_result["status"] = "skipped_no_command_topics"
+        return trim_result
+
+    pad_before_ns = int(round(max(0.0, pad_before_s) * 1_000_000_000.0))
+    pad_after_ns = int(round(max(0.0, pad_after_s) * 1_000_000_000.0))
+    original_size_bytes = bag_dir_size_bytes(bag_dir)
+
+    reader = rosbag2_py.SequentialReader()
+    storage_options = rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id=storage_id)
+    converter_options = rosbag2_py.ConverterOptions("", "")
+    reader.open(storage_options, converter_options)
+
+    topics_and_types = reader.get_all_topics_and_types()
+    topic_names = {topic.name for topic in topics_and_types}
+    available_command_topics = [topic for topic in command_topics if topic in topic_names]
+    trim_result["activity_topics"] = available_command_topics
+    if not available_command_topics:
+        trim_result["status"] = "skipped_topics_not_in_bag"
+        return trim_result
+
+    bag_start_ns: int | None = None
+    bag_end_ns: int | None = None
+    activity_start_ns: int | None = None
+    activity_end_ns: int | None = None
+    original_message_count = 0
+
+    while reader.has_next():
+        topic, _, bag_timestamp_ns = reader.read_next()
+        original_message_count += 1
+        if bag_start_ns is None:
+            bag_start_ns = bag_timestamp_ns
+        bag_end_ns = bag_timestamp_ns
+        if topic in available_command_topics:
+            if activity_start_ns is None:
+                activity_start_ns = bag_timestamp_ns
+            activity_end_ns = bag_timestamp_ns
+
+    del reader
+
+    trim_result["messages_before"] = original_message_count
+    trim_result["size_bytes_before"] = original_size_bytes
+    trim_result["bag_start_ns"] = bag_start_ns
+    trim_result["bag_end_ns"] = bag_end_ns
+    trim_result["activity_start_ns"] = activity_start_ns
+    trim_result["activity_end_ns"] = activity_end_ns
+
+    if bag_start_ns is None or bag_end_ns is None:
+        trim_result["status"] = "skipped_empty_bag"
+        return trim_result
+    if activity_start_ns is None or activity_end_ns is None:
+        trim_result["status"] = "skipped_no_command_activity"
+        return trim_result
+
+    trim_start_ns = max(bag_start_ns, activity_start_ns - pad_before_ns)
+    trim_end_ns = min(bag_end_ns, activity_end_ns + pad_after_ns)
+    trim_result["trim_start_ns"] = trim_start_ns
+    trim_result["trim_end_ns"] = trim_end_ns
+
+    if trim_start_ns <= bag_start_ns and trim_end_ns >= bag_end_ns:
+        trim_result["status"] = "skipped_full_span"
+        return trim_result
+
+    temp_bag_dir = bag_dir.parent / f"{bag_dir.name}.trim_tmp"
+    if temp_bag_dir.exists():
+        shutil.rmtree(temp_bag_dir)
+
+    reader = rosbag2_py.SequentialReader()
+    reader.open(storage_options, converter_options)
+
+    writer_storage_options = rosbag2_py.StorageOptions(
+        uri=str(temp_bag_dir),
+        storage_id=storage_id,
+        storage_preset_profile=(storage_preset_profile if storage_id == "mcap" else ""),
+    )
+    writer = rosbag2_py.SequentialWriter()
+    writer.open(writer_storage_options, converter_options)
+
+    for topic_id, topic_metadata in enumerate(topics_and_types):
+        writer.create_topic(
+            rosbag2_py.TopicMetadata(
+                id=topic_id,
+                name=topic_metadata.name,
+                type=topic_metadata.type,
+                serialization_format=topic_metadata.serialization_format,
+            )
+        )
+
+    trimmed_message_count = 0
+    while reader.has_next():
+        topic, data, bag_timestamp_ns = reader.read_next()
+        if bag_timestamp_ns < trim_start_ns or bag_timestamp_ns > trim_end_ns:
+            continue
+        writer.write(topic, data, bag_timestamp_ns)
+        trimmed_message_count += 1
+
+    del writer
+    del reader
+    time.sleep(0.1)
+
+    if trimmed_message_count == 0:
+        shutil.rmtree(temp_bag_dir, ignore_errors=True)
+        trim_result["status"] = "skipped_zero_messages_after_trim"
+        return trim_result
+
+    original_bag_dir = bag_dir.parent / f"{bag_dir.name}.pre_trim_backup"
+    if original_bag_dir.exists():
+        shutil.rmtree(original_bag_dir)
+    bag_dir.rename(original_bag_dir)
+    temp_bag_dir.rename(bag_dir)
+    shutil.rmtree(original_bag_dir)
+
+    trim_result["status"] = "applied"
+    trim_result["applied"] = True
+    trim_result["messages_after"] = trimmed_message_count
+    trim_result["size_bytes_after"] = bag_dir_size_bytes(bag_dir)
+    return trim_result
+
+
 def run_recorder(
     bag_dir: Path,
     topics: list[str],
@@ -169,6 +327,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"bag_storage_preset_profile={args.storage_preset_profile}")
         print(f"language_instruction={dry_run_manifest['language_instruction'] or ''}")
         print(f"bag_topics={len(selected_topics)}")
+        if not args.disable_command_trim:
+            command_topics = build_command_activity_topics(profile, active_arms)
+            print("raw_trim_policy=teleop_command_head_tail_v1")
+            print(f"raw_trim_activity_topics={','.join(command_topics)}")
+            print(f"raw_trim_pad_before_s={args.command_trim_pad_before_s}")
+            print(f"raw_trim_pad_after_s={args.command_trim_pad_after_s}")
         for sensor in dry_run_manifest["sensors"]:
             print(
                 "sensor="
@@ -234,9 +398,35 @@ def main(argv: list[str] | None = None) -> int:
         end_time_ns=end_time_ns,
     )
     final_manifest["record_exit_code"] = return_code
+    if not args.disable_command_trim and return_code == 0:
+        command_topics = build_command_activity_topics(profile, active_arms)
+        final_manifest["raw_trim"] = trim_bag_to_command_activity(
+            bag_dir=bag_dir,
+            command_topics=command_topics,
+            storage_id=args.storage_id,
+            storage_preset_profile=args.storage_preset_profile,
+            pad_before_s=args.command_trim_pad_before_s,
+            pad_after_s=args.command_trim_pad_after_s,
+        )
+    else:
+        final_manifest["raw_trim"] = {
+            "policy": "teleop_command_head_tail_v1",
+            "activity_topics": build_command_activity_topics(profile, active_arms),
+            "pad_before_s": float(args.command_trim_pad_before_s),
+            "pad_after_s": float(args.command_trim_pad_after_s),
+            "status": "disabled" if args.disable_command_trim else "skipped_nonzero_exit_code",
+            "applied": False,
+        }
     write_json(manifest_path, final_manifest)
 
     print(f"Finished episode {args.episode_id} with ros2 bag exit code {return_code}")
+    raw_trim = final_manifest["raw_trim"]
+    print(f"Raw trim status: {raw_trim['status']}")
+    if raw_trim.get("applied"):
+        print(
+            "Trimmed bag size: "
+            f"{raw_trim.get('size_bytes_before')} -> {raw_trim.get('size_bytes_after')} bytes"
+        )
     print(f"Manifest: {manifest_path}")
     print(f"Notes: {notes_path}")
     return return_code
