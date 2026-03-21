@@ -1182,3 +1182,8 @@
   - result:
     - the Qt frontend starts and stays up for the smoke window
     - only the expected offscreen-plugin `propagateSizeHints()` warnings appeared
+
+### Spec cleanup after frontend decision
+
+- Removed the now-resolved frontend-toolkit question from `data_pipeline/docs/operator-console-spec.md`.
+- The spec already names Qt / `PySide6` as the chosen production frontend, so leaving `Tk vs Qt vs local web app?` in the open-questions list was no longer accurate.

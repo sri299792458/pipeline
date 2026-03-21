@@ -545,7 +545,6 @@ Only after Phase 1 is stable, consider:
 
 ## 21. Open Questions
 
-- Should the frontend be Tk, Qt, or a local web app?
 - Should Teleop be launched from the console or simply supervised if already running?
 - Should V1 ship with Lightning-only enabled first and keep bimanual behind a feature gate until validated?
 
