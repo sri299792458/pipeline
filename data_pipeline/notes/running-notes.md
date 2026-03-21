@@ -1349,13 +1349,15 @@
 
 - Stopped relying only on code inspection for frontend changes and rendered the actual Qt window offscreen to inspect the composition directly.
 - The screenshot made two layout problems obvious:
-  - low-signal `Advanced` fields were pushing `Latest Artifacts` down the left column
+  - low-signal optional fields were pushing `Latest Artifacts` down the left column
   - the right column was giving too much height to `Action Output` relative to `Process Logs`
 - Tightened the Qt UI accordingly in `data_pipeline/operator_console_qt.py`:
-  - moved `Notes` and `Extra Topics` behind a `Show Advanced` toggle, hidden by default
   - rebalanced the right column so logs get more height than output
   - tightened subsystem card padding slightly so more cards fit comfortably in the middle column
   - capped the command preview height so the `Selected Process` box stays compact
+- After reviewing the rendered result again, backed out the `Show Advanced` toggle:
+  - for only `Notes` and `Extra Topics`, the extra reveal control was more UI than value
+  - kept those two fields inline in a small `Optional` section instead
 - Re-rendered the window after the change and confirmed:
   - `Latest Artifacts` is visible in the default 1080p composition
   - the default view reads more like an operator workflow and less like a config dump

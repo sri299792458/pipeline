@@ -210,13 +210,8 @@ class OperatorConsoleQtWindow(QMainWindow):
 
         layout.addWidget(self._build_task_box())
         layout.addWidget(self._build_sensor_box())
-        self.advanced_toggle_button = QPushButton("Show Advanced")
-        self.advanced_toggle_button.clicked.connect(self._toggle_advanced_box)
-        layout.addWidget(self.advanced_toggle_button)
-        self.advanced_box = self._build_advanced_box()
-        self.advanced_box.setVisible(False)
-        layout.addWidget(self.advanced_box)
         layout.addWidget(self._build_session_actions_box())
+        layout.addWidget(self._build_optional_box())
         layout.addWidget(self._build_artifacts_box())
         layout.addStretch(1)
         return container
@@ -281,8 +276,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         form.addRow("", gelsight_checkbox)
         return box
 
-    def _build_advanced_box(self) -> QWidget:
-        box = QGroupBox("Advanced")
+    def _build_optional_box(self) -> QWidget:
+        box = QGroupBox("Optional")
         form = QFormLayout(box)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -293,11 +288,6 @@ class OperatorConsoleQtWindow(QMainWindow):
         form.addRow("Notes", self.form_widgets["notes"])
         form.addRow("Extra Topics", self.form_widgets["extra_topics"])
         return box
-
-    def _toggle_advanced_box(self) -> None:
-        visible = not self.advanced_box.isVisible()
-        self.advanced_box.setVisible(visible)
-        self.advanced_toggle_button.setText("Hide Advanced" if visible else "Show Advanced")
 
     def _build_session_actions_box(self) -> QWidget:
         box = QGroupBox("Session Actions")
