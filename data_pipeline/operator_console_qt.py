@@ -619,6 +619,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         scrollbar.setValue(scrollbar.maximum())
 
     def _update_button_states(self, snapshot: dict[str, object]) -> None:
+        config = self._config()
         session_state = str(snapshot.get("session_state", "idle"))
         validation_state = str(snapshot.get("validation_state", "not_run"))
         processes = snapshot.get("processes", {})
@@ -626,7 +627,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         converter_state = str(processes.get("converter", {}).get("state", "stopped"))
         recording_ready = bool(snapshot.get("latest_episode_id")) and snapshot.get("latest_recording_ok") is True
         recording_check_running = bool(snapshot.get("recording_check_running"))
-        viewer_available = self.backend.viewer_target_available(self._config())
+        viewer_available = self.backend.viewer_target_available(config)
         live_states = {"running", "starting", "stopping"}
         core_running = any(
             str(processes.get(name, {}).get("state", "stopped")) in live_states
@@ -637,7 +638,11 @@ class OperatorConsoleQtWindow(QMainWindow):
             for name in ("recorder", "converter")
         )
         session_running = core_running or work_running
-        can_record = validation_state == "passed" and core_running and recorder_state != "running"
+        can_record = (
+            validation_state == "passed"
+            and self.backend.required_service_processes_live(config)
+            and recorder_state != "running"
+        )
 
         self.start_session_button.setEnabled(not session_running)
         self.stop_session_button.setEnabled(session_running)

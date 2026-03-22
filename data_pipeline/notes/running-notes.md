@@ -1716,3 +1716,18 @@
 - Validation:
   - `python3 -m py_compile data_pipeline/pipeline_utils.py data_pipeline/record_episode.py data_pipeline/convert_episode_bag_to_lerobot.py data_pipeline/operator_console_backend.py`
   - synthetic alignment smoke test confirmed a mid-episode pedal-off gap is removed from the published grid instead of becoming an action-hold failure
+
+### Operator console: align record gating with live session state
+
+- Found a real mismatch between the Qt frontend and backend around starting another take after a failed conversion.
+- Before this fix:
+  - the UI treated recording as allowed when the validated session processes were still up
+  - but `start_recording()` still hard-blocked on live health-card green status
+  - that let `Record` look available while the backend silently rejected it
+- Updated the recorder gate so it now uses the same rule in both places:
+  - current config has a matching successful `Validate`
+  - required session processes are still `running` / `starting`
+- This keeps health cards informative without making transient probe state the authority on whether the operator can immediately re-record in the same validated session.
+- Validation:
+  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console_qt.py`
+  - backend smoke check confirmed `required_service_processes_live(...)` returns `True` and the session reports `ready_to_record` when the validated core processes are still up
