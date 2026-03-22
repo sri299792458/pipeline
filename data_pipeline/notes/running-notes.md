@@ -1505,3 +1505,24 @@
     - `depth_preview/observation.depth.wrist/chunk-000/file-000.mp4`
   - Playwright screenshot confirmed the visualizer renders the new depth preview section on:
     - `local/spark_multisensor_lightning_tactile_depth_preview_eval/episode_0?t=5`
+
+### Teleop runtime refactor spec
+
+- Wrote [teleop-runtime-refactor-spec.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/teleop-runtime-refactor-spec.md) to define the next cleanup as a behavior-preserving internal refactor, not a teleop redesign.
+- Locked phase-1 scope to the actual core runtime:
+  - Spark serial input
+  - UR dashboard / RTDE control / RTDE state / gripper
+  - Spark teleop orchestration
+  - Tk GUI and ROS as adapters on top
+- Explicitly marked these as out of phase 1:
+  - SpaceMouse
+  - VR
+  - haptic gloves
+  - WebRTC
+  - legacy camera publishers under `TeleopSoftware/camera`
+- Froze the important current hardware behaviors as requirements:
+  - base-joint `±2π` wrap reconciliation on Spark mode entry
+  - arm-specific Spark gripper normalization
+  - FT zero on enable rising edge
+  - current UR mode-transition stop behavior
+  - current stamped `/spark/<arm>/teleop/cmd_*` topic surface
