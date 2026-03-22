@@ -1587,3 +1587,32 @@
 - Important note:
   - this slice has syntax/config validation only
   - it still needs live hardware parity validation before treating it as fully proven
+
+### Teleop runtime refactor slice 3: extract core Spark orchestration
+
+- Added [teleop_runtime_core.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/teleop_runtime_core.py) to hold the core Spark/UR orchestration logic that had been embedded directly inside `launch_helpers/run.py`.
+- Moved these behaviors into the new core module without changing their semantics:
+  - stamped robot-state message construction
+  - stamped teleop-command message construction
+  - periodic stable robot-state publishing
+  - Spark mode processing
+  - Spark mode visualization math for the Tk plot
+  - base-joint wrap reconciliation on mode entry
+  - arm-specific gripper normalization
+  - FT zero on enable rising edge
+- Updated [run.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/launch_helpers/run.py) so it now delegates the hot Spark path to the new core module while leaving the other legacy branches in place:
+  - SpaceMouse
+  - VR
+  - Force
+- Preserved one especially important current quirk exactly as-is:
+  - the Spark path still keys enable gating off `lightning_spark_enable` for both arms
+  - this looks suspicious, but it is current runtime behavior and was intentionally not “fixed” during the refactor
+- Validation:
+  - `python3 -m py_compile TeleopSoftware/teleop_runtime_core.py TeleopSoftware/launch_helpers/run.py`
+  - parity-oriented Spark smoke check under ROS + `.venv`:
+    - exercised base-joint wrap reconciliation
+    - exercised FT zero on enable rising edge
+    - exercised stamped teleop command publishing
+    - result: `spark mode parity smoke ok`
+- Important note:
+  - like the previous slice, this is still not a substitute for live hardware parity validation
