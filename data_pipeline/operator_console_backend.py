@@ -247,8 +247,8 @@ class OperatorConsoleBackend:
 
     def start_recording(self, config: dict[str, Any]) -> None:
         self.last_action_error = ""
-        if not self.required_service_processes_live(config):
-            self.last_action_error = "Required session processes are not running."
+        if not self._required_services_healthy(config):
+            self.last_action_error = "Required services are not healthy enough to record."
             return
         if not self.last_validation_ok or self.last_validation_signature != self._config_signature(config):
             self.last_action_error = "Run Validate successfully for the current configuration before recording."
@@ -447,13 +447,6 @@ class OperatorConsoleBackend:
             if status == "red":
                 return True
         return False
-
-    def required_service_processes_live(self, config: dict[str, Any]) -> bool:
-        live_states = {"running", "starting"}
-        for name in self._required_service_names(config):
-            if self.processes[name].state not in live_states:
-                return False
-        return True
 
     def _required_service_names(self, config: dict[str, Any]) -> list[str]:
         required = ["spark_devices", "teleop_gui"]
