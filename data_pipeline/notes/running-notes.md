@@ -1671,3 +1671,20 @@
   - ROS import smoke under the actual Teleop runtime path:
     - `source /opt/ros/jazzy/setup.bash && .venv/bin/python ...`
     - confirmed the adapter exports callable `create_publishers` and `register_core_subscriptions`
+
+### Operator console state fix after failed conversion
+
+- Found a real console state bug after a failed conversion:
+  - `converter.state == failed` was still being treated as if the session were active
+  - that left `Start Session` disabled even after `Stop Session`
+- Updated [operator_console_qt.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_qt.py) so session buttons key off live processes only:
+  - `running`
+  - `starting`
+  - `stopping`
+- Failed `recorder` or `converter` states no longer block starting a fresh session.
+- Updated [operator_console_backend.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) so `stop_session()` clears stale validation state, which prevents the UI from implying the old preflight result still applies after all services were shut down.
+- Also made failed convert/record exits set `last_action_error` more explicitly:
+  - `Convert failed.`
+  - `Recording failed.`
+- Validation:
+  - `python3 -m py_compile data_pipeline/operator_console_backend.py data_pipeline/operator_console_qt.py`

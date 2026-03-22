@@ -232,6 +232,11 @@ class OperatorConsoleBackend:
         self.stop_recording()
         for name in ("converter", "gelsight_contract", "realsense_contract", "teleop_gui", "spark_devices"):
             self._stop_process(name)
+        self.validation_running = False
+        self.last_validation_ok = False
+        self.last_validation_signature = ""
+        self.last_validation_output = ""
+        self.last_action_error = ""
         self._record_event("stop_session", {})
 
     def start_validation(self, config: dict[str, Any]) -> None:
@@ -932,8 +937,12 @@ class OperatorConsoleBackend:
                         "episode_id": self.latest_episode_id,
                     },
                 )
+            elif exit_code != 0:
+                self.last_action_error = "Convert failed."
             self.pending_conversion_dataset_id = None
         elif name == "recorder":
+            if exit_code not in {0, -signal.SIGINT, -signal.SIGTERM, 130, 143}:
+                self.last_action_error = "Recording failed."
             self._finalize_recording_after_exit(exit_code)
 
     def _run_ros_command(
