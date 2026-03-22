@@ -1734,4 +1734,9 @@
 - Verified the production build is now valid:
   - [`.next/BUILD_ID`](/home/srinivas/Desktop/pipeline/lerobot-dataset-visualizer/.next/BUILD_ID) exists
   - `next start` no longer fails with `Could not find a production build in the '.next' directory`
-- Remaining viewer `503 DNS lookup failed` behavior is a separate issue in the local dataset-serving path or viewer environment wiring, not the Node/Bun/Next toolchain itself.
+- Also confirmed a separate debugging trap on this machine:
+  - shell-level `curl http://localhost:3000/...` probes can return `503 DNS lookup failed` if proxy environment variables are still active
+  - those failures were not coming from the viewer itself
+  - local probes must clear proxy variables, for example with:
+    - `env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy -u NO_PROXY -u no_proxy curl ...`
+- With the rebuilt production bundle and proxy-clean local probes, the viewer serves local datasets correctly again.
