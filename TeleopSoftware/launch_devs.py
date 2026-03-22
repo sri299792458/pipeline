@@ -1,93 +1,81 @@
-import os
-import subprocess
-import sys
-import time
+from __future__ import annotations
+
+import argparse
 import atexit
-# import rospy
+
 import rclpy
 from rclpy.node import Node
 
+from teleop_device_launcher import TeleopDeviceLaunchConfig, TeleopDeviceLauncher
 
-# https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9029686
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Launch SPARK device nodes and optional legacy USB peripherals.",
+    )
+    parser.add_argument(
+        "--spark-device",
+        action="append",
+        default=[],
+        help="Explicit SPARK serial device path. May be passed multiple times. If omitted, cp210x devices are auto-discovered.",
+    )
+    parser.add_argument(
+        "--buffered-spark-topic",
+        action="store_true",
+        help="Publish SPARK angles on Spark_angle_buffer/<arm> instead of Spark_angle/<arm>.",
+    )
+    parser.add_argument(
+        "--no-space-mouse",
+        action="store_true",
+        help="Skip legacy SpaceMouse auto-launch.",
+    )
+    parser.add_argument(
+        "--no-vr",
+        action="store_true",
+        help="Skip legacy VR auto-launch.",
+    )
+    parser.add_argument(
+        "--startup-settle-s",
+        type=float,
+        default=8.0,
+        help="Seconds to wait after spawning child processes before reporting startup complete.",
+    )
+    return parser.parse_args()
+
+
 class LaunchDevs(Node):
-    def __init__(self):
-        super().__init__('LaunchDevs')
+    def __init__(self, config: TeleopDeviceLaunchConfig):
+        super().__init__("LaunchDevs")
         self.get_logger().info("Starting LaunchDevs")
+        self.launcher = TeleopDeviceLauncher(config)
+        self.modules: list = []
 
-    def get_devs(self):
-        cmd = "udevadm info --name="
-        devs = []
-        spark_devs = []
-        SM_devs = []
-        VR_devs = []
-        haptic_devs = []
-        for dev in os.listdir('/dev'):
-            if 'ttyUSB' in dev:
-                devs.append(dev)
-            if 'hidraw' in dev:
-                devs.append(dev)
-            if 'ttyACM' in dev:
-                devs.append(dev)
-        for dev in devs:
-            cmd = "udevadm info --name=/dev/" + dev + " --attribute-walk"
-            output = os.popen(cmd).read()
-            if "cp210x" in output:
-                print("Spark Device found: " + dev)
-                spark_devs.append(os.path.join("/dev/", dev))
-            if "3Dconnexion" in output:
-                print("SpaceMouse Device found: " + dev)
-                SM_devs.append(os.path.join("/dev/", dev))
-            if "STMicroelectronics" in output:
-                print("Haptic Device found: " + dev)
-                haptic_devs.append(os.path.join("/dev/", dev))
-        if os.path.exists('/dev/serial/by-id/usb-HTC_Hub_Controller-if00'):
-            print("VR Device found")
-            VR_devs.append('/dev/serial/by-id/usb-HTC_Hub_Controller-if00')
-
-        return spark_devs, SM_devs, VR_devs, haptic_devs
-    def cleanup(self, modules, arms):
-        for module in modules:
-            module.kill()
+    def cleanup(self) -> None:
+        TeleopDeviceLauncher.stop_all(self.modules)
         print("Exiting")
 
-    def StartModules(self, Spark_devs, SM_devs, VR_devs, haptic_devs):
+    def main(self) -> None:
         print("Starting modules---------------------")
-        # modules = [subprocess.Popen(['roscore'], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)]
-        # time.sleep(1)
-        # rospy.init_node('Main', anonymous=True)
-        path = os.path.dirname(os.path.abspath(__file__))
-        python_exe = sys.executable
-        # modules.append(subprocess.Popen(['python3', 'Force/ForceNode.py'], start_new_session=True))
-        # modules.append(subprocess.Popen(['python3', 'camera/realsense.py', '/both/front/'], start_new_session=True))
-        # modules.append(subprocess.Popen(['python3', 'camera/realsense.py', '/lightning/wrist/'], start_new_session=True))
-        # modules.append(subprocess.Popen(['python3', 'camera/realsense.py', '/thunder/wrist/'], start_new_session=True))
-        # modules.append(subprocess.Popen(['python3', 'camera/realsense.py', '/both/top/'], start_new_session=True))
-        # modules.append(subprocess.Popen(['python3', os.path.join(path, 'Spark/SparkNode_buffer.py')], start_new_session=True))
-
-        modules = []
-        for vr in VR_devs:
-            modules.append(subprocess.Popen([python_exe, 'VR/VR_Node.py'], start_new_session=True))
-        for dev in Spark_devs:
-            # modules.append(subprocess.Popen(['python3', os.path.join(path, 'Spark/SparkNode.py'), dev, "False"], start_new_session=True)) # Pub to latency buffer
-            modules.append(subprocess.Popen([python_exe, os.path.join(path, 'Spark/SparkNode.py'), dev], start_new_session=True)) # Pub to latency buffer
-        for dev in SM_devs:
-            modules.append(subprocess.Popen([python_exe, os.path.join(path, 'SM/SpaceMouseROS.py'), dev], start_new_session=True))
-        # for dev in haptic_devs:
-        #     modules.append(subprocess.Popen([python_exe, os.path.join(path, 'Haptic/HapticNode.py'), dev], start_new_session=True))
-        time.sleep(8)
+        self.modules = self.launcher.start_all()
         print("Modules started----------------------")
-        return modules
-
-
-    def main(self):
-        Spark_devs, SM_devs, VR_devs, haptic_devs = self.get_devs()
-        modules = self.StartModules(Spark_devs, SM_devs, VR_devs, haptic_devs)
-        atexit.register(self.cleanup, modules, None)
+        atexit.register(self.cleanup)
         rclpy.spin(self)
 
-if __name__ == '__main__':
+
+def build_launch_config(args: argparse.Namespace) -> TeleopDeviceLaunchConfig:
+    return TeleopDeviceLaunchConfig(
+        spark_devices=tuple(args.spark_device),
+        include_space_mouse=not args.no_space_mouse,
+        include_vr=not args.no_vr,
+        buffered_spark_topic=bool(args.buffered_spark_topic),
+        startup_settle_s=float(args.startup_settle_s),
+    )
+
+
+if __name__ == "__main__":
+    args = parse_args()
     rclpy.init()
-    node = LaunchDevs()
+    node = LaunchDevs(build_launch_config(args))
     node.main()
     node.destroy_node()
     rclpy.shutdown()

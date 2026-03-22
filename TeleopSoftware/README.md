@@ -11,7 +11,7 @@ TODO
   - [./launch_helpers/opt.py](./launch_helpers/opt.py) > This handles the code for the compliant SPARK controller (SPARK-FC).
   - [./launch_helpers/recorder.py](./launch_helpers/recorder.py) & [playback.py](./launch_helpers/playback.py)> These can be used to record and playback teleoperations and their sensor readings. These record to ROS2 bags. 
   - [./launch_helpers/check_topics.py](./launch_helpers/check_topics.py) > Use this script to get alerts if any any of its topics stop being published. Useful to ensure cameras are still working. 
-- [./launch_devs.py](./launch_devs.py) Launches controller scripts for SPARKS and other USB perefrials (not haptic gloves). This will automatically detect the devices. 
+- [./launch_devs.py](./launch_devs.py) Launches SPARK device nodes and, by default, still auto-launches the legacy SpaceMouse / VR peripheral nodes if detected. It now also supports explicit `--spark-device /dev/...` paths for deterministic bring-up instead of relying only on USB guessing.
 - [./launch_haptic_devs.py](./launch_haptic_devs.py) Launches the controllers for the haptic gloves. 
 
 
@@ -41,7 +41,6 @@ TODO
 ## WebRTC Streaming
 - [./webrtc/](./webrtc/) > Code for creating a WebRTC RGB video stream. 
   - [./webrtc/sender.py](./webrtc/sender.py) & [/sender.py](./webrtc/sender.py) > The IP of the remote video source should be used in both of these files. The *video_dev* argument corisponds to the */dev/video\** V4L stream. 
-
 
 
 

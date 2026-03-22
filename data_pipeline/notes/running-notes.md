@@ -1779,3 +1779,26 @@
 - Conclusion:
   - the current Teleop refactor slices did not break the Lightning single-arm record/convert/view path on this checked episode
   - the remaining work should stay focused on real issues found in use, not more speculative refactor
+
+### `launch_devs.py` cleanup into a Spark-first launcher
+
+- Refactored [launch_devs.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/launch_devs.py) into a thin wrapper over a new typed launcher module:
+  - [teleop_device_launcher.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/teleop_device_launcher.py)
+- The new module separates:
+  - USB discovery
+  - SPARK child-process command construction
+  - optional legacy SpaceMouse / VR launch behavior
+- This keeps the same entrypoint and default bring-up shape for current use:
+  - `python TeleopSoftware/launch_devs.py`
+  - SPARK devices are still auto-discovered from cp210x serial devices
+  - legacy SpaceMouse / VR auto-launch remains available by default for compatibility
+- Added an explicit deterministic option for future bring-up:
+  - `--spark-device /dev/...`
+  - may be passed multiple times
+- Added explicit CLI flags so legacy peripherals no longer dictate the structure of the launcher:
+  - `--no-space-mouse`
+  - `--no-vr`
+  - `--buffered-spark-topic`
+- Validation:
+  - `python3 -m py_compile TeleopSoftware/teleop_device_launcher.py TeleopSoftware/launch_devs.py`
+  - `source /opt/ros/jazzy/setup.bash && .venv/bin/python TeleopSoftware/launch_devs.py --help`
