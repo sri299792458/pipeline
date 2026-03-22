@@ -4,22 +4,19 @@ import time
 from functools import partial
 import tkinter as tk
 from tkinter import ttk
-import time
 
 from UR.arms import *
 from launch_helpers.opt import UR5eForceControl
 from launch_helpers.run import *
 from launch_helpers.tk_functions import *
 from teleop_runtime_config import build_default_runtime_config
+from teleop_ros_adapter import TeleopROSAdapter
 
 # import rospy
 # from std_msgs.msg import Float32MultiArray, String, Bool, Float32, Int32
 # Update to ROS2
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, WrenchStamped
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32MultiArray, String, Bool, Float32, Int32
 
 class GUI(Node):
     def __init__(self):
@@ -46,54 +43,8 @@ class GUI(Node):
         URs = UR(arms, ips, enable_grippers=enable_gripper)
         optimize = UR5eForceControl(URs)
 
-        pubs = dict()
-        for arm in arms:
-            # pubs[arm+"_reset_estop"] = rospy.Publisher("/reset_estop", Bool, queue_size=10)
-            # pubs[arm+"_ft"] = rospy.Publisher(f"/{arm.lower()}_ft", Float32MultiArray, queue_size=10)
-            # pubs[arm+"_ft_raw"] = rospy.Publisher(f"/{arm.lower()}_raw_ft_raw", Float32MultiArray, queue_size=10)
-            # pubs[arm+"_q"] = rospy.Publisher(f"/{arm.lower()}_q", Float32MultiArray, queue_size=10)
-            # pubs[arm+"_cartesian"] = rospy.Publisher(f"/{arm.lower()}_cartesian_eef", Float32MultiArray, queue_size=10)
-            # pubs[arm+"_speed"] = rospy.Publisher(f"/{arm.lower()}_speed", Float32MultiArray, queue_size=10)
-            # pubs[arm+"_gripper"] = rospy.Publisher(f"/{arm.lower()}_gripper", Float32, queue_size=10)
-            # pubs[arm+"_enable"] = rospy.Publisher(f"/{arm.lower()}_enable", Bool, queue_size=10)
-            # pubs[arm+"_safety_mode"] = rospy.Publisher(f"/{arm.lower()}_safety_mode", Int32, queue_size=10)
-            # # Force offset
-            # pubs[arm+"_force_offset"] = rospy.Publisher(f"/{arm.lower()}_force_offset", Float32MultiArray, queue_size=10)
-            pubs[arm+"_reset_estop"] = self.create_publisher(Bool, "/reset_estop", 10)
-            pubs[arm+"_ft"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_ft", 10)
-            pubs[arm+"_ft_raw"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_raw_ft_raw", 10)
-            pubs[arm+"_q"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_q", 10)
-            pubs[arm+"_cartesian"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_cartesian_eef", 10)
-            pubs[arm+"_speed"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_speed", 10)
-            pubs[arm+"_gripper"] = self.create_publisher(Int32, f"/{arm.lower()}_gripper", 10)
-            pubs[arm+"_enable"] = self.create_publisher(Bool, f"/{arm.lower()}_enable", 10)
-            pubs[arm+"_safety_mode"] = self.create_publisher(Int32, f"/{arm.lower()}_safety_mode", 10)
-            # # Force offset
-            pubs[arm+"_force_offset"] = self.create_publisher(Float32MultiArray, f"/{arm.lower()}_force_offset", 10)
-            pubs[arm.lower()+"_spark_command_angles"] = self.create_publisher(
-                Float32MultiArray, f"/{arm.lower()}_spark_command_angles", 10
-            )
-            pubs[arm.lower()+"_spark_command_gripper"] = self.create_publisher(
-                Float32, f"/{arm.lower()}_spark_command_gripper", 10
-            )
-            pubs[arm+"_robot_joint_state"] = self.create_publisher(
-                JointState, f"/spark/{arm.lower()}/robot/joint_state", 10
-            )
-            pubs[arm+"_robot_eef_pose"] = self.create_publisher(
-                PoseStamped, f"/spark/{arm.lower()}/robot/eef_pose", 10
-            )
-            pubs[arm+"_robot_tcp_wrench"] = self.create_publisher(
-                WrenchStamped, f"/spark/{arm.lower()}/robot/tcp_wrench", 10
-            )
-            pubs[arm+"_robot_gripper_state"] = self.create_publisher(
-                JointState, f"/spark/{arm.lower()}/robot/gripper_state", 10
-            )
-            pubs[arm+"_teleop_cmd_joint_state"] = self.create_publisher(
-                JointState, f"/spark/{arm.lower()}/teleop/cmd_joint_state", 10
-            )
-            pubs[arm+"_teleop_cmd_gripper_state"] = self.create_publisher(
-                JointState, f"/spark/{arm.lower()}/teleop/cmd_gripper_state", 10
-            )
+        ros_adapter = TeleopROSAdapter(self, self.ros_data)
+        pubs = ros_adapter.create_publishers(arms)
 
         colors = ["light blue", "light green"]
         col = {}
@@ -322,14 +273,7 @@ class GUI(Node):
                 print(f"\tSkipping startup reset for {arm}: dashboard unavailable")
             time.sleep(1)
             
-        self.create_subscription(String, "/SpaceMouseThunderLog", self.thunder_sm_log, 10)
-        self.create_subscription(String, "/SpaceMouseLightningLog", self.lightning_sm_log, 10)
-        self.create_subscription(Float32MultiArray, "/SpaceMouseThunder", self.thunder_sm_data, 10)
-        self.create_subscription(Float32MultiArray, "/SpaceMouseLightning", self.lightning_sm_data, 10)
-        self.create_subscription(Float32MultiArray, "/Spark_angle/thunder", self.spark_angle_thunder, 10)
-        self.create_subscription(Float32MultiArray, "/Spark_angle/lightning", self.spark_angle_lightning, 10)
-        self.create_subscription(Bool, "/Spark_enable/thunder", self.spark_enable_thunder, 10)
-        self.create_subscription(Bool, "/Spark_enable/lightning", self.spark_enable_lightning, 10)
+        ros_adapter.register_core_subscriptions()
         
         print("\tStarting Main Loop")
         try:
@@ -345,45 +289,6 @@ class GUI(Node):
             print("Window closed")
             pass
         
-
-    def thunder_sm_log(self, data):
-        self.ros_data['thunder_sm_log'] = data.data
-        print(data.data)
-    def lightning_sm_log(self, data):
-        self.ros_data['lightning_sm_log'] = data.data
-        print(data.data)
-    # rospy.Subscriber("/SpaceMouseThunderLog", String, thunder_sm_log) 
-    # rospy.Subscriber("/SpaceMouseLightningLog", String, lightning_sm_log)
-    # self.create_subscription("/SpaceMouseLightningLog", String, lightning_sm_log)
-
-    def thunder_sm_data(self, data):
-        self.ros_data['thunder_sm_data'] = data.data
-    def lightning_sm_data(self, data):
-        self.ros_data['lightning_sm_data'] = data.data
-        # print(data.data)
-    # rospy.Subscriber("/SpaceMouseThunder", Float32MultiArray, thunder_sm_data)
-    # rospy.Subscriber("/SpaceMouseLightning", Float32MultiArray, lightning_sm_data)
-    # self.create_subscription("/SpaceMouseThunder", Float32MultiArray, thunder_sm_data)
-    # self.create_subscription("/SpaceMouseLightning", Float32MultiArray, lightning_sm_data)
-
-    def spark_angle_thunder(self, data):
-        self.ros_data['thunder_spark_angle'] = data.data
-    def spark_angle_lightning(self, data):
-        self.ros_data['lightning_spark_angle'] = data.data
-        # print(data.data)
-    # rospy.Subscriber("/Spark_angle/thunder", Float32MultiArray, spark_angle_thunder)
-    # rospy.Subscriber("/Spark_angle/lightning", Float32MultiArray, spark_angle_lightning)
-    # self.create_subscription("/Spark_angle/thunder", Float32MultiArray, spark_angle_thunder)
-    # self.create_subscription("/Spark_angle/lightning", Float32MultiArray, spark_angle_lightning)
-
-    def spark_enable_thunder(self, data):
-        self.ros_data['thunder_spark_enable'] = data.data
-    def spark_enable_lightning(self, data):
-        self.ros_data['lightning_spark_enable'] = data.data
-    # rospy.Subscriber("/Spark_enable/thunder", Bool, spark_enable_thunder)
-    # rospy.Subscriber("/Spark_enable/lightning", Bool, spark_enable_lightning)
-    # self.create_subscription("/Spark_enable/thunder", Bool, spark_enable_thunder)
-    # self.create_subscription("/Spark_enable/lightning", Bool, spark_enable_lightning)
 
     # def vr_data_thunder(data):
     #     ros_data['thunder_vr_data'] = data.data

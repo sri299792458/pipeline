@@ -1648,3 +1648,26 @@
 - Important note:
   - this slice is still internal only
   - the Tk GUI call signatures and expected globals were preserved intentionally
+
+### Teleop runtime refactor slice 5: extract ROS adapter
+
+- Added [teleop_ros_adapter.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/teleop_ros_adapter.py) so the ROS-facing surface of the Teleop GUI is no longer embedded directly in `launch.py`.
+- Moved the core ROS boilerplate behind the adapter:
+  - publisher creation for the current raw and stamped robot/teleop topics
+  - SpaceMouse log/data subscriptions
+  - Spark angle/enable subscriptions
+  - the small callbacks that feed `ros_data`
+- Updated [launch.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/launch.py) so it now:
+  - instantiates `TeleopROSAdapter`
+  - asks it to create publishers
+  - asks it to register the core subscriptions
+  - no longer owns the raw callback methods itself
+- This was still a behavior-preserving extraction:
+  - same topic names
+  - same publisher construction
+  - same `ros_data` keys used downstream by `run.py`
+- Validation:
+  - `python3 -m py_compile TeleopSoftware/teleop_ros_adapter.py TeleopSoftware/launch.py`
+  - ROS import smoke under the actual Teleop runtime path:
+    - `source /opt/ros/jazzy/setup.bash && .venv/bin/python ...`
+    - confirmed the adapter exports callable `create_publishers` and `register_core_subscriptions`
