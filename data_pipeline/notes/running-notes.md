@@ -1553,3 +1553,37 @@
   - `python3 -m py_compile TeleopSoftware/Spark/SparkNode.py TeleopSoftware/Spark/spark_runtime.py`
   - parity check against the legacy unwrap math over randomized samples:
     - `spark unwrap parity ok`
+
+### Teleop runtime refactor slice 2: typed launch config and UR adapters
+
+- Added [teleop_runtime_config.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/teleop_runtime_config.py) as a typed boundary for the currently hardcoded Teleop launch-time values:
+  - arm order
+  - robot IPs
+  - enable-control flags
+  - enable-gripper flags
+  - arm home joint configurations
+- Updated [launch.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/launch.py) to read those values from the typed config instead of embedding them inline.
+- Added [ur_adapters.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/UR/ur_adapters.py) so the internal UR connection types are now explicit:
+  - dashboard adapter
+  - RTDE control adapter
+  - RTDE state adapter
+  - gripper adapter
+- Updated [arms.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/UR/arms.py) to use those adapters internally while preserving the existing `UR` class surface used by:
+  - `launch.py`
+  - `launch_helpers/run.py`
+  - `launch_helpers/tk_functions.py`
+  - `launch_helpers/opt.py`
+- The point of this slice was structural only:
+  - keep the same `UR(...)` entrypoint
+  - keep the same movement/mode methods
+  - keep the same startup behavior contract
+  - stop exposing raw third-party client creation directly in multiple places
+- Validation:
+  - `python3 -m py_compile TeleopSoftware/teleop_runtime_config.py TeleopSoftware/UR/ur_adapters.py TeleopSoftware/UR/arms.py TeleopSoftware/launch.py`
+  - config smoke check:
+    - arm names remain `['Lightning', 'Thunder']`
+    - IPs remain `['10.33.55.90', '10.33.55.89']`
+    - enable-control map remains unchanged
+- Important note:
+  - this slice has syntax/config validation only
+  - it still needs live hardware parity validation before treating it as fully proven

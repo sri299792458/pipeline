@@ -10,6 +10,7 @@ from UR.arms import *
 from launch_helpers.opt import UR5eForceControl
 from launch_helpers.run import *
 from launch_helpers.tk_functions import *
+from teleop_runtime_config import build_default_runtime_config
 
 # import rospy
 # from std_msgs.msg import Float32MultiArray, String, Bool, Float32, Int32
@@ -37,19 +38,11 @@ class GUI(Node):
         # rospy.Subscriber("/SpaceMouseThunderLog", Float32MultiArray, lambda data: globals().update({'thunder_data': data.data}))
 
 
-        thunder_ip = "10.33.55.89"
-        lightning_ip = "10.33.55.90"
-
-        arms = ["Lightning", "Thunder"]
-        ips = [lightning_ip, thunder_ip]
-        enable_control = {
-            "Thunder": True,
-            "Lightning": True,
-        }
-        enable_gripper = {
-            "Thunder": True,
-            "Lightning": True,
-        }
+        runtime_config = build_default_runtime_config()
+        arms = runtime_config.arm_names()
+        ips = runtime_config.arm_ips()
+        enable_control = runtime_config.enable_control_map()
+        enable_gripper = runtime_config.enable_gripper_map()
         URs = UR(arms, ips, enable_grippers=enable_gripper)
         optimize = UR5eForceControl(URs)
 
@@ -103,32 +96,10 @@ class GUI(Node):
             )
 
         colors = ["light blue", "light green"]
-        ur_homes_dict = {
-            "Thunder": (
-                3.181920289993286,
-                -0.16607506573200226,
-                0.2841489911079407,
-                -1.0576382875442505,
-                -0.10265476256608963,
-                -0.7487161755561829,
-            ),
-            "Lightning": (
-                -3.092430591583252,
-                -2.535433530807495,
-                -1.2771631479263306,
-                -1.0458279848098755,
-                -0.0320628322660923,
-                -0.025522056967020035,
-            ),
-        }
-        ur_homes = [ur_homes_dict["Lightning"], ur_homes_dict["Thunder"]]
-
         col = {}
-        homes = {}
-        for name, color, ur_home in zip(arms, colors, ur_homes):
+        homes = runtime_config.homes_map()
+        for name, color in zip(arms, colors):
             col[name] = color
-            homes[name] = [float(angle) for angle in ur_home]
-            homes[name+"_spark"] = list(homes[name])  # Not used
 
         root = tk.Tk()
         root.title("Teleop Control")

@@ -1,8 +1,12 @@
-import rtde_control
-import rtde_receive
-from UR.dashboard import rtde_dashboard
-from UR.gripper import RobotiqGripper
 import time
+
+from UR.ur_adapters import (
+    URArmConnectionConfig,
+    URControlAdapter,
+    URDashboardAdapter,
+    URGripperAdapter,
+    URStateAdapter,
+)
 
 class UR:
     def __init__(self, names, ip_addresses, enable_grippers=True):
@@ -13,8 +17,14 @@ class UR:
         self.names = names
         self.enable_grippers = enable_grippers
         self.ips = {}
+        self.arm_configs = {}
         for name, ip in zip(names, ip_addresses):
             self.ips[name] = ip
+            self.arm_configs[name] = URArmConnectionConfig(
+                name=name,
+                ip_address=ip,
+                enable_gripper=self.gripper_enabled(name),
+            )
         self.mode = {}
 
     def gripper_enabled(self, name):
@@ -132,8 +142,9 @@ class UR:
     def init_dashboard(self, name):
         try:
             if name in self.ur_dashboard:
+                self.ur_dashboard[name].close()
                 del self.ur_dashboard[name]
-            self.ur_dashboard[name] = rtde_dashboard(self.ips[name])
+            self.ur_dashboard[name] = URDashboardAdapter.connect(self.arm_configs[name])
             print(f"Connected to {name} dashboard at {self.ips[name]}")
         except RuntimeError as e:
             print(f"\tFailed to connect to {name} dashboard at {self.ips[name]}")
@@ -153,7 +164,7 @@ class UR:
                     self.ur_control[name].disconnect()
                     self.ur_control[name].reconnect()
                 else:
-                    self.ur_control[name] = rtde_control.RTDEControlInterface(self.ips[name], 500)
+                    self.ur_control[name] = URControlAdapter.connect(self.arm_configs[name])
                 control_ready = True
             except RuntimeError as e:
                 print(f"\tFailed to connect control to {name} at {self.ips[name]}")
@@ -163,7 +174,7 @@ class UR:
             if name in self.ur_receive:
                 self.ur_receive[name].disconnect()
                 self.ur_receive[name].reconnect()
-            self.ur_receive[name] = rtde_receive.RTDEReceiveInterface(self.ips[name])
+            self.ur_receive[name] = URStateAdapter.connect(self.arm_configs[name])
             print(f"Connected state to {name} at {self.ips[name]}")
         except RuntimeError as e:
             print(f"\tFailed to connect state to {name} at {self.ips[name]}")
@@ -174,8 +185,7 @@ class UR:
                 return False
         try:
             if name not in self.ur_grippers:
-                self.ur_grippers[name] = RobotiqGripper()
-                self.ur_grippers[name].connect(self.ips[name], 63352)
+                self.ur_grippers[name] = URGripperAdapter.connect(self.arm_configs[name])
                 if self.gripper_enabled(name):
                     self.ur_grippers[name].activate()
                     print(f"Connected to {name} gripper")
@@ -188,6 +198,7 @@ class UR:
     def __del__(self):
         for name in self.names:
             if name in self.ur_dashboard:
+                self.ur_dashboard[name].close()
                 del self.ur_dashboard[name]
             if name in self.ur_control:
                 self.ur_control[name].disconnect()
@@ -196,4 +207,8 @@ class UR:
                 self.ur_receive[name].disconnect()
                 del self.ur_receive[name]
             if name in self.ur_grippers:
+                try:
+                    self.ur_grippers[name].disconnect()
+                except Exception:
+                    pass
                 del self.ur_grippers[name]
