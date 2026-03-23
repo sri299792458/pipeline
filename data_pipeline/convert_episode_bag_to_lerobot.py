@@ -40,6 +40,15 @@ if str(REPO_ROOT) not in sys.path:
 from data_pipeline.pipeline_utils import (  # noqa: E402
     detect_bag_storage_id,
     load_profile,
+    manifest_active_arms,
+    manifest_clock_policy,
+    manifest_dataset_id,
+    manifest_episode_id,
+    manifest_language_instruction,
+    manifest_profile_name,
+    manifest_robot_id,
+    manifest_task_name,
+    manifest_topic_types,
     normalize_active_arms,
     profile_required_arms,
     write_json,
@@ -1171,23 +1180,23 @@ def main(argv: list[str] | None = None) -> int:
         raise FileNotFoundError(f"Missing bag directory: {bag_dir}")
 
     manifest = read_manifest(manifest_path)
-    profile_ref = args.profile or manifest["mapping_profile"]
+    profile_ref = args.profile or manifest_profile_name(manifest)
     profile = load_profile(profile_ref)
-    if manifest["mapping_profile"] != profile["profile_name"]:
+    if manifest_profile_name(manifest) != profile["profile_name"]:
         raise RuntimeError(
-            f"Manifest mapping_profile={manifest['mapping_profile']} does not match profile {profile['profile_name']}"
+            f"Manifest mapping_profile={manifest_profile_name(manifest)} does not match profile {profile['profile_name']}"
         )
-    manifest_active_arms = manifest.get("active_arms")
-    if manifest_active_arms:
-        normalized_manifest_arms = normalize_active_arms(manifest_active_arms)
+    manifest_arms = manifest_active_arms(manifest)
+    if manifest_arms:
+        normalized_manifest_arms = normalize_active_arms(manifest_arms)
         normalized_profile_arms = profile_required_arms(profile)
         if normalized_manifest_arms != normalized_profile_arms:
             raise RuntimeError(
                 f"Manifest active_arms {normalized_manifest_arms} do not match profile arms {normalized_profile_arms}"
             )
 
-    all_topics_to_read = set(manifest["topics"])
-    topic_types = manifest.get("topic_types", {})
+    topic_types = manifest_topic_types(manifest)
+    all_topics_to_read = set(topic_types)
     value_topics = build_value_topics(profile) & all_topics_to_read
     parse_topics = build_parse_topics(profile, all_topics_to_read, topic_types, value_topics)
     bag_storage_id = detect_bag_storage_id(bag_dir)
@@ -1204,24 +1213,24 @@ def main(argv: list[str] | None = None) -> int:
         profile=effective_profile,
         selected_image_specs=selected_image_specs,
         selected_depth_specs=selected_depth_specs,
-        task_name=manifest["task_name"],
-        language_instruction=manifest.get("language_instruction"),
+        task_name=manifest_task_name(manifest),
+        language_instruction=manifest_language_instruction(manifest),
     )
 
     image_fields = [spec["field"] for spec in selected_image_specs]
     image_shapes = image_shapes_from_frames(frames, image_fields)
     features = build_features(effective_profile, image_shapes)
 
-    dataset_id = args.published_dataset_id or manifest["dataset_id"]
+    dataset_id = args.published_dataset_id or manifest_dataset_id(manifest)
     dataset_root = args.published_root / dataset_id
-    artifact_dir = dataset_root / "meta" / "spark_conversion" / manifest["episode_id"]
+    artifact_dir = dataset_root / "meta" / "spark_conversion" / manifest_episode_id(manifest)
     if artifact_dir.exists():
-        raise RuntimeError(f"Conversion artifacts already exist for {manifest['episode_id']} at {artifact_dir}")
+        raise RuntimeError(f"Conversion artifacts already exist for {manifest_episode_id(manifest)} at {artifact_dir}")
 
     dataset = get_or_create_dataset(
         dataset_root=dataset_root,
         dataset_id=dataset_id,
-        robot_type=manifest["robot_id"],
+        robot_type=manifest_robot_id(manifest),
         fps=int(profile["dataset"]["fps"]),
         features=features,
         vcodec=args.vcodec,
@@ -1271,12 +1280,12 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     diagnostics = {
-        "episode_id": manifest["episode_id"],
-        "manifest_dataset_id": manifest["dataset_id"],
+        "episode_id": manifest_episode_id(manifest),
+        "manifest_dataset_id": manifest_dataset_id(manifest),
         "dataset_id": dataset_id,
         "dataset_root": str(dataset_root),
         "dataset_episode_index": dataset_episode_index,
-        "clock_policy": manifest["clock_policy"],
+        "clock_policy": manifest_clock_policy(manifest),
         "bag_storage_id": bag_storage_id,
         "summary_status": summary_status,
         "topic_diagnostics": {topic: series[topic].diagnostics() for topic in sorted(series)},
@@ -1285,8 +1294,8 @@ def main(argv: list[str] | None = None) -> int:
         **alignment_diagnostics,
     }
     summary = {
-        "episode_id": manifest["episode_id"],
-        "manifest_dataset_id": manifest["dataset_id"],
+        "episode_id": manifest_episode_id(manifest),
+        "manifest_dataset_id": manifest_dataset_id(manifest),
         "dataset_id": dataset_id,
         "dataset_root": str(dataset_root),
         "dataset_episode_index": dataset_episode_index,
@@ -1300,7 +1309,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     write_conversion_artifacts(artifact_dir, diagnostics, effective_profile, summary)
 
-    print(f"Converted {manifest['episode_id']} -> {dataset_root}")
+    print(f"Converted {manifest_episode_id(manifest)} -> {dataset_root}")
     print(f"episode_index={dataset_episode_index}")
     print(f"status={summary_status}")
     print(f"published_frames={len(frames)}")

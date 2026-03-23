@@ -314,10 +314,10 @@ sed -n '1,240p' raw_episodes/<episode_id>/episode_manifest.json
 What to look for:
 
 - both RealSense serials are present
-- the selected topic list looks complete
-- `record_exit_code` is `0`
-- `start_time_ns` and `end_time_ns` are populated
-- sensor entries look reasonable
+- `recorded_topics` looks complete for the chosen profile
+- `capture.record_exit_code` is `0`
+- `capture.start_time_ns` and `capture.end_time_ns` are populated
+- `sensors.devices` entries look reasonable
 
 
 ## 10. Convert The Episode To LeRobot

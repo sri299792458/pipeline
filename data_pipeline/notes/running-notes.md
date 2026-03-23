@@ -1394,7 +1394,7 @@
   - default pad after: `1.0 s`
   - default behavior: enabled after successful recording
   - opt-out flag: `--disable-command-trim`
-- The recorder now stamps the result into `episode_manifest.json` under `raw_trim`, including:
+- The recorder now stamps the result into `episode_manifest.json` under `capture.raw_trim`, including:
   - activity topics used
   - pad values
   - status
@@ -1817,3 +1817,33 @@
   - [get_open_position()](/home/srinivas/Desktop/pipeline/TeleopSoftware/UR/gripper.py#L204)
   - [get_closed_position()](/home/srinivas/Desktop/pipeline/TeleopSoftware/UR/gripper.py#L208)
 - Updated the topic and dataset contract docs so published gripper state and command are explicitly on the same `0..1` scale.
+
+### Episode manifest redesign
+
+- Reworked `episode_manifest.json` into the single resolved per-episode snapshot instead of spreading episode truth across a manifest plus a separate topic-ledger file.
+- Kept the profile YAML as the reusable static policy artifact and moved the per-episode resolved topic contract into the manifest itself under:
+  - `recorded_topics`
+- New manifest shape is now:
+  - `manifest_schema_version`
+  - `episode`
+  - `profile`
+  - `capture`
+  - `sensors`
+  - `recorded_topics`
+  - `provenance`
+- This replaces the older weaker top-level summary fields:
+  - `topics`
+  - `topic_types`
+- Each `recorded_topics` entry now carries the resolved per-topic snapshot for that episode:
+  - message type
+  - producer/process provenance
+  - semantic meaning and units
+  - timestamp carrier and timestamp meaning
+  - expected rate band
+  - associated `sensor_id` when applicable
+  - usage flags like `required_for_record`, `required_for_convert`, `published`, `raw_only`, and `published_fields`
+- The intent is to make one episode folder self-describing without adding another machine-readable artifact to maintain.
+- Validation:
+  - `python3 -m py_compile` passed for the recorder, dummy generator, converter, manifest helpers, and eval script after the schema change
+  - a dummy episode generated successfully with the new schema
+  - the converter successfully consumed that new manifest and wrote a published episode

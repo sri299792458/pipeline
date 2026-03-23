@@ -25,8 +25,10 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
     DEFAULT_PROFILE_PATH,
     DEFAULT_RAW_EPISODES_DIR,
     build_notes_template,
+    build_recorded_topics_snapshot,
     collect_candidate_topics,
     load_profile,
+    MANIFEST_SCHEMA_VERSION,
     make_episode_id,
     now_ns,
     profile_required_arms,
@@ -225,27 +227,48 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
         )
 
     return {
-        "episode_id": episode_id,
-        "dataset_id": args.dataset_id,
-        "task_name": args.task_name,
-        "language_instruction": str(args.language_instruction).strip() or args.task_name,
-        "robot_id": args.robot_id,
-        "active_arms": active_arms,
-        "operator": args.operator,
-        "start_time_ns": start_ns,
-        "end_time_ns": end_ns,
-        "topics": topics,
-        "topic_types": {topic: TOPIC_TYPES[topic] for topic in topics},
-        "sensor_inventory_version": 2,
-        "sensors": sensors,
-        "mapping_profile": profile["profile_name"],
-        "profile_version": profile["profile_version"],
-        "clock_policy": profile["dataset"]["clock_policy"],
-        "bag_storage_id": args.storage_id,
-        "bag_storage_preset_profile": (
-            args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
+        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
+        "episode": {
+            "episode_id": episode_id,
+            "dataset_id": args.dataset_id,
+            "task_name": args.task_name,
+            "language_instruction": str(args.language_instruction).strip() or args.task_name,
+            "robot_id": args.robot_id,
+            "active_arms": active_arms,
+            "operator": args.operator,
+        },
+        "profile": {
+            "name": profile["profile_name"],
+            "version": profile["profile_version"],
+            "path": str(Path(args.profile)),
+            "clock_policy": profile["dataset"]["clock_policy"],
+        },
+        "capture": {
+            "start_time_ns": start_ns,
+            "end_time_ns": end_ns,
+            "storage": {
+                "bag_storage_id": args.storage_id,
+                "bag_storage_preset_profile": (
+                    args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
+                ),
+            },
+            "record_exit_code": 0,
+            "raw_trim": None,
+        },
+        "sensors": {
+            "inventory_version": 2,
+            "devices": sensors,
+        },
+        "recorded_topics": build_recorded_topics_snapshot(
+            profile=profile,
+            selected_topics=topics,
+            live_topics=TOPIC_TYPES,
+            sensors=sensors,
+            extra_topics=[],
         ),
-        "git_commit": "dummy",
+        "provenance": {
+            "git_commit": "dummy",
+        },
     }
 
 

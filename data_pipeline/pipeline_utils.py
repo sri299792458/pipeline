@@ -22,6 +22,7 @@ DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
 ARM_ORDER = ("lightning", "thunder")
+MANIFEST_SCHEMA_VERSION = 3
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
     "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",
@@ -34,6 +35,16 @@ ACTIVE_ARMS_TO_PROFILE_NAME = {
 }
 
 _TOPIC_TYPE_PATTERN = re.compile(r"^(?P<topic>/\S+)\s+\[(?P<type>[^\]]+)\]\s*$")
+_STATE_SOURCE_COUNTS = (
+    ("joint_state", 6),
+    ("eef_pose", 6),
+    ("gripper_state", 1),
+    ("tcp_wrench", 6),
+)
+_ACTION_SOURCE_COUNTS = (
+    ("cmd_joint_state", 6),
+    ("cmd_gripper_state", 1),
+)
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
@@ -412,6 +423,449 @@ def infer_sensor_metadata(
     return sensors
 
 
+def _sensor_ids_by_topic(sensors: list[dict[str, Any]]) -> dict[str, str]:
+    topic_to_sensor: dict[str, str] = {}
+    for sensor in sensors:
+        sensor_id = str(sensor.get("sensor_id", "")).strip()
+        if not sensor_id:
+            continue
+        for topic in sensor.get("topic_names", []):
+            topic_to_sensor[str(topic)] = sensor_id
+    return topic_to_sensor
+
+
+def _rate_range(min_hz: float | None, max_hz: float | None) -> dict[str, float | None]:
+    return {
+        "min_hz": float(min_hz) if min_hz is not None else None,
+        "max_hz": float(max_hz) if max_hz is not None else None,
+    }
+
+
+def _static_topic_descriptor(topic: str) -> dict[str, Any]:
+    if topic == "/Spark_enable/lightning":
+        return {
+            "producer": {
+                "process": "TeleopSoftware/Spark/SparkNode.py",
+                "node": "SparkNode",
+                "upstream_source": "SPARK serial packet enable_switch from the shared foot pedal",
+            },
+            "semantics": {
+                "kind": "teleop_activity",
+                "value_meaning": "Boolean teleop activity mask",
+                "units": "boolean",
+                "convention": "true=pedal_active",
+            },
+            "timestamp": {
+                "carrier": "bag_timestamp_ns",
+                "meaning": "host receive/publish time of the SPARK packet carrying the enable state",
+                "vocabulary": "host_capture_time_v1",
+                "has_header": False,
+            },
+            "expected_rate_hz": _rate_range(20, 200),
+        }
+
+    if topic == "/spark/cameras/wrist/color/image_raw":
+        return {
+            "producer": {
+                "process": "data_pipeline/realsense_bridge.py",
+                "node": "/spark/cameras/wrist",
+                "upstream_source": "Intel RealSense wrist color stream",
+            },
+            "semantics": {
+                "kind": "raw_sensor",
+                "value_meaning": "RGB image observation",
+                "units": None,
+                "convention": None,
+            },
+            "timestamp": {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
+                "vocabulary": "host_capture_time_v1",
+                "has_header": True,
+            },
+            "expected_rate_hz": _rate_range(20, 30),
+        }
+
+    if topic == "/spark/cameras/wrist/depth/image_rect_raw":
+        return {
+            "producer": {
+                "process": "data_pipeline/realsense_bridge.py",
+                "node": "/spark/cameras/wrist",
+                "upstream_source": "Intel RealSense wrist depth stream",
+            },
+            "semantics": {
+                "kind": "raw_sensor",
+                "value_meaning": "Depth image",
+                "units": "millimeters",
+                "convention": None,
+            },
+            "timestamp": {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
+                "vocabulary": "host_capture_time_v1",
+                "has_header": True,
+            },
+            "expected_rate_hz": _rate_range(20, 30),
+        }
+
+    if topic == "/spark/cameras/scene/color/image_raw":
+        return {
+            "producer": {
+                "process": "data_pipeline/realsense_bridge.py",
+                "node": "/spark/cameras/scene",
+                "upstream_source": "Intel RealSense scene color stream",
+            },
+            "semantics": {
+                "kind": "raw_sensor",
+                "value_meaning": "RGB image observation",
+                "units": None,
+                "convention": None,
+            },
+            "timestamp": {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
+                "vocabulary": "host_capture_time_v1",
+                "has_header": True,
+            },
+            "expected_rate_hz": _rate_range(20, 30),
+        }
+
+    if topic == "/spark/cameras/scene/depth/image_rect_raw":
+        return {
+            "producer": {
+                "process": "data_pipeline/realsense_bridge.py",
+                "node": "/spark/cameras/scene",
+                "upstream_source": "Intel RealSense scene depth stream",
+            },
+            "semantics": {
+                "kind": "raw_sensor",
+                "value_meaning": "Depth image",
+                "units": "millimeters",
+                "convention": None,
+            },
+            "timestamp": {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
+                "vocabulary": "host_capture_time_v1",
+                "has_header": True,
+            },
+            "expected_rate_hz": _rate_range(20, 30),
+        }
+
+    tactile_match = re.fullmatch(r"/spark/tactile/(left|right)/(color/image_raw|depth/image_raw|marker_offset)", topic)
+    if tactile_match:
+        side, suffix = tactile_match.groups()
+        kind = "raw_sensor" if suffix == "color/image_raw" else "derived_sensor"
+        value_meaning = {
+            "color/image_raw": "GelSight tactile RGB frame",
+            "depth/image_raw": "GelSight derived depth image",
+            "marker_offset": "GelSight marker displacement cloud",
+        }[suffix]
+        units = "millimeters" if suffix == "depth/image_raw" else None
+        return {
+            "producer": {
+                "process": "data_pipeline/gelsight_bridge.py",
+                "node": f"/gelsight_{side}_bridge",
+                "upstream_source": f"GelSight Mini {side} tactile stream",
+            },
+            "semantics": {
+                "kind": kind,
+                "value_meaning": value_meaning,
+                "units": units,
+                "convention": None,
+            },
+            "timestamp": {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time assigned immediately after camera.read() returns",
+                "vocabulary": "host_capture_time_v1",
+                "has_header": True,
+            },
+            "expected_rate_hz": _rate_range(15, 30),
+        }
+
+    robot_match = re.fullmatch(
+        r"/spark/(lightning|thunder)/(robot|teleop)/(joint_state|eef_pose|tcp_wrench|gripper_state|cmd_joint_state|cmd_gripper_state)",
+        topic,
+    )
+    if robot_match:
+        arm, namespace, signal = robot_match.groups()
+        if namespace == "robot":
+            timestamp = {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time assigned once for the robot/control update tick",
+                "vocabulary": "control_tick_time_v1",
+                "has_header": True,
+            }
+            kind = "measured_state"
+        else:
+            timestamp = {
+                "carrier": "header.stamp",
+                "meaning": "host ROS time when the teleop/runtime command is issued",
+                "vocabulary": "command_issue_time_v1",
+                "has_header": True,
+            }
+            kind = "command"
+        semantics = {
+            "joint_state": ("Measured UR joint positions", "radians", None),
+            "eef_pose": ("Measured UR end-effector pose", "meters_and_radians", None),
+            "tcp_wrench": ("Measured UR TCP wrench", "newtons_and_newton_meters", None),
+            "gripper_state": ("Measured gripper opening", "unitless_0_to_1", "0=open,1=closed"),
+            "cmd_joint_state": ("Issued joint target", "radians", None),
+            "cmd_gripper_state": ("Issued gripper opening target", "unitless_0_to_1", "0=open,1=closed"),
+        }[signal]
+        upstream_source = {
+            "joint_state": "UR RTDE receive",
+            "eef_pose": "UR RTDE TCP pose",
+            "tcp_wrench": "UR RTDE force-torque",
+            "gripper_state": "Robotiq gripper state",
+            "cmd_joint_state": "Spark teleop command path",
+            "cmd_gripper_state": "Spark-derived gripper command path",
+        }[signal]
+        return {
+            "producer": {
+                "process": "TeleopSoftware/launch.py",
+                "node": "gui_node",
+                "upstream_source": f"{arm} {upstream_source}",
+            },
+            "semantics": {
+                "kind": kind,
+                "value_meaning": semantics[0],
+                "units": semantics[1],
+                "convention": semantics[2],
+            },
+            "timestamp": timestamp,
+            "expected_rate_hz": _rate_range(20, 200),
+        }
+
+    return {
+        "producer": {
+            "process": None,
+            "node": None,
+            "upstream_source": None,
+        },
+        "semantics": {
+            "kind": "unknown",
+            "value_meaning": None,
+            "units": None,
+            "convention": None,
+        },
+        "timestamp": {
+            "carrier": "unknown",
+            "meaning": "No static topic-contract entry available",
+            "vocabulary": None,
+            "has_header": None,
+        },
+        "expected_rate_hz": _rate_range(None, None),
+    }
+
+
+def _profile_topic_usage(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    usage: dict[str, dict[str, Any]] = {}
+
+    def entry(topic: str) -> dict[str, Any]:
+        return usage.setdefault(
+            topic,
+            {
+                "roles": [],
+                "published_fields": [],
+                "required_for_convert": False,
+                "published": False,
+                "raw_only": False,
+            },
+        )
+
+    observation_state = profile.get("published", {}).get("observation_state", {})
+    state_names = list(observation_state.get("names", []))
+    state_index = 0
+    for arm, arm_sources in observation_state.get("sources", {}).items():
+        for source_key, count in _STATE_SOURCE_COUNTS:
+            topic = str(arm_sources.get(source_key, "")).strip()
+            if not topic:
+                continue
+            topic_entry = entry(topic)
+            topic_entry["roles"].append("published_observation_state_source")
+            topic_entry["published_fields"].extend(state_names[state_index : state_index + count])
+            topic_entry["required_for_convert"] = True
+            topic_entry["published"] = True
+            state_index += count
+
+    action = profile.get("published", {}).get("action", {})
+    action_names = list(action.get("names", []))
+    action_index = 0
+    for arm, arm_sources in action.get("sources", {}).items():
+        for source_key, count in _ACTION_SOURCE_COUNTS:
+            topic = str(arm_sources.get(source_key, "")).strip()
+            if not topic:
+                continue
+            topic_entry = entry(topic)
+            topic_entry["roles"].append("published_action_source")
+            topic_entry["published_fields"].extend(action_names[action_index : action_index + count])
+            topic_entry["required_for_convert"] = True
+            topic_entry["published"] = True
+            action_index += count
+
+    for image_spec in profile.get("published", {}).get("images", []):
+        topic = str(image_spec.get("topic", "")).strip()
+        if not topic:
+            continue
+        topic_entry = entry(topic)
+        topic_entry["roles"].append("published_image_source")
+        field = str(image_spec.get("field", "")).strip()
+        if field:
+            topic_entry["published_fields"].append(field)
+        if bool(image_spec.get("required", False)):
+            topic_entry["required_for_convert"] = True
+        topic_entry["published"] = True
+
+    for depth_spec in profile.get("published_depth", []):
+        topic = str(depth_spec.get("topic", "")).strip()
+        if not topic:
+            continue
+        topic_entry = entry(topic)
+        topic_entry["roles"].append("published_depth_source")
+        field = str(depth_spec.get("field", "")).strip()
+        if field:
+            topic_entry["published_fields"].append(field)
+        if bool(depth_spec.get("required", False)):
+            topic_entry["required_for_convert"] = True
+        topic_entry["published"] = True
+
+    for topic in profile.get("raw_only_topics", []):
+        topic_entry = entry(str(topic))
+        topic_entry["roles"].append("raw_only")
+        topic_entry["raw_only"] = True
+
+    teleop_activity = profile.get("teleop_activity", {})
+    teleop_activity_topic = str(teleop_activity.get("topic", "")).strip()
+    if teleop_activity_topic:
+        topic_entry = entry(teleop_activity_topic)
+        topic_entry["roles"].append("teleop_activity")
+        topic_entry["roles"].append("raw_only_conversion_aid")
+        topic_entry["raw_only"] = True
+        if bool(teleop_activity.get("required_for_convert", False)):
+            topic_entry["required_for_convert"] = True
+
+    for topic_entry in usage.values():
+        topic_entry["roles"] = sorted(set(topic_entry["roles"]))
+        topic_entry["published_fields"] = list(dict.fromkeys(topic_entry["published_fields"]))
+
+    return usage
+
+
+def build_recorded_topics_snapshot(
+    *,
+    profile: dict[str, Any],
+    selected_topics: list[str],
+    live_topics: dict[str, str],
+    sensors: list[dict[str, Any]],
+    extra_topics: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    sensor_ids_by_topic = _sensor_ids_by_topic(sensors)
+    usage = _profile_topic_usage(profile)
+    required_for_record = set(required_topics_from_profile(profile))
+    extra_topic_set = {str(topic) for topic in (extra_topics or [])}
+
+    entries: list[dict[str, Any]] = []
+    for topic in selected_topics:
+        descriptor = _static_topic_descriptor(topic)
+        topic_usage = usage.get(
+            topic,
+            {
+                "roles": [],
+                "published_fields": [],
+                "required_for_convert": False,
+                "published": False,
+                "raw_only": True,
+            },
+        )
+        roles = list(topic_usage["roles"])
+        if topic in extra_topic_set:
+            roles.append("extra_topic")
+        entries.append(
+            {
+                "topic": topic,
+                "message_type": live_topics[topic],
+                "producer": descriptor["producer"],
+                "semantics": descriptor["semantics"],
+                "timestamp": descriptor["timestamp"],
+                "expected_rate_hz": descriptor["expected_rate_hz"],
+                "sensor_id": sensor_ids_by_topic.get(topic),
+                "usage": {
+                    "required_for_record": topic in required_for_record,
+                    "required_for_convert": bool(topic_usage["required_for_convert"]),
+                    "published": bool(topic_usage["published"]),
+                    "raw_only": bool(topic_usage["raw_only"]),
+                    "roles": sorted(set(roles)),
+                    "published_fields": list(topic_usage["published_fields"]),
+                },
+            }
+        )
+    return entries
+
+
+def manifest_episode(manifest: dict[str, Any]) -> dict[str, Any]:
+    return manifest["episode"]
+
+
+def manifest_profile(manifest: dict[str, Any]) -> dict[str, Any]:
+    return manifest["profile"]
+
+
+def manifest_capture(manifest: dict[str, Any]) -> dict[str, Any]:
+    return manifest["capture"]
+
+
+def manifest_sensors(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    sensors = manifest.get("sensors", {})
+    if isinstance(sensors, dict):
+        return list(sensors.get("devices", []))
+    return list(sensors)
+
+
+def manifest_dataset_id(manifest: dict[str, Any]) -> str:
+    return str(manifest_episode(manifest)["dataset_id"])
+
+
+def manifest_episode_id(manifest: dict[str, Any]) -> str:
+    return str(manifest_episode(manifest)["episode_id"])
+
+
+def manifest_task_name(manifest: dict[str, Any]) -> str:
+    return str(manifest_episode(manifest)["task_name"])
+
+
+def manifest_language_instruction(manifest: dict[str, Any]) -> str | None:
+    value = manifest_episode(manifest).get("language_instruction")
+    return str(value) if value else None
+
+
+def manifest_active_arms(manifest: dict[str, Any]) -> list[str]:
+    return list(manifest_episode(manifest).get("active_arms", []))
+
+
+def manifest_robot_id(manifest: dict[str, Any]) -> str:
+    return str(manifest_episode(manifest)["robot_id"])
+
+
+def manifest_profile_name(manifest: dict[str, Any]) -> str:
+    return str(manifest_profile(manifest)["name"])
+
+
+def manifest_profile_version(manifest: dict[str, Any]) -> int:
+    return int(manifest_profile(manifest)["version"])
+
+
+def manifest_clock_policy(manifest: dict[str, Any]) -> str:
+    return str(manifest_profile(manifest)["clock_policy"])
+
+
+def manifest_topic_types(manifest: dict[str, Any]) -> dict[str, str]:
+    return {
+        str(entry["topic"]): str(entry["message_type"])
+        for entry in manifest.get("recorded_topics", [])
+    }
+
+
 def parse_task_list(value: str | None) -> list[str]:
     if value is None:
         return []
@@ -430,17 +884,19 @@ def write_json(path: str | Path, data: dict[str, Any]) -> None:
 
 
 def build_notes_template(manifest: dict[str, Any]) -> str:
+    episode = manifest_episode(manifest)
+    profile = manifest_profile(manifest)
     lines = [
-        f"# {manifest['episode_id']}",
+        f"# {episode['episode_id']}",
         "",
-        f"- dataset_id: {manifest['dataset_id']}",
-        f"- task_name: {manifest['task_name']}",
-        f"- language_instruction: {manifest.get('language_instruction') or ''}",
-        f"- robot_id: {manifest['robot_id']}",
-        f"- active_arms: {', '.join(manifest.get('active_arms', [])) or 'unknown'}",
-        f"- operator: {manifest['operator']}",
-        f"- mapping_profile: {manifest['mapping_profile']}",
-        f"- clock_policy: {manifest['clock_policy']}",
+        f"- dataset_id: {episode['dataset_id']}",
+        f"- task_name: {episode['task_name']}",
+        f"- language_instruction: {episode.get('language_instruction') or ''}",
+        f"- robot_id: {episode['robot_id']}",
+        f"- active_arms: {', '.join(episode.get('active_arms', [])) or 'unknown'}",
+        f"- operator: {episode['operator']}",
+        f"- mapping_profile: {profile['name']}",
+        f"- clock_policy: {profile['clock_policy']}",
         "",
         "## Notes",
         "",

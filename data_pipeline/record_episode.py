@@ -24,11 +24,13 @@ from data_pipeline.pipeline_utils import (
     DEFAULT_BAG_STORAGE_PRESET_PROFILE,
     DEFAULT_RAW_EPISODES_DIR,
     build_notes_template,
+    build_recorded_topics_snapshot,
     collect_candidate_topics,
     get_git_commit,
     infer_sensor_metadata,
     list_live_topics,
     load_optional_sensor_overrides,
+    MANIFEST_SCHEMA_VERSION,
     make_episode_id,
     normalize_active_arms,
     now_ns,
@@ -84,40 +86,62 @@ def select_topics(profile: dict, live_topics: dict[str, str], extra_topics: list
 def build_manifest(
     args: argparse.Namespace,
     profile: dict,
+    profile_path: Path,
     active_arms: list[str],
     selected_topics: list[str],
     live_topics: dict[str, str],
+    extra_topics: list[str],
     sensor_overrides: dict[str, dict],
     start_time_ns: int,
     end_time_ns: int,
 ) -> dict:
-    profile_name = profile["profile_name"]
-    profile_version = profile["profile_version"]
-    topic_types = {topic: live_topics[topic] for topic in selected_topics}
     sensors = infer_sensor_metadata(selected_topics, sensor_overrides=sensor_overrides)
+    recorded_topics = build_recorded_topics_snapshot(
+        profile=profile,
+        selected_topics=selected_topics,
+        live_topics=live_topics,
+        sensors=sensors,
+        extra_topics=extra_topics,
+    )
+    profile_relpath = str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path)
 
     return {
-        "episode_id": args.episode_id,
-        "dataset_id": args.dataset_id,
-        "task_name": args.task_name,
-        "language_instruction": str(args.language_instruction).strip() or None,
-        "robot_id": args.robot_id,
-        "active_arms": active_arms,
-        "operator": args.operator,
-        "start_time_ns": start_time_ns,
-        "end_time_ns": end_time_ns,
-        "topics": selected_topics,
-        "topic_types": topic_types,
-        "sensor_inventory_version": 2,
-        "sensors": sensors,
-        "mapping_profile": profile_name,
-        "profile_version": profile_version,
-        "clock_policy": profile["dataset"]["clock_policy"],
-        "bag_storage_id": args.storage_id,
-        "bag_storage_preset_profile": (
-            args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
-        ),
-        "git_commit": get_git_commit(),
+        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
+        "episode": {
+            "episode_id": args.episode_id,
+            "dataset_id": args.dataset_id,
+            "task_name": args.task_name,
+            "language_instruction": str(args.language_instruction).strip() or None,
+            "robot_id": args.robot_id,
+            "active_arms": active_arms,
+            "operator": args.operator,
+        },
+        "profile": {
+            "name": profile["profile_name"],
+            "version": profile["profile_version"],
+            "path": profile_relpath,
+            "clock_policy": profile["dataset"]["clock_policy"],
+        },
+        "capture": {
+            "start_time_ns": start_time_ns,
+            "end_time_ns": end_time_ns,
+            "storage": {
+                "bag_storage_id": args.storage_id,
+                "bag_storage_preset_profile": (
+                    args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
+                ),
+            },
+            "record_exit_code": None,
+            "raw_trim": None,
+        },
+        "sensors": {
+            "inventory_version": 2,
+            "devices": sensors,
+        },
+        "recorded_topics": recorded_topics,
+        "provenance": {
+            "git_commit": get_git_commit(),
+        },
     }
 
 
@@ -311,9 +335,11 @@ def main(argv: list[str] | None = None) -> int:
         dry_run_manifest = build_manifest(
             args=args,
             profile=profile,
+            profile_path=resolved_profile_path,
             active_arms=active_arms,
             selected_topics=selected_topics,
             live_topics=live_topics,
+            extra_topics=extra_topics,
             sensor_overrides=sensor_overrides,
             start_time_ns=0,
             end_time_ns=0,
@@ -325,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"bag_storage_id={args.storage_id}")
         if args.storage_id == "mcap" and args.storage_preset_profile:
             print(f"bag_storage_preset_profile={args.storage_preset_profile}")
-        print(f"language_instruction={dry_run_manifest['language_instruction'] or ''}")
+        print(f"language_instruction={dry_run_manifest['episode'].get('language_instruction') or ''}")
         print(f"bag_topics={len(selected_topics)}")
         if not args.disable_command_trim:
             command_topics = build_command_activity_topics(profile, active_arms)
@@ -333,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"raw_trim_activity_topics={','.join(command_topics)}")
             print(f"raw_trim_pad_before_s={args.command_trim_pad_before_s}")
             print(f"raw_trim_pad_after_s={args.command_trim_pad_after_s}")
-        for sensor in dry_run_manifest["sensors"]:
+        for sensor in dry_run_manifest["sensors"]["devices"]:
             print(
                 "sensor="
                 f"id={sensor.get('sensor_id')} "
@@ -355,9 +381,11 @@ def main(argv: list[str] | None = None) -> int:
     manifest = build_manifest(
         args=args,
         profile=profile,
+        profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
         live_topics=live_topics,
+        extra_topics=extra_topics,
         sensor_overrides=sensor_overrides,
         start_time_ns=start_time_ns,
         end_time_ns=start_time_ns,
@@ -390,17 +418,19 @@ def main(argv: list[str] | None = None) -> int:
     final_manifest = build_manifest(
         args=args,
         profile=profile,
+        profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
         live_topics=live_topics,
+        extra_topics=extra_topics,
         sensor_overrides=sensor_overrides,
         start_time_ns=start_time_ns,
         end_time_ns=end_time_ns,
     )
-    final_manifest["record_exit_code"] = return_code
+    final_manifest["capture"]["record_exit_code"] = return_code
     if not args.disable_command_trim and return_code == 0:
         command_topics = build_command_activity_topics(profile, active_arms)
-        final_manifest["raw_trim"] = trim_bag_to_command_activity(
+        final_manifest["capture"]["raw_trim"] = trim_bag_to_command_activity(
             bag_dir=bag_dir,
             command_topics=command_topics,
             storage_id=args.storage_id,
@@ -409,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
             pad_after_s=args.command_trim_pad_after_s,
         )
     else:
-        final_manifest["raw_trim"] = {
+        final_manifest["capture"]["raw_trim"] = {
             "policy": "teleop_command_head_tail_v1",
             "activity_topics": build_command_activity_topics(profile, active_arms),
             "pad_before_s": float(args.command_trim_pad_before_s),
@@ -420,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
     write_json(manifest_path, final_manifest)
 
     print(f"Finished episode {args.episode_id} with ros2 bag exit code {return_code}")
-    raw_trim = final_manifest["raw_trim"]
+    raw_trim = final_manifest["capture"]["raw_trim"]
     print(f"Raw trim status: {raw_trim['status']}")
     if raw_trim.get("applied"):
         print(

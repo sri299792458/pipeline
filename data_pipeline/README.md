@@ -162,6 +162,15 @@ Each episode is written under `raw_episodes/<episode_id>/` with:
 - `episode_manifest.json`
 - `notes.md`
 
+`episode_manifest.json` is now the single resolved per-episode snapshot. The reusable profile stays in YAML, and the manifest carries the resolved episode-specific sections:
+
+- `episode`
+- `profile`
+- `capture`
+- `sensors.devices`
+- `recorded_topics`
+- `provenance`
+
 Raw bag storage now defaults to:
 
 - `mcap`
@@ -169,7 +178,7 @@ Raw bag storage now defaults to:
 
 This raw capture compression is lossless.
 
-After a successful recording, the saved raw bag is also trimmed automatically to the first and last teleop command activity, with a `1.0 s` pad before and after. This reduces head/tail idle storage without splitting mid-episode pauses. The applied result is recorded in `episode_manifest.json` under `raw_trim`.
+After a successful recording, the saved raw bag is also trimmed automatically to the first and last teleop command activity, with a `1.0 s` pad before and after. This reduces head/tail idle storage without splitting mid-episode pauses. The applied result is recorded in `episode_manifest.json` under `capture.raw_trim`.
 
 If you need to keep the full untrimmed bag, pass:
 

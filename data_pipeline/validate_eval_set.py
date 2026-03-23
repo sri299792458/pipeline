@@ -17,7 +17,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from data_pipeline.convert_episode_bag_to_lerobot import main as convert_episode_main  # noqa: E402
 from data_pipeline.generate_dummy_episode import main as generate_dummy_episode_main  # noqa: E402
-from data_pipeline.pipeline_utils import DEFAULT_PROFILE_PATH, write_json  # noqa: E402
+from data_pipeline.pipeline_utils import (  # noqa: E402
+    DEFAULT_PROFILE_PATH,
+    manifest_dataset_id,
+    manifest_episode_id,
+    write_json,
+)
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 
 
@@ -81,13 +86,13 @@ def convert_episode(episode_dir: Path, published_root: Path, profile: str) -> di
         raise RuntimeError(f"Episode conversion failed with exit code {rc} for {episode_dir}")
 
     manifest = read_json(episode_dir / "episode_manifest.json")
-    dataset_root = published_root / manifest["dataset_id"]
-    artifact_root = dataset_root / "meta" / "spark_conversion" / manifest["episode_id"]
+    dataset_root = published_root / manifest_dataset_id(manifest)
+    artifact_root = dataset_root / "meta" / "spark_conversion" / manifest_episode_id(manifest)
     return {
-        "episode_id": manifest["episode_id"],
-        "dataset_id": manifest["dataset_id"],
+        "episode_id": manifest_episode_id(manifest),
+        "dataset_id": manifest_dataset_id(manifest),
         "conversion_summary": read_json(artifact_root / "conversion_summary.json"),
-        "dataset_snapshot": dataset_snapshot(dataset_root, manifest["dataset_id"]),
+        "dataset_snapshot": dataset_snapshot(dataset_root, manifest_dataset_id(manifest)),
         "artifact_root": str(artifact_root),
     }
 

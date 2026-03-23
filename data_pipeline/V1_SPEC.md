@@ -83,30 +83,50 @@ raw_episodes/
     notes.md
 ```
 
-`episode_manifest.json` must include at least:
+`episode_manifest.json` should be the single resolved per-episode snapshot.
 
-- `episode_id`
-- `dataset_id`
-- `task_name`
-- `language_instruction` (optional, recommended for language-conditioned training)
-- `robot_id`
-- `active_arms`
-- `operator`
-- `start_time_ns`
-- `end_time_ns`
-- `topics`
-- `topic_types`
-- `sensor_inventory_version`
+It should use these top-level sections:
+
+- `manifest_schema_version`
+- `episode`
+- `profile`
+- `capture`
 - `sensors`
-- `mapping_profile`
-- `profile_version`
-- `clock_policy`
-- `bag_storage_id`
-- `bag_storage_preset_profile`
-- `raw_trim`
-- `git_commit`
+- `recorded_topics`
+- `provenance`
 
-The `sensors` section should stay minimal and include only:
+Minimum expectations for each section:
+
+- `episode`
+  - `episode_id`
+  - `dataset_id`
+  - `task_name`
+  - `language_instruction` (optional, recommended for language-conditioned training)
+  - `robot_id`
+  - `active_arms`
+  - `operator`
+- `profile`
+  - `name`
+  - `version`
+  - `path`
+  - `clock_policy`
+- `capture`
+  - `start_time_ns`
+  - `end_time_ns`
+  - `storage`
+    - `bag_storage_id`
+    - `bag_storage_preset_profile`
+  - `record_exit_code`
+  - `raw_trim`
+- `sensors`
+  - `inventory_version`
+  - `devices`
+- `recorded_topics`
+  - one resolved entry per topic actually recorded in the bag
+- `provenance`
+  - `git_commit`
+
+Each entry under `sensors.devices` should stay minimal and include only:
 
 - `sensor_id`
 - `modality`
