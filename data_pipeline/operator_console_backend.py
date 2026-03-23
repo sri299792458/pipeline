@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.pipeline_utils import get_git_commit, load_yaml, make_episode_id
+from data_pipeline.session_capture_plan import build_session_capture_plan
 
 
 ROS_SETUP = "/opt/ros/jazzy/setup.bash"
@@ -33,6 +34,7 @@ CONVERTER_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 SYSTEM_PYTHON = "/usr/bin/python3"
 PRESETS_PATH = REPO_ROOT / "data_pipeline" / "configs" / "operator_console_presets.yaml"
 STATE_DIR = REPO_ROOT / ".operator_console"
+CAPTURE_PLAN_DIR = STATE_DIR / "capture_plans"
 TOPIC_PROBE_SCRIPT = REPO_ROOT / "data_pipeline" / "ros_topic_probe.py"
 VIEWER_REPO = REPO_ROOT / "lerobot-dataset-visualizer"
 VIEWER_BUN = Path.home() / ".bun" / "bin" / "bun"
@@ -89,11 +91,14 @@ class OperatorConsoleBackend:
         self.recording_check_running = False
         self.latest_recording_config: dict[str, Any] | None = None
         self.pending_conversion_dataset_id: str | None = None
+        self.current_session_capture_plan: dict[str, Any] | None = None
+        self.current_session_capture_plan_path: Path | None = None
         self.topic_probe_cache: dict[str, tuple[float, bool]] = {}
         self.session_id = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.session_events: list[dict[str, Any]] = []
         self.session_log_dir = STATE_DIR / "sessions"
         self.session_log_dir.mkdir(parents=True, exist_ok=True)
+        CAPTURE_PLAN_DIR.mkdir(parents=True, exist_ok=True)
         self.session_log_path = self.session_log_dir / f"session-{self.session_id}.json"
         self._persist_session_log()
 
@@ -169,6 +174,7 @@ class OperatorConsoleBackend:
             "latest_recording_ok": self.latest_recording_ok,
             "latest_recording_check_output": self.latest_recording_check_output,
             "recording_check_running": self.recording_check_running,
+            "current_session_capture_plan": self.current_session_capture_plan,
         }
 
     def validation_state(self, config: dict[str, Any]) -> str:
@@ -220,6 +226,7 @@ class OperatorConsoleBackend:
     def start_session(self, config: dict[str, Any]) -> None:
         self.last_action_error = ""
         self.latest_viewer_url = None
+        self._refresh_session_capture_plan(config)
         self._start_process("spark_devices", self._build_spark_devices_command())
         self._start_process("teleop_gui", self._build_teleop_gui_command())
         if config.get("realsense_enabled", True):
@@ -237,6 +244,8 @@ class OperatorConsoleBackend:
         self.last_validation_signature = ""
         self.last_validation_output = ""
         self.last_action_error = ""
+        self.current_session_capture_plan = None
+        self.current_session_capture_plan_path = None
         self._record_event("stop_session", {})
 
     def start_validation(self, config: dict[str, Any]) -> None:
@@ -255,6 +264,7 @@ class OperatorConsoleBackend:
             return
 
         episode_id = make_episode_id()
+        self._refresh_session_capture_plan(config)
         self.latest_episode_id = episode_id
         self.latest_recording_ok = None
         self.latest_recording_check_output = ""
@@ -1025,6 +1035,8 @@ class OperatorConsoleBackend:
             args.extend(["--notes", shlex.quote(notes)])
         if extra_topics:
             args.extend(["--extra-topics", shlex.quote(extra_topics)])
+        if self.current_session_capture_plan_path is not None:
+            args.extend(["--session-plan-file", shlex.quote(str(self.current_session_capture_plan_path))])
         if dry_run:
             args.append("--dry-run")
         return f"source {shlex.quote(ROS_SETUP)} && " + " ".join(args)
@@ -1161,6 +1173,17 @@ class OperatorConsoleBackend:
             "latest_dataset_id": self.latest_dataset_id,
             "latest_viewer_url": self.latest_viewer_url,
             "latest_recording_ok": self.latest_recording_ok,
+            "current_session_capture_plan": self.current_session_capture_plan,
         }
         with self.session_log_path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
+
+    def _refresh_session_capture_plan(self, config: dict[str, Any]) -> None:
+        plan = build_session_capture_plan(config, session_id=self.session_id)
+        plan_path = CAPTURE_PLAN_DIR / f"session-{self.session_id}.json"
+        with plan_path.open("w", encoding="utf-8") as handle:
+            json.dump(plan, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        self.current_session_capture_plan = plan
+        self.current_session_capture_plan_path = plan_path
+        self._persist_session_log()

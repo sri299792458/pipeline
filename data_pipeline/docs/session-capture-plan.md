@@ -370,3 +370,19 @@ The next implementation steps should be:
 5. keep published profiles for conversion-time schema checks
 
 This is the smallest architecture change that removes the current rigidity without throwing away the existing V1 pipeline rules.
+
+## First Implementation Slice
+
+The first implemented slice is intentionally narrow:
+
+- the operator console still uses the current fixed fields for:
+  - `wrist_serial_no`
+  - `scene_serial_no`
+  - left/right GelSight enable and path
+- a new explicit session capture-plan object is now built from those current inputs
+- the operator console persists that plan under `.operator_console/capture_plans/`
+- recorded episodes may snapshot that resolved plan under an optional top-level `session` section in `episode_manifest.json`
+
+This does not fully realize runtime device discovery or flexible role assignment yet.
+
+Its purpose is to create the missing explicit boundary so future work can replace the current rigid UI and config assumptions without again entangling session state with published profile YAMLs.

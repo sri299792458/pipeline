@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import signal
 import shutil
@@ -57,6 +58,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--storage-id", default=DEFAULT_BAG_STORAGE_ID)
     parser.add_argument("--storage-preset-profile", default=DEFAULT_BAG_STORAGE_PRESET_PROFILE)
     parser.add_argument("--sensors-file", default=None)
+    parser.add_argument("--session-plan-file", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-topics", default="")
@@ -94,6 +96,7 @@ def build_manifest(
     sensor_overrides: dict[str, dict],
     start_time_ns: int,
     end_time_ns: int,
+    session_capture_plan: dict | None,
 ) -> dict:
     sensors = infer_sensor_metadata(selected_topics, sensor_overrides=sensor_overrides)
     recorded_topics = build_recorded_topics_snapshot(
@@ -105,7 +108,7 @@ def build_manifest(
     )
     profile_relpath = str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path)
 
-    return {
+    manifest = {
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "episode": {
             "episode_id": args.episode_id,
@@ -116,33 +119,53 @@ def build_manifest(
             "active_arms": active_arms,
             "operator": args.operator,
         },
-        "profile": {
-            "name": profile["profile_name"],
-            "version": profile["profile_version"],
-            "path": profile_relpath,
-            "clock_policy": profile["dataset"]["clock_policy"],
-        },
-        "capture": {
-            "start_time_ns": start_time_ns,
-            "end_time_ns": end_time_ns,
-            "storage": {
-                "bag_storage_id": args.storage_id,
-                "bag_storage_preset_profile": (
-                    args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
-                ),
-            },
-            "record_exit_code": None,
-            "raw_trim": None,
-        },
-        "sensors": {
-            "inventory_version": 2,
-            "devices": sensors,
-        },
-        "recorded_topics": recorded_topics,
-        "provenance": {
-            "git_commit": get_git_commit(),
-        },
     }
+    if session_capture_plan is not None:
+        manifest["session"] = session_capture_plan
+    manifest.update(
+        {
+            "profile": {
+                "name": profile["profile_name"],
+                "version": profile["profile_version"],
+                "path": profile_relpath,
+                "clock_policy": profile["dataset"]["clock_policy"],
+            },
+            "capture": {
+                "start_time_ns": start_time_ns,
+                "end_time_ns": end_time_ns,
+                "storage": {
+                    "bag_storage_id": args.storage_id,
+                    "bag_storage_preset_profile": (
+                        args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
+                    ),
+                },
+                "record_exit_code": None,
+                "raw_trim": None,
+            },
+            "sensors": {
+                "inventory_version": 2,
+                "devices": sensors,
+            },
+            "recorded_topics": recorded_topics,
+            "provenance": {
+                "git_commit": get_git_commit(),
+            },
+        }
+    )
+    return manifest
+
+
+def load_optional_json(path: str | Path | None) -> dict | None:
+    if path is None:
+        return None
+    json_path = Path(path)
+    if not json_path.exists():
+        raise FileNotFoundError(f"Session plan file not found: {json_path}")
+    with json_path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected a JSON object in {json_path}, got {type(data).__name__}")
+    return data
 
 
 def ensure_episode_dir(raw_root: Path, episode_id: str) -> Path:
@@ -324,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     raw_root = Path(args.raw_root)
     args.episode_id = args.episode_id or make_episode_id()
     sensor_overrides = load_optional_sensor_overrides(args.sensors_file)
+    session_capture_plan = load_optional_json(args.session_plan_file)
     extra_topics = parse_task_list(args.extra_topics)
 
     live_topics = list_live_topics()
@@ -343,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
             sensor_overrides=sensor_overrides,
             start_time_ns=0,
             end_time_ns=0,
+            session_capture_plan=session_capture_plan,
         )
         print(f"episode_id={args.episode_id}")
         print(f"active_arms={','.join(active_arms)}")
@@ -389,6 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         sensor_overrides=sensor_overrides,
         start_time_ns=start_time_ns,
         end_time_ns=start_time_ns,
+        session_capture_plan=session_capture_plan,
     )
 
     notes_body = build_notes_template(manifest)
@@ -426,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         sensor_overrides=sensor_overrides,
         start_time_ns=start_time_ns,
         end_time_ns=end_time_ns,
+        session_capture_plan=session_capture_plan,
     )
     final_manifest["capture"]["record_exit_code"] = return_code
     if not args.disable_command_trim and return_code == 0:

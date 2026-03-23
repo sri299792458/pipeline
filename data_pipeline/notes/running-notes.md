@@ -1867,3 +1867,18 @@
   - optional local YAMLs may provide serial-to-role defaults, launch defaults, calibration refs, UI defaults, optional geometry, and other local rig facts
   - operator confirmation should happen once per session, not once per episode
 - This is a design/spec pass only. No runtime behavior was changed yet.
+
+### First session-capture implementation slice
+
+- Implemented the first non-disruptive session-capture slice without redesigning the Qt UI yet.
+- Added [session_capture_plan.py](/home/srinivas/Desktop/pipeline/data_pipeline/session_capture_plan.py) to build an explicit session capture-plan object from the current operator-console config plus local overlay data.
+- The current implementation is intentionally transitional:
+  - it still reflects the current narrow console inputs (`wrist_serial_no`, `scene_serial_no`, left/right GelSight)
+  - but it creates the missing explicit capture-plan boundary instead of leaving session structure implicit in presets and backend code
+- Updated [operator_console_backend.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) so:
+  - each session persists a capture plan under `.operator_console/capture_plans/`
+  - the current session log also carries the resolved plan snapshot
+  - recorder launches pass `--session-plan-file ...` into `record_episode.py`
+- Updated [record_episode.py](/home/srinivas/Desktop/pipeline/data_pipeline/record_episode.py) so the raw episode manifest can embed the resolved session plan under a new optional top-level `session` section.
+- Bumped the manifest schema version to `4` because this adds a new manifest section and the old shape is no longer treated as something we need to preserve.
+- This does not solve the larger multi-camera or richer role-assignment problem yet; it only establishes the explicit session-plan object so the next implementation steps have the right boundary.

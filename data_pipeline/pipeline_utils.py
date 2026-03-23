@@ -22,7 +22,7 @@ DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
 ARM_ORDER = ("lightning", "thunder")
-MANIFEST_SCHEMA_VERSION = 3
+MANIFEST_SCHEMA_VERSION = 4
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
     "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",

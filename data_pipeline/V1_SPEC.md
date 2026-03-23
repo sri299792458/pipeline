@@ -101,6 +101,7 @@ It should use these top-level sections:
 
 - `manifest_schema_version`
 - `episode`
+- `session` (optional)
 - `profile`
 - `capture`
 - `sensors`
@@ -122,6 +123,13 @@ Minimum expectations for each section:
   - `version`
   - `path`
   - `clock_policy`
+- `session`
+  - `session_id`
+  - `active_arms`
+  - `local_overlays`
+  - `resolved_devices`
+  - `planned_topics`
+  - `profile_compatibility`
 - `capture`
   - `start_time_ns`
   - `end_time_ns`

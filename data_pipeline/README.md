@@ -165,6 +165,7 @@ Each episode is written under `raw_episodes/<episode_id>/` with:
 `episode_manifest.json` is now the single resolved per-episode snapshot. The reusable profile stays in YAML, and the manifest carries the resolved episode-specific sections:
 
 - `episode`
+- `session` when the run came from an operator-console session plan
 - `profile`
 - `capture`
 - `sensors.devices`
