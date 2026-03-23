@@ -1847,3 +1847,23 @@
   - `python3 -m py_compile` passed for the recorder, dummy generator, converter, manifest helpers, and eval script after the schema change
   - a dummy episode generated successfully with the new schema
   - the converter successfully consumed that new manifest and wrote a published episode
+
+### Session-capture architecture direction
+
+- Did a deeper architecture pass on why the current setup feels rigid around:
+  - `wrist` / `scene`
+  - single left GelSight assumptions
+  - using published-profile YAMLs too early in session bring-up
+- Wrote [session-capture-plan.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/session-capture-plan.md) as the architecture decision document for the next layer of redesign.
+- The core separation is now explicit:
+  - shared contract
+  - session capture plan
+  - published profile
+  - optional local YAML overlays
+- Key decisions:
+  - canonical role names must stay lab-stable and shared
+  - raw session bring-up should be device-centric and role-based
+  - published profile YAMLs should remain fixed conversion schemas, not the thing that defines the whole live session
+  - optional local YAMLs may provide serial-to-role defaults and optional geometry-file references
+  - operator confirmation should happen once per session, not once per episode
+- This is a design/spec pass only. No runtime behavior was changed yet.

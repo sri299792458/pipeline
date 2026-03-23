@@ -65,10 +65,22 @@ Expected files:
 - `data_pipeline/V1_SPEC.md`
 - `data_pipeline/docs/topic-contract.md`
 - `data_pipeline/docs/dataset-mapping.md`
+- `data_pipeline/docs/session-capture-plan.md`
 - `data_pipeline/configs/multisensor_20hz.yaml`
 - `data_pipeline/record_episode.py`
 - `data_pipeline/convert_episode_bag_to_lerobot.py`
 - `data_pipeline/generate_dummy_episode.py`
+
+Longer-term architecture direction is defined in [docs/session-capture-plan.md](./docs/session-capture-plan.md).
+
+That document separates:
+
+- shared contract
+- session capture plan
+- published profile
+- optional local YAML overlays
+
+The current implementation does not fully realize that separation yet, but future changes should move in that direction rather than deepening the current rigid session model.
 
 
 ## 7. Raw Output

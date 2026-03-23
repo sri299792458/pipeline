@@ -1,0 +1,352 @@
+# Session Capture Plan
+
+## Purpose
+
+This document separates four things that are currently too entangled in the V1 stack:
+
+- shared contract
+- session capture plan
+- published profile
+- optional local YAML overlays
+
+The goal is to keep shared dataset meaning stable without forcing raw session bring-up to look like a fixed published schema.
+
+
+## Current Problem
+
+Today, the system is too rigid because the same profile layer is doing multiple jobs at once:
+
+- deciding what raw topics are recorded
+- implying which physical sensors exist
+- implying which semantic camera roles exist
+- defining the fixed published LeRobot schema
+
+That works for the current narrow setup of:
+
+- one Lightning wrist camera
+- one scene camera
+- optional left GelSight
+
+It does not scale cleanly to:
+
+- two UR arms
+- zero, one, or two wrist cameras
+- two or three scene cameras
+- four GelSight sensors
+- geometry-sensitive downstream policies
+
+
+## Design Objects
+
+### 1. Shared Contract
+
+The shared contract is the lab-wide meaning layer.
+
+It defines:
+
+- stable topic semantics
+- timestamp semantics
+- canonical role vocabulary
+- published dataset field semantics
+
+Examples:
+
+- what `/spark/{arm}/robot/gripper_state` means
+- what `control_tick_time_v1` means
+- what `scene_0` means
+- what `lightning_finger_left` means
+
+The shared contract must not vary by operator.
+
+
+### 2. Session Capture Plan
+
+The session capture plan is the resolved runtime truth for one live session.
+
+It should describe:
+
+- which devices were discovered
+- which devices were enabled for this session
+- which canonical role each enabled device was assigned
+- which topics were resolved for recording
+- which optional local YAML files were applied
+- which published profiles this session can satisfy
+
+The session capture plan is session-level, not episode-level.
+
+Each recorded episode should snapshot the relevant resolved session information into `episode_manifest.json`.
+
+
+### 3. Published Profile
+
+A published profile is a fixed shared dataset schema.
+
+It defines:
+
+- required semantic roles
+- optional semantic roles
+- raw-to-published mapping
+- alignment rules
+- published feature names
+
+A published profile is used for conversion and dataset appending.
+
+It should not be the thing that decides which devices must exist before a raw session can start.
+
+
+### 4. Optional Local YAML Overlay
+
+A local YAML overlay is an operator- or machine-local defaults file.
+
+It may provide:
+
+- serial-to-role defaults
+- display labels
+- mount metadata
+- optional geometry file references
+
+It must not redefine shared semantics.
+
+It is a convenience layer, not the shared contract.
+
+
+## Canonical Role Model
+
+Canonical roles should be stable, shared, and independent of the current device serial numbers.
+
+Suggested first vocabulary:
+
+- arms
+  - `lightning`
+  - `thunder`
+- wrist cameras
+  - `lightning_wrist_0`
+  - `thunder_wrist_0`
+- scene cameras
+  - `scene_0`
+  - `scene_1`
+  - `scene_2`
+- tactile sensors
+  - `lightning_finger_left`
+  - `lightning_finger_right`
+  - `thunder_finger_left`
+  - `thunder_finger_right`
+
+Rules:
+
+- canonical role names are lab-controlled
+- operators do not invent canonical names at runtime
+- optional display labels may differ locally, but dataset-facing names must remain canonical
+
+
+## Why Roles And Geometry Must Be Separate
+
+Role identity is not the same thing as geometry.
+
+For example:
+
+- `scene_1` tells us which semantic camera slot this is
+- it does not tell us where the camera is relative to the robot base or world frame
+
+That distinction matters because:
+
+- image-only policies may only need the role and image stream
+- point-cloud or geometry-sensitive policies may also need camera intrinsics and extrinsics
+
+Therefore:
+
+- canonical role naming must stay stable
+- optional geometry may be attached separately via local YAML
+
+
+## Session Workflow
+
+The intended session workflow is:
+
+1. start session
+2. discover live devices
+3. load optional local YAML overlays
+4. suggest canonical role assignments from remembered serial-to-role mappings
+5. let the operator confirm or correct assignments once
+6. resolve the final topic list for this session
+7. record multiple episodes under that session plan
+
+The operator should not repeat this role-confirmation workflow for every episode unless the rig changed.
+
+
+## What The Operator Chooses
+
+The operator should be choosing intent, not redefining shared meaning.
+
+The operator may choose:
+
+- which discovered devices are enabled for this session
+- whether the suggested canonical role assignments are correct
+- whether to include optional devices in raw recording
+- which published profile to target later
+
+The operator should not be choosing:
+
+- new canonical role names
+- topic timestamp semantics
+- dataset field semantics
+
+
+## Session Capture Plan Shape
+
+The exact file format can be JSON or YAML, but the resolved object should look like this:
+
+```yaml
+schema_version: 1
+session_id: session-20260323-101500
+contract_version: v1
+
+local_overlays:
+  - path: data_pipeline/configs/sensors.local.yaml
+  - path: data_pipeline/configs/rig_geometry.local.yaml
+
+discovered_devices:
+  - device_id: realsense/130322273305
+    kind: realsense
+    model: Intel RealSense D405
+    serial_number: "130322273305"
+    enabled: true
+    suggested_role: lightning_wrist_0
+    resolved_role: lightning_wrist_0
+  - device_id: realsense/213622251272
+    kind: realsense
+    model: Intel RealSense D455
+    serial_number: "213622251272"
+    enabled: true
+    suggested_role: scene_0
+    resolved_role: scene_0
+  - device_id: realsense/f1380660
+    kind: realsense
+    model: Intel RealSense L515
+    serial_number: "f1380660"
+    enabled: true
+    suggested_role: scene_1
+    resolved_role: scene_1
+  - device_id: gelsight/28D8PXEC
+    kind: gelsight
+    model: GelSight Mini
+    serial_number: "28D8PXEC"
+    enabled: true
+    suggested_role: lightning_finger_left
+    resolved_role: lightning_finger_left
+
+selected_topics:
+  - /spark/cameras/lightning/wrist_0/color/image_raw
+  - /spark/cameras/lightning/wrist_0/depth/image_rect_raw
+  - /spark/cameras/world/scene_0/color/image_raw
+  - /spark/cameras/world/scene_0/depth/image_rect_raw
+  - /spark/cameras/world/scene_1/color/image_raw
+  - /spark/cameras/world/scene_1/depth/image_rect_raw
+  - /spark/tactile/lightning/finger_left/color/image_raw
+  - /spark/lightning/robot/joint_state
+  - /spark/lightning/teleop/cmd_joint_state
+  - /spark/thunder/robot/joint_state
+  - /spark/thunder/teleop/cmd_joint_state
+
+profile_compatibility:
+  publishable_profiles:
+    - lightning_minimal_v1
+    - lightning_multiview_v1
+  incompatible_profiles:
+    - name: bimanual_dual_wrist_v1
+      missing_roles:
+        - thunder_wrist_0
+```
+
+
+## Optional Local YAML Overlay Shape
+
+The minimal local overlay should support remembered serial-to-role defaults.
+
+Example:
+
+```yaml
+schema_version: 1
+
+devices:
+  realsense/130322273305:
+    role: lightning_wrist_0
+    display_label: Lightning wrist D405
+  realsense/213622251272:
+    role: scene_0
+    display_label: Primary overhead D455
+  realsense/f1380660:
+    role: scene_1
+    display_label: Side L515
+  gelsight/28D8PXEC:
+    role: lightning_finger_left
+    display_label: Lightning left GelSight
+```
+
+If geometry is needed, the same local YAML may also attach a separate geometry file reference:
+
+```yaml
+devices:
+  realsense/213622251272:
+    role: scene_0
+    geometry_file: data_pipeline/calibration/scene_0.yaml
+```
+
+This keeps geometry optional without requiring every session to care about it.
+
+
+## Episode Manifest Rule
+
+Each episode should remain self-describing.
+
+That means the episode manifest should snapshot, at minimum:
+
+- the enabled devices used for that episode
+- their resolved canonical roles
+- the optional local overlay paths used for the session
+- the resolved topic list actually recorded
+
+This avoids making old episodes depend on later edits to a local YAML file.
+
+
+## Published Profile Rule
+
+Published profiles remain necessary because a shared LeRobot dataset needs a fixed feature schema.
+
+However:
+
+- raw session bring-up must not be blocked just because no published profile was chosen yet
+- conversion must check whether the recorded session/episode satisfies the requested published profile
+
+So the correct order is:
+
+- discover and record first
+- publish against a fixed profile later
+
+not:
+
+- force every raw session to conform to one small set of predefined published profiles before recording
+
+
+## Non-Goals
+
+This design does not require:
+
+- one new YAML file per run
+- operator-defined canonical role names
+- per-episode re-selection of every device role
+- geometry for image-only runs
+- forcing every raw recording to be immediately publishable
+
+
+## Immediate Direction
+
+The next implementation steps should be:
+
+1. keep the shared topic/timestamp contract
+2. stop treating the current `multisensor_20hz*.yaml` files as session-definition files
+3. introduce an explicit session capture-plan object in the operator console/backend
+4. let optional local YAML overlays provide serial-to-role defaults
+5. keep published profiles for conversion-time schema checks
+
+This is the smallest architecture change that removes the current rigidity without throwing away the existing V1 pipeline rules.
