@@ -2092,14 +2092,20 @@
 ### User-local session profiles
 
 - Added a minimal user-local session-profile layer on top of the simplified console.
-- The console now has an editable `Session Profile` field with:
-  - `Load`
-  - `Save`
+- The console now has a file-based `Session Profile` control with:
+  - `Browse`
+  - `Save As`
 - The built-in `init` profile still comes from [operator_console_presets.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.yaml).
-- User-created profiles are stored locally at [.operator_console/session_profiles.yaml](/home/srinivas/Desktop/pipeline/.operator_console/session_profiles.yaml).
+- User-created profiles are stored locally under [.operator_console/session_profiles](/home/srinivas/Desktop/pipeline/.operator_console/session_profiles).
 - Saved session profiles capture:
   - session metadata
   - sensors file
-  - viewer URL
   - current discovered-device selections and roles
 - This keeps reusable session setup without bringing back the old hardware-preset model.
+
+### Viewer base URL removal
+
+- Removed `Viewer Base URL` from the active operator-console workflow.
+- `Open Viewer` now uses one backend-local default instead of exposing viewer hosting as session metadata.
+- The default is `http://localhost:3000` unless overridden with `PIPELINE_VIEWER_BASE_URL`.
+- Session profiles no longer save viewer-host settings.

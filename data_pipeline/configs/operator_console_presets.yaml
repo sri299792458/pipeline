@@ -8,4 +8,3 @@ presets:
     language_instruction: "pick up the object and place it in the target area"
     operator: ""
     sensors_file: "data_pipeline/configs/sensors.local.yaml"
-    viewer_base_url: "http://10.33.55.65:3000"

@@ -59,7 +59,6 @@ Includes:
 - operator
 - active arms
 - sensors file
-- viewer base URL
 
 This is session-level metadata, not device identity.
 

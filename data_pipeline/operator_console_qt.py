@@ -294,9 +294,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.browse_sensors_button.clicked.connect(self._browse_sensors_file)
         sensors_file_layout.addWidget(self.form_widgets["sensors_file"], 1)
         sensors_file_layout.addWidget(self.browse_sensors_button)
-        self.form_widgets["viewer_base_url"] = QLineEdit("http://10.33.55.65:3000")
         form.addRow("Sensors File", sensors_file_row)
-        form.addRow("Viewer Base URL", self.form_widgets["viewer_base_url"])
         layout.addLayout(form)
 
         self.session_devices_table = QTableWidget(0, 5)
@@ -396,7 +394,6 @@ class OperatorConsoleQtWindow(QMainWindow):
             self._set_field("operator", str(config.get("operator", "")))
         self._set_field("active_arms", str(config.get("active_arms", "lightning")))
         self._set_field("sensors_file", str(config.get("sensors_file", "data_pipeline/configs/sensors.local.yaml")))
-        self._set_field("viewer_base_url", str(config.get("viewer_base_url", "")))
         discovery_config = {
             "active_arms": str(config.get("active_arms", "lightning")),
             "sensors_file": str(config.get("sensors_file", "")),
@@ -764,7 +761,6 @@ class OperatorConsoleQtWindow(QMainWindow):
             "session_devices": session_devices,
             "realsense_enabled": bool(enabled_realsense),
             "gelsight_enabled": bool(enabled_gelsights),
-            "viewer_base_url": self._get_field("viewer_base_url"),
         }
 
     def _start_session(self) -> None:

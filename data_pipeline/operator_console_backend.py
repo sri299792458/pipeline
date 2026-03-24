@@ -51,6 +51,7 @@ TOPIC_PROBE_SCRIPT = REPO_ROOT / "data_pipeline" / "ros_topic_probe.py"
 VIEWER_REPO = REPO_ROOT / "lerobot-dataset-visualizer"
 VIEWER_BUN = Path.home() / ".bun" / "bin" / "bun"
 BUILTIN_SESSION_PROFILE_NAME = "init"
+DEFAULT_VIEWER_BASE_URL = os.environ.get("PIPELINE_VIEWER_BASE_URL", "http://localhost:3000").strip().rstrip("/")
 
 
 @dataclass
@@ -170,7 +171,6 @@ class OperatorConsoleBackend:
             "operator",
             "active_arms",
             "sensors_file",
-            "viewer_base_url",
         ):
             if key in profile:
                 config[key] = profile[key]
@@ -188,7 +188,6 @@ class OperatorConsoleBackend:
             "operator": str(config.get("operator", "")).strip(),
             "active_arms": str(config.get("active_arms", "")).strip(),
             "sensors_file": str(config.get("sensors_file", "")).strip(),
-            "viewer_base_url": str(config.get("viewer_base_url", "")).strip(),
             "session_devices": json.loads(json.dumps(config.get("session_devices", []))),
         }
 
@@ -490,9 +489,7 @@ class OperatorConsoleBackend:
         return None
 
     def _resolve_viewer_target(self, config: dict[str, Any]) -> tuple[str, int, str]:
-        viewer_base_url = str(config.get("viewer_base_url", "")).strip().rstrip("/")
-        if not viewer_base_url:
-            raise RuntimeError("Viewer base URL is empty.")
+        viewer_base_url = DEFAULT_VIEWER_BASE_URL
         dataset_id = self._find_viewer_dataset_id(config)
         if not dataset_id:
             checked = [
@@ -515,7 +512,7 @@ class OperatorConsoleBackend:
             raise RuntimeError(f"Viewer repo not found: {VIEWER_REPO}")
         if not VIEWER_BUN.exists():
             raise RuntimeError(f"Bun not found: {VIEWER_BUN}")
-        viewer_base_url = str(config.get("viewer_base_url", "")).strip().rstrip("/")
+        viewer_base_url = DEFAULT_VIEWER_BASE_URL
         dataset_url = f"{viewer_base_url}/datasets"
         localhost_dataset_url = "http://localhost:3000/datasets"
         return (
@@ -530,7 +527,7 @@ class OperatorConsoleBackend:
         )
 
     def _ensure_viewer_server(self, config: dict[str, Any], dataset_id: str, episode_index: int) -> None:
-        viewer_base_url = str(config.get("viewer_base_url", "")).strip().rstrip("/")
+        viewer_base_url = DEFAULT_VIEWER_BASE_URL
         command = self._build_viewer_server_command(config, dataset_id, episode_index)
         process = self.processes["viewer_server"]
         process_running = process.process is not None and process.process.poll() is None
