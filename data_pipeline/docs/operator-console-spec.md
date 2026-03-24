@@ -65,9 +65,9 @@ This is session-level metadata, not device identity.
 
 The session profile control may:
 
-- load the built-in `starter` profile
-- load a user-local saved session profile YAML file
-- save the current session metadata and device choices as a user-local profile YAML file
+- load the built-in `init` profile
+- browse to a user-local session profile YAML file and apply it immediately
+- save the current session metadata and device choices with `Save As`
 
 The operator should be able to choose both:
 
@@ -75,6 +75,8 @@ The operator should be able to choose both:
 - the sensors file
 
 through file dialogs instead of pasting paths manually.
+
+For the sensors file, choosing the file should be enough. There should not be a separate `Load` step.
 
 ### 2. Discovered devices
 

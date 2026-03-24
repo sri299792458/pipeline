@@ -240,15 +240,14 @@ class OperatorConsoleQtWindow(QMainWindow):
         profile_layout.setContentsMargins(0, 0, 0, 0)
         profile_layout.setSpacing(8)
         self.session_profile_edit = QLineEdit(BUILTIN_SESSION_PROFILE_NAME)
+        self.session_profile_edit.setPlaceholderText("init or session profile YAML")
+        self.session_profile_edit.returnPressed.connect(self._load_selected_session_profile)
         self.browse_profile_button = QPushButton("Browse")
         self.browse_profile_button.clicked.connect(self._browse_session_profile)
-        self.load_profile_button = QPushButton("Load")
-        self.load_profile_button.clicked.connect(self._load_selected_session_profile)
-        self.save_profile_button = QPushButton("Save")
+        self.save_profile_button = QPushButton("Save As")
         self.save_profile_button.clicked.connect(self._save_selected_session_profile)
         profile_layout.addWidget(self.session_profile_edit, 1)
         profile_layout.addWidget(self.browse_profile_button)
-        profile_layout.addWidget(self.load_profile_button)
         profile_layout.addWidget(self.save_profile_button)
         form.addRow("Session Profile", profile_row)
 
@@ -368,6 +367,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         )
         if path:
             self.session_profile_edit.setText(path)
+            self._load_selected_session_profile()
 
     def _browse_sensors_file(self) -> None:
         current = str(self._get_field("sensors_file")).strip()
@@ -385,6 +385,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         except ValueError:
             rel = path
         self._set_field("sensors_file", rel)
+        self._discover_session_devices()
 
     def _apply_form_config(self, config: dict[str, object]) -> None:
         self._set_field("dataset_id", str(config.get("dataset_id", "")))
@@ -417,22 +418,23 @@ class OperatorConsoleQtWindow(QMainWindow):
         )
 
     def _save_selected_session_profile(self) -> None:
-        profile_name = self.session_profile_edit.text().strip()
-        if not profile_name or profile_name == BUILTIN_SESSION_PROFILE_NAME:
-            suggested = str(self.backend.session_profiles_dir() / "new_session_profile.yaml")
-            path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save Session Profile",
-                suggested,
-                "YAML Files (*.yaml *.yml)",
-            )
-            if not path:
-                self.session_profile_status.setText("Save canceled.")
-                return
-            profile_name = path
-            self.session_profile_edit.setText(path)
+        current_ref = self.session_profile_edit.text().strip()
+        suggested = (
+            current_ref
+            if current_ref and current_ref != BUILTIN_SESSION_PROFILE_NAME
+            else str(self.backend.session_profiles_dir() / "new_session_profile.yaml")
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Session Profile",
+            suggested,
+            "YAML Files (*.yaml *.yml)",
+        )
+        if not path:
+            self.session_profile_status.setText("Save canceled.")
+            return
         try:
-            saved_path = self.backend.save_session_profile(profile_name, self._config())
+            saved_path = self.backend.save_session_profile(path, self._config())
         except Exception as exc:
             self.session_profile_status.setText(str(exc))
             return

@@ -50,7 +50,7 @@ SESSION_PROFILES_DIR = STATE_DIR / "session_profiles"
 TOPIC_PROBE_SCRIPT = REPO_ROOT / "data_pipeline" / "ros_topic_probe.py"
 VIEWER_REPO = REPO_ROOT / "lerobot-dataset-visualizer"
 VIEWER_BUN = Path.home() / ".bun" / "bin" / "bun"
-BUILTIN_SESSION_PROFILE_NAME = "starter"
+BUILTIN_SESSION_PROFILE_NAME = "init"
 
 
 @dataclass

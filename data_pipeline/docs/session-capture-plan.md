@@ -105,7 +105,7 @@ Saved session profiles are:
 - convenience defaults
 - not part of the shared contract
 
-The built-in `starter` profile is only the checked-in starting point.
+The built-in `init` profile is only the checked-in starting point.
 
 
 ## Canonical Role Vocabulary

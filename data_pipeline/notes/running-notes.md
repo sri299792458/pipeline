@@ -2095,7 +2095,7 @@
 - The console now has an editable `Session Profile` field with:
   - `Load`
   - `Save`
-- The built-in `starter` profile still comes from [operator_console_presets.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.yaml).
+- The built-in `init` profile still comes from [operator_console_presets.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.yaml).
 - User-created profiles are stored locally at [.operator_console/session_profiles.yaml](/home/srinivas/Desktop/pipeline/.operator_console/session_profiles.yaml).
 - Saved session profiles capture:
   - session metadata
