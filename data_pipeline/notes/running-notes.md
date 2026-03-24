@@ -2020,3 +2020,23 @@
   - no add/remove device-row behavior in the primary workflow
   - no `manual` device-source concept
 - This was necessary because the UI implementation had gotten ahead of the clarified session-plan model and was starting to behave like a device authoring tool instead of a discovery-and-confirmation tool.
+
+### Operator console discovery-first implementation
+
+- Implemented a discovery inventory layer in [device_discovery.py](/home/srinivas/Desktop/pipeline/data_pipeline/device_discovery.py) and [operator_console_backend.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) so the backend now returns:
+  - `discovered_devices`
+  - `expected_devices`
+  - `missing_expected_devices`
+- Preset `session_devices` are now treated as expected devices for matching and missing-device reporting, not as fabricated live rows.
+- The main `Session Devices` table in [operator_console_qt.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_qt.py) now shows discovered hardware only.
+- Removed device-authoring behavior from the primary workflow:
+  - no `Add Camera`
+  - no `Add GelSight`
+  - no `Remove Selected`
+  - no editable kind or identifier in the main table
+- Added a separate `Expected but Missing` pane so a missing preset or overlay device is visible without being turned into a fake launch target.
+- Role choices in the table are now filtered by device kind:
+  - `realsense` can only resolve to wrist/scene camera roles
+  - `gelsight` can only resolve to finger tactile roles
+- Discovery rediscovery preserves current session enable/role choices where the same discovered device is still present.
+- Updated [session_capture_plan.py](/home/srinivas/Desktop/pipeline/data_pipeline/session_capture_plan.py) so expected and missing devices are carried into the session plan, and active arms are no longer misrepresented as discovered devices.

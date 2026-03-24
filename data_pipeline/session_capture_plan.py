@@ -70,19 +70,6 @@ def _canonical_role_from_sensor_name(
     return sensor_name
 
 
-def _arm_devices(active_arms: list[str]) -> list[dict[str, Any]]:
-    return [
-        {
-            "device_id": f"arm/{arm}",
-            "kind": "ur_arm",
-            "enabled": True,
-            "suggested_role": arm,
-            "resolved_role": arm,
-        }
-        for arm in active_arms
-    ]
-
-
 def _runtime_slot_for_device(device: dict[str, Any]) -> str | None:
     if not bool(device.get("enabled", False)):
         return None
@@ -233,6 +220,93 @@ def _device_from_session_config(
     return base
 
 
+def _expected_kind_for_role(role: str) -> str | None:
+    if camera_path_parts_for_role(role) is not None:
+        return "realsense"
+    if tactile_path_parts_for_role(role) is not None:
+        return "gelsight"
+    return None
+
+
+def _expected_devices_from_config(
+    *,
+    config: dict[str, Any],
+    sensor_overrides: dict[str, dict[str, Any]],
+    active_arms: list[str],
+) -> list[dict[str, Any]]:
+    expected: list[dict[str, Any]] = []
+    configured = config.get("expected_session_devices", [])
+    seen_keys: set[tuple[str, str, str]] = set()
+
+    for index, entry in enumerate(configured if isinstance(configured, list) else []):
+        if not isinstance(entry, dict):
+            continue
+        role = str(entry.get("resolved_role", "")).strip() or str(entry.get("suggested_role", "")).strip()
+        kind = str(entry.get("kind", "")).strip() or _expected_kind_for_role(role) or "device"
+        if not role:
+            continue
+        preferred_identifier = (
+            str(entry.get("serial_number", "")).strip()
+            or str(entry.get("device_path", "")).strip()
+            or str(entry.get("identifier", "")).strip()
+        )
+        key = (kind, role, preferred_identifier)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        expected.append(
+            {
+                "expected_id": f"preset/{role}/{index}",
+                "kind": kind,
+                "expected_role": role,
+                "preferred_identifier": preferred_identifier,
+                "required": bool(entry.get("enabled", False)),
+                "source": str(entry.get("source", "")).strip() or "preset",
+            }
+        )
+
+    for sensor_name, sensor in sensor_overrides.items():
+        if not bool(sensor.get("enabled_by_default", False)):
+            continue
+        role = _canonical_role_from_sensor_name(sensor_name, sensor, active_arms)
+        kind = _expected_kind_for_role(role)
+        if kind is None:
+            continue
+        preferred_identifier = str(sensor.get("serial_number", "")).strip()
+        key = (kind, role, preferred_identifier)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        expected.append(
+            {
+                "expected_id": f"overlay/{role}",
+                "kind": kind,
+                "expected_role": role,
+                "preferred_identifier": preferred_identifier,
+                "required": True,
+                "source": "overlay",
+            }
+        )
+    return expected
+
+
+def _device_matches_expected(device: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if str(device.get("kind", "")).strip() != str(expected.get("kind", "")).strip():
+        return False
+
+    preferred_identifier = str(expected.get("preferred_identifier", "")).strip()
+    if preferred_identifier:
+        candidate = (
+            str(device.get("serial_number", "")).strip()
+            or str(device.get("device_path", "")).strip()
+            or str(device.get("identifier", "")).strip()
+        )
+        return candidate == preferred_identifier
+
+    role = str(device.get("resolved_role", "")).strip() or str(device.get("suggested_role", "")).strip()
+    return bool(role) and role == str(expected.get("expected_role", "")).strip()
+
+
 def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[str, Any]:
     active_arms = normalize_active_arms(parse_task_list(str(config.get("active_arms", ""))))
     profile, profile_path = resolve_profile_for_active_arms("auto", active_arms)
@@ -245,7 +319,7 @@ def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[
     if sensors_file:
         local_overlays.append(_overlay_status(sensors_file))
 
-    devices = _arm_devices(active_arms)
+    devices: list[dict[str, Any]] = []
 
     configured_session_devices = config.get("session_devices", [])
     for entry in configured_session_devices if isinstance(configured_session_devices, list) else []:
@@ -258,6 +332,22 @@ def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[
                 active_arms=active_arms,
             )
         )
+
+    expected_devices = _expected_devices_from_config(
+        config=config,
+        sensor_overrides=sensor_overrides,
+        active_arms=active_arms,
+    )
+    matched_expected_ids = {
+        str(expected.get("expected_id", "")).strip()
+        for expected in expected_devices
+        if any(_device_matches_expected(device, expected) for device in devices)
+    }
+    missing_expected_devices = [
+        expected
+        for expected in expected_devices
+        if str(expected.get("expected_id", "")).strip() not in matched_expected_ids
+    ]
 
     selected_topics = _selected_topics_for_session(
         profile=profile,
@@ -288,6 +378,9 @@ def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[
             "path": str(profile_path),
             "selection_rule": "auto_from_active_arms_v2",
         },
+        "expected_devices": expected_devices,
+        "missing_expected_devices": missing_expected_devices,
+        "resolved_devices": devices,
         "discovered_devices": devices,
         "selected_topics": sorted(selected_topics),
         "selected_extra_topics": sorted(extra_topics),

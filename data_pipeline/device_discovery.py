@@ -56,7 +56,8 @@ def _canonical_role_from_sensor(sensor_name: str, sensor: dict[str, Any], active
 
 def _enabled_roles(config: dict[str, Any]) -> set[str]:
     roles: set[str] = set()
-    for entry in config.get("session_devices", []) if isinstance(config.get("session_devices", []), list) else []:
+    seed_devices = config.get("discovery_seed_devices", config.get("session_devices", []))
+    for entry in seed_devices if isinstance(seed_devices, list) else []:
         if not isinstance(entry, dict):
             continue
         if bool(entry.get("enabled", False)):
@@ -64,6 +65,123 @@ def _enabled_roles(config: dict[str, Any]) -> set[str]:
             if role:
                 roles.add(role)
     return roles
+
+
+def _expected_kind_for_role(role: str) -> str | None:
+    if camera_path_parts_for_role(role) is not None:
+        return "realsense"
+    if tactile_path_parts_for_role(role) is not None:
+        return "gelsight"
+    return None
+
+
+def _expected_identifier(entry: dict[str, Any]) -> str:
+    return (
+        str(entry.get("serial_number", "")).strip()
+        or str(entry.get("device_path", "")).strip()
+        or str(entry.get("identifier", "")).strip()
+    )
+
+
+def _normalize_expected_identifier(kind: str, identifier: str) -> str:
+    if kind == "realsense":
+        return _normalize_serial(identifier)
+    return identifier.strip().lower()
+
+
+def _normalized_device_identifier(device: dict[str, Any]) -> str:
+    kind = str(device.get("kind", "")).strip()
+    if kind == "realsense":
+        return _normalize_serial(
+            str(device.get("serial_number", "")).strip() or str(device.get("identifier", "")).strip()
+        )
+    return (
+        str(device.get("device_path", "")).strip().lower()
+        or str(device.get("identifier", "")).strip().lower()
+        or _normalize_serial(str(device.get("serial_number", "")).strip())
+    )
+
+
+def _expected_devices_from_config(
+    config: dict[str, Any],
+    sensor_overrides: dict[str, dict[str, Any]],
+    active_arms: list[str],
+) -> list[dict[str, Any]]:
+    expected: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str, str]] = set()
+
+    configured = config.get("expected_session_devices", [])
+    for index, entry in enumerate(configured if isinstance(configured, list) else []):
+        if not isinstance(entry, dict):
+            continue
+        role = str(entry.get("resolved_role", "")).strip() or str(entry.get("suggested_role", "")).strip()
+        kind = str(entry.get("kind", "")).strip() or _expected_kind_for_role(role) or "device"
+        if not role:
+            continue
+        preferred_identifier = _expected_identifier(entry)
+        key = (kind, role, _normalize_expected_identifier(kind, preferred_identifier))
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        expected.append(
+            {
+                "expected_id": f"preset/{role}/{index}",
+                "kind": kind,
+                "expected_role": role,
+                "preferred_identifier": preferred_identifier,
+                "required": bool(entry.get("enabled", False)),
+                "source": str(entry.get("source", "")).strip() or "preset",
+            }
+        )
+
+    for sensor_name, sensor in sensor_overrides.items():
+        if not bool(sensor.get("enabled_by_default", False)):
+            continue
+        role = _canonical_role_from_sensor(sensor_name, sensor, active_arms)
+        kind = _expected_kind_for_role(role)
+        if kind is None:
+            continue
+        preferred_identifier = str(sensor.get("serial_number", "")).strip()
+        key = (kind, role, _normalize_expected_identifier(kind, preferred_identifier))
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        expected.append(
+            {
+                "expected_id": f"overlay/{role}",
+                "kind": kind,
+                "expected_role": role,
+                "preferred_identifier": preferred_identifier,
+                "required": True,
+                "source": "overlay",
+            }
+        )
+    return expected
+
+
+def _device_matches_expected(device: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if str(device.get("kind", "")).strip() != str(expected.get("kind", "")).strip():
+        return False
+
+    expected_identifier = _normalize_expected_identifier(
+        str(expected.get("kind", "")).strip(),
+        str(expected.get("preferred_identifier", "")).strip(),
+    )
+    if expected_identifier:
+        return _normalized_device_identifier(device) == expected_identifier
+
+    role = str(device.get("resolved_role", "")).strip() or str(device.get("suggested_role", "")).strip()
+    return bool(role) and role == str(expected.get("expected_role", "")).strip()
+
+
+def _match_label(match_sources: list[str]) -> str:
+    unique = []
+    for source in match_sources:
+        if source not in unique:
+            unique.append(source)
+    if not unique:
+        return "unmatched"
+    return " + ".join(unique)
 
 
 def _overlay_entry_from_sensor(
@@ -324,3 +442,38 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
         )
 
     return devices
+
+
+def discover_session_inventory(config: dict[str, Any]) -> dict[str, Any]:
+    active_arms = normalize_active_arms(parse_task_list(str(config.get("active_arms", ""))))
+    sensors_file = str(config.get("sensors_file", "")).strip()
+    sensor_overrides = load_optional_sensor_overrides(sensors_file) if sensors_file and Path(sensors_file).exists() else {}
+
+    discovered_devices = discover_session_devices(config)
+    expected_devices = _expected_devices_from_config(config, sensor_overrides, active_arms)
+
+    matched_expected_ids: set[str] = set()
+    for device in discovered_devices:
+        match_sources: list[str] = []
+        if str(device.get("overlay_key", "")).strip():
+            match_sources.append("overlay")
+        for expected in expected_devices:
+            if _device_matches_expected(device, expected):
+                matched_expected_ids.add(str(expected.get("expected_id", "")).strip())
+                source = str(expected.get("source", "")).strip()
+                if source:
+                    match_sources.append(source)
+        device["match_sources"] = list(dict.fromkeys(match_sources))
+        device["match_label"] = _match_label(match_sources)
+
+    missing_expected_devices = [
+        expected
+        for expected in expected_devices
+        if str(expected.get("expected_id", "")).strip() not in matched_expected_ids
+    ]
+
+    return {
+        "discovered_devices": discovered_devices,
+        "expected_devices": expected_devices,
+        "missing_expected_devices": missing_expected_devices,
+    }

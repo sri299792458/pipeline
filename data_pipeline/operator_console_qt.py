@@ -57,19 +57,36 @@ STATUS_STYLES = {
     "info": "background:#e7eef8;color:#29415f;border:1px solid #c3d3ea;",
 }
 
-DEVICE_ROLE_CHOICES = [
+CAMERA_ROLE_CHOICES = [
     "lightning_wrist_1",
     "thunder_wrist_1",
     "scene_1",
     "scene_2",
     "scene_3",
+]
+
+TACTILE_ROLE_CHOICES = [
     "lightning_finger_left",
     "lightning_finger_right",
     "thunder_finger_left",
     "thunder_finger_right",
 ]
 
-DEVICE_KIND_CHOICES = ["realsense", "gelsight"]
+
+def _role_choices_for_kind(kind: str) -> list[str]:
+    if kind == "realsense":
+        return list(CAMERA_ROLE_CHOICES)
+    if kind == "gelsight":
+        return list(TACTILE_ROLE_CHOICES)
+    return []
+
+
+def _device_identifier(device: dict[str, object]) -> str:
+    return (
+        str(device.get("serial_number", "")).strip()
+        or str(device.get("device_path", "")).strip()
+        or str(device.get("identifier", "")).strip()
+    )
 
 
 def apply_chip_style(label: QLabel, tone: str) -> None:
@@ -283,8 +300,10 @@ class OperatorConsoleQtWindow(QMainWindow):
         form.addRow("Viewer Base URL", self.form_widgets["viewer_base_url"])
         layout.addLayout(form)
 
-        self.session_devices_table = QTableWidget(0, 5)
-        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Kind", "Identifier", "Role", "Source"])
+        self.session_devices_table = QTableWidget(0, 7)
+        self.session_devices_table.setHorizontalHeaderLabels(
+            ["Record", "Kind", "Model", "Identifier", "Suggested Role", "Resolved Role", "Match"]
+        )
         self.session_devices_table.verticalHeader().setVisible(False)
         self.session_devices_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.session_devices_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -292,9 +311,19 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.session_devices_table.horizontalHeader().setStretchLastSection(True)
         self.session_devices_table.setColumnWidth(0, 70)
         self.session_devices_table.setColumnWidth(1, 100)
-        self.session_devices_table.setColumnWidth(2, 220)
-        self.session_devices_table.setColumnWidth(3, 170)
+        self.session_devices_table.setColumnWidth(2, 120)
+        self.session_devices_table.setColumnWidth(3, 220)
+        self.session_devices_table.setColumnWidth(4, 160)
+        self.session_devices_table.setColumnWidth(5, 170)
         layout.addWidget(self.session_devices_table)
+
+        missing_label = QLabel("Expected but Missing")
+        missing_label.setObjectName("selectedProcessLabel")
+        layout.addWidget(missing_label)
+        self.missing_expected_text = QPlainTextEdit()
+        self.missing_expected_text.setReadOnly(True)
+        self.missing_expected_text.setMaximumHeight(110)
+        layout.addWidget(self.missing_expected_text)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
@@ -303,17 +332,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.reset_devices_button.clicked.connect(self._reset_session_devices_from_current_preset)
         self.discover_devices_button = QPushButton("Discover Devices")
         self.discover_devices_button.clicked.connect(self._discover_session_devices)
-        add_camera = QPushButton("Add Camera")
-        add_camera.clicked.connect(lambda: self._append_session_device_row({"kind": "realsense"}))
-        add_gelsight = QPushButton("Add GelSight")
-        add_gelsight.clicked.connect(lambda: self._append_session_device_row({"kind": "gelsight"}))
-        remove_selected = QPushButton("Remove Selected")
-        remove_selected.clicked.connect(self._remove_selected_session_device_row)
         controls.addWidget(self.reset_devices_button)
         controls.addWidget(self.discover_devices_button)
-        controls.addWidget(add_camera)
-        controls.addWidget(add_gelsight)
-        controls.addWidget(remove_selected)
         controls.addStretch(1)
         layout.addLayout(controls)
         return box
@@ -373,23 +393,78 @@ class OperatorConsoleQtWindow(QMainWindow):
             return [dict(device) for device in session_devices if isinstance(device, dict)]
         return []
 
+    def _current_preset(self) -> dict[str, object]:
+        preset_id = self.preset_combo.currentText().strip()
+        if not preset_id:
+            return {}
+        return self.backend.get_preset(preset_id)
+
+    def _expected_session_devices_for_preset(self, preset: dict[str, object] | None = None) -> list[dict[str, object]]:
+        expected = self._default_session_devices_for_preset(preset or self._current_preset())
+        for entry in expected:
+            source = str(entry.get("source", "")).strip()
+            entry["source"] = source or "preset"
+        return expected
+
     def _discovery_seed_config(self, preset: dict[str, object] | None = None) -> dict[str, object]:
         active_arms = str((preset or {}).get("active_arms", self._get_field("active_arms"))).strip() or "lightning"
         sensors_file = str((preset or {}).get("sensors_file", self._get_field("sensors_file"))).strip()
-        preset_devices = (preset or {}).get("session_devices", []) if isinstance((preset or {}).get("session_devices", []), list) else []
-        session_devices = [dict(device) for device in preset_devices if isinstance(device, dict)] if preset_devices else (
-            self._session_devices() if self.session_devices_table.rowCount() > 0 else []
-        )
+        expected_session_devices = self._expected_session_devices_for_preset(preset)
+        discovery_seed_devices = self._session_devices() if self.session_devices_table.rowCount() > 0 else expected_session_devices
         return {
             "active_arms": active_arms,
             "sensors_file": sensors_file,
-            "session_devices": session_devices,
+            "expected_session_devices": expected_session_devices,
+            "discovery_seed_devices": discovery_seed_devices,
         }
+
+    def _current_device_selection_map(self) -> dict[tuple[str, str], dict[str, object]]:
+        selections: dict[tuple[str, str], dict[str, object]] = {}
+        for device in self._session_devices():
+            key = (str(device.get("kind", "")).strip(), _device_identifier(device))
+            if key[1]:
+                selections[key] = device
+        return selections
 
     def _set_session_devices(self, devices: list[dict[str, object]]) -> None:
         self.session_devices_table.setRowCount(0)
         for device in devices:
             self._append_session_device_row(device)
+
+    def _render_missing_expected_devices(self, entries: list[dict[str, object]]) -> None:
+        if not entries:
+            self.missing_expected_text.setPlainText("None.")
+            return
+        lines = []
+        for entry in entries:
+            kind = str(entry.get("kind", "device")).strip()
+            role = str(entry.get("expected_role", "")).strip()
+            preferred_identifier = str(entry.get("preferred_identifier", "")).strip()
+            source = str(entry.get("source", "")).strip() or "expected"
+            details = " | ".join(part for part in [kind, role, preferred_identifier, source] if part)
+            lines.append(details)
+        self.missing_expected_text.setPlainText("\n".join(lines))
+
+    def _set_session_inventory(self, inventory: dict[str, object], *, preserve_existing: bool = False) -> None:
+        discovered_devices = [
+            dict(device)
+            for device in inventory.get("discovered_devices", [])
+            if isinstance(device, dict)
+        ]
+        if preserve_existing:
+            current = self._current_device_selection_map()
+            for device in discovered_devices:
+                key = (str(device.get("kind", "")).strip(), _device_identifier(device))
+                existing = current.get(key)
+                if existing is None:
+                    continue
+                device["enabled"] = bool(existing.get("enabled", False))
+                existing_role = str(existing.get("resolved_role", "")).strip()
+                if existing_role:
+                    device["resolved_role"] = existing_role
+        self._set_session_devices(discovered_devices)
+        missing = inventory.get("missing_expected_devices", [])
+        self._render_missing_expected_devices(missing if isinstance(missing, list) else [])
 
     def _append_session_device_row(self, device: dict[str, object]) -> None:
         row = self.session_devices_table.rowCount()
@@ -400,61 +475,73 @@ class OperatorConsoleQtWindow(QMainWindow):
         enabled.setStyleSheet("margin-left:18px;")
         self.session_devices_table.setCellWidget(row, 0, enabled)
 
-        kind_combo = QComboBox()
-        kind_combo.addItems(DEVICE_KIND_CHOICES)
-        kind_value = str(device.get("kind", "realsense")).strip() or "realsense"
-        index = kind_combo.findText(kind_value)
-        kind_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.session_devices_table.setCellWidget(row, 1, kind_combo)
+        kind_value = str(device.get("kind", "device")).strip() or "device"
+        kind_item = QTableWidgetItem(kind_value)
+        self.session_devices_table.setItem(row, 1, kind_item)
 
-        identifier_edit = QLineEdit(str(device.get("identifier", "")).strip())
-        self.session_devices_table.setCellWidget(row, 2, identifier_edit)
+        model_item = QTableWidgetItem(str(device.get("model", "")).strip())
+        self.session_devices_table.setItem(row, 2, model_item)
+
+        identifier_value = _device_identifier(device)
+        identifier_item = QTableWidgetItem(identifier_value)
+        self.session_devices_table.setItem(row, 3, identifier_item)
+
+        suggested_role = str(device.get("suggested_role", "")).strip()
+        suggested_role_item = QTableWidgetItem(suggested_role)
+        self.session_devices_table.setItem(row, 4, suggested_role_item)
 
         role_combo = QComboBox()
-        role_combo.addItems(DEVICE_ROLE_CHOICES)
-        role_value = str(device.get("resolved_role", "")).strip() or str(device.get("suggested_role", "")).strip()
+        role_choices = _role_choices_for_kind(kind_value)
+        role_combo.addItems(role_choices)
+        role_value = str(device.get("resolved_role", "")).strip() or suggested_role
         if role_value and role_combo.findText(role_value) < 0:
             role_combo.addItem(role_value)
         role_combo.setCurrentText(role_value)
-        self.session_devices_table.setCellWidget(row, 3, role_combo)
+        self.session_devices_table.setCellWidget(row, 5, role_combo)
 
-        source_item = QTableWidgetItem(str(device.get("source", "")).strip() or "manual")
-        source_item.setData(
+        match_text = str(device.get("match_label", "")).strip() or "unmatched"
+        match_item = QTableWidgetItem(match_text)
+        identifier_item.setData(
             Qt.ItemDataRole.UserRole,
             {
+                "kind": kind_value,
+                "identifier": identifier_value,
                 "overlay_key": str(device.get("overlay_key", "")).strip(),
-                "suggested_role": str(device.get("suggested_role", "")).strip(),
+                "suggested_role": suggested_role,
                 "model": device.get("model"),
                 "sensor_id": device.get("sensor_id"),
                 "attached_to": device.get("attached_to"),
                 "mount_site": device.get("mount_site"),
                 "calibration_ref": device.get("calibration_ref"),
+                "serial_number": str(device.get("serial_number", "")).strip(),
+                "device_path": str(device.get("device_path", "")).strip(),
+                "source": str(device.get("source", "")).strip() or "discovered",
+                "match_sources": list(device.get("match_sources", [])) if isinstance(device.get("match_sources", []), list) else [],
             },
         )
-        self.session_devices_table.setItem(row, 4, source_item)
+        self.session_devices_table.setItem(row, 6, match_item)
 
     def _session_devices(self) -> list[dict[str, object]]:
         devices: list[dict[str, object]] = []
         for row in range(self.session_devices_table.rowCount()):
             enabled_widget = self.session_devices_table.cellWidget(row, 0)
-            kind_widget = self.session_devices_table.cellWidget(row, 1)
-            identifier_widget = self.session_devices_table.cellWidget(row, 2)
-            role_widget = self.session_devices_table.cellWidget(row, 3)
-            source_item = self.session_devices_table.item(row, 4)
+            kind_item = self.session_devices_table.item(row, 1)
+            identifier_item = self.session_devices_table.item(row, 3)
+            role_widget = self.session_devices_table.cellWidget(row, 5)
             if not isinstance(enabled_widget, QCheckBox):
                 continue
-            if not isinstance(kind_widget, QComboBox):
+            if not isinstance(kind_item, QTableWidgetItem):
                 continue
-            if not isinstance(identifier_widget, QLineEdit):
+            if not isinstance(identifier_item, QTableWidgetItem):
                 continue
             if not isinstance(role_widget, QComboBox):
                 continue
-            metadata = source_item.data(Qt.ItemDataRole.UserRole) if source_item is not None else {}
+            metadata = identifier_item.data(Qt.ItemDataRole.UserRole) if identifier_item is not None else {}
             if not isinstance(metadata, dict):
                 metadata = {}
 
-            kind = kind_widget.currentText().strip()
-            identifier = identifier_widget.text().strip()
+            kind = kind_item.text().strip()
+            identifier = identifier_item.text().strip()
             role = role_widget.currentText().strip()
             device: dict[str, object] = {
                 "kind": kind,
@@ -463,35 +550,34 @@ class OperatorConsoleQtWindow(QMainWindow):
                 "suggested_role": str(metadata.get("suggested_role", "")).strip() or role,
                 "resolved_role": role,
                 "overlay_key": str(metadata.get("overlay_key", "")).strip(),
-                "source": source_item.text().strip() if source_item is not None else "manual",
+                "source": str(metadata.get("source", "")).strip() or "discovered",
             }
             for key in ("model", "sensor_id", "attached_to", "mount_site", "calibration_ref"):
                 value = metadata.get(key)
                 if value not in {"", None}:
                     device[key] = value
             if kind == "realsense":
-                device["serial_number"] = identifier
+                device["serial_number"] = str(metadata.get("serial_number", "")).strip() or identifier
             elif kind == "gelsight":
-                device["device_path"] = identifier
+                device["device_path"] = str(metadata.get("device_path", "")).strip() or identifier
+                serial_number = str(metadata.get("serial_number", "")).strip()
+                if serial_number:
+                    device["serial_number"] = serial_number
             devices.append(device)
         return devices
-
-    def _remove_selected_session_device_row(self) -> None:
-        current_row = self.session_devices_table.currentRow()
-        if current_row >= 0:
-            self.session_devices_table.removeRow(current_row)
 
     def _reset_session_devices_from_current_preset(self) -> None:
         preset_id = self.preset_combo.currentText().strip()
         if not preset_id:
             return
-        self._set_session_devices(self._default_session_devices_for_preset(self.backend.get_preset(preset_id)))
+        preset = self.backend.get_preset(preset_id)
+        inventory = self.backend.discover_session_inventory(self._discovery_seed_config(preset))
+        self._set_session_inventory(inventory, preserve_existing=False)
 
     def _discover_session_devices(self) -> None:
         config = self._discovery_seed_config()
-        devices = self.backend.discover_session_devices(config)
-        if devices:
-            self._set_session_devices(devices)
+        inventory = self.backend.discover_session_inventory(config)
+        self._set_session_inventory(inventory, preserve_existing=True)
 
     def _build_optional_box(self) -> QWidget:
         box = QGroupBox("Optional")
@@ -686,8 +772,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         self._set_field("viewer_base_url", str(preset.get("viewer_base_url", "")))
         self._set_field("notes", "")
         self._set_field("extra_topics", "")
-        discovered_devices = self.backend.discover_session_devices(self._discovery_seed_config(preset))
-        self._set_session_devices(discovered_devices or self._default_session_devices_for_preset(preset))
+        inventory = self.backend.discover_session_inventory(self._discovery_seed_config(preset))
+        self._set_session_inventory(inventory, preserve_existing=False)
 
     def _set_field(self, key: str, value: str | bool) -> None:
         widget = self.form_widgets[key]
@@ -714,6 +800,7 @@ class OperatorConsoleQtWindow(QMainWindow):
 
     def _config(self) -> dict[str, object]:
         session_devices = self._session_devices()
+        expected_session_devices = self._expected_session_devices_for_preset()
         enabled_realsense = [
             device for device in session_devices
             if bool(device.get("enabled", False)) and str(device.get("kind", "")).strip() == "realsense"
@@ -732,6 +819,7 @@ class OperatorConsoleQtWindow(QMainWindow):
             "operator": self._get_field("operator"),
             "active_arms": self._get_field("active_arms"),
             "sensors_file": self._get_field("sensors_file"),
+            "expected_session_devices": expected_session_devices,
             "session_devices": session_devices,
             "realsense_enabled": bool(enabled_realsense),
             "gelsight_enabled": bool(enabled_gelsights),
@@ -841,7 +929,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         overlay_text = ", ".join(str(entry.get("path", "")) for entry in overlays if str(entry.get("path", "")).strip()) or "None"
         self.session_plan_overlays_label.setText(overlay_text)
 
-        devices = plan.get("discovered_devices") or plan.get("resolved_devices") or []
+        devices = plan.get("resolved_devices") or plan.get("discovered_devices") or []
         device_lines = []
         for device in devices:
             kind = str(device.get("kind", "device")).strip()

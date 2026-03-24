@@ -31,7 +31,10 @@ from data_pipeline.pipeline_utils import (
     make_episode_id,
     tactile_path_parts_for_role,
 )
-from data_pipeline.device_discovery import discover_session_devices as discover_runtime_session_devices
+from data_pipeline.device_discovery import (
+    discover_session_devices as discover_runtime_session_devices,
+    discover_session_inventory as discover_runtime_session_inventory,
+)
 from data_pipeline.session_capture_plan import build_session_capture_plan
 
 
@@ -333,6 +336,18 @@ class OperatorConsoleBackend:
         except Exception as exc:
             self.last_action_error = str(exc)
             return []
+
+    def discover_session_inventory(self, config: dict[str, Any]) -> dict[str, Any]:
+        self.last_action_error = ""
+        try:
+            return discover_runtime_session_inventory(config)
+        except Exception as exc:
+            self.last_action_error = str(exc)
+            return {
+                "discovered_devices": [],
+                "expected_devices": [],
+                "missing_expected_devices": [],
+            }
 
     def request_health_refresh(self, config: dict[str, Any]) -> None:
         if self.health_refresh_in_flight:
