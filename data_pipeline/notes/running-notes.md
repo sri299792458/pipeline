@@ -1953,3 +1953,10 @@
   - GelSight identification remains limited by what is visible in `/dev/v4l/by-id`
   - and no live image preview is attached yet
   - but the session device list is now driven by actual available hardware rather than only by preset text fields
+
+### Operator-console process-stop hardening
+
+- Tightened [operator_console_backend.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) so `stop_session()` and other stop paths do not rely on a single `SIGTERM`/`SIGINT`.
+- Discovery itself remains passive and does not spawn long-lived child processes.
+- Session-owned processes are still explicit and tracked in `self.processes`, but `_stop_process(...)` now escalates to `SIGKILL` after a short grace period if a child ignores the initial stop signal.
+- This is specifically to avoid the class of lab issue where a launcher or ROS subprocess keeps running in the background after the console thinks it was stopped.

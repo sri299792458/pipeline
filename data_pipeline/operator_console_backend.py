@@ -109,6 +109,7 @@ class OperatorConsoleBackend:
         "realsense_contract": 18.0,
         "gelsight_contract": 12.0,
     }
+    STOP_GRACE_S = 5.0
 
     def _load_presets(self) -> dict[str, dict[str, Any]]:
         data = load_yaml(self.presets_path)
@@ -918,14 +919,40 @@ class OperatorConsoleBackend:
             process = self.processes[name]
             if process.process is None or process.process.poll() is not None:
                 return
+            popen = process.process
             try:
                 if sigint:
-                    os.killpg(process.process.pid, signal.SIGINT)
+                    os.killpg(popen.pid, signal.SIGINT)
                 else:
-                    os.killpg(process.process.pid, signal.SIGTERM)
+                    os.killpg(popen.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
             process.state = "stopping"
+        watcher = threading.Thread(
+            target=self._escalate_stop_if_needed,
+            args=(name, popen),
+            daemon=True,
+        )
+        watcher.start()
+
+    def _escalate_stop_if_needed(self, name: str, popen: subprocess.Popen[str]) -> None:
+        try:
+            popen.wait(timeout=self.STOP_GRACE_S)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+
+        with self.process_lock:
+            process = self.processes[name]
+            if process.process is not popen or popen.poll() is not None:
+                return
+            try:
+                os.killpg(popen.pid, signal.SIGKILL)
+                process.append_log(
+                    f"[operator-console] escalated stop to SIGKILL after {self.STOP_GRACE_S:.1f}s grace"
+                )
+            except ProcessLookupError:
+                return
 
     def _drain_logs(self, name: str, popen: subprocess.Popen[str]) -> None:
         process = self.processes[name]
