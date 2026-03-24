@@ -97,6 +97,16 @@ It contains:
 - resolved `devices`
 - resolved `selected_topics`
 
+The operator may save a resolved session profile for later reuse.
+
+Saved session profiles are:
+
+- user-local
+- convenience defaults
+- not part of the shared contract
+
+The built-in `default` profile is only the checked-in starting point.
+
 
 ## Canonical Role Vocabulary
 

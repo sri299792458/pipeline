@@ -234,6 +234,21 @@ class OperatorConsoleQtWindow(QMainWindow):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
+        profile_row = QWidget()
+        profile_layout = QHBoxLayout(profile_row)
+        profile_layout.setContentsMargins(0, 0, 0, 0)
+        profile_layout.setSpacing(8)
+        self.session_profile_combo = QComboBox()
+        self.session_profile_combo.setEditable(True)
+        self.load_profile_button = QPushButton("Load")
+        self.load_profile_button.clicked.connect(self._load_selected_session_profile)
+        self.save_profile_button = QPushButton("Save")
+        self.save_profile_button.clicked.connect(self._save_selected_session_profile)
+        profile_layout.addWidget(self.session_profile_combo, 1)
+        profile_layout.addWidget(self.load_profile_button)
+        profile_layout.addWidget(self.save_profile_button)
+        form.addRow("Session Profile", profile_row)
+
         self.form_widgets["dataset_id"] = QLineEdit()
         self.form_widgets["robot_id"] = QLineEdit()
         self.form_widgets["task_name"] = QLineEdit()
@@ -252,6 +267,10 @@ class OperatorConsoleQtWindow(QMainWindow):
             ("Active Arms", "active_arms"),
         ]:
             form.addRow(label, self.form_widgets[key])
+
+        self.session_profile_status = QLabel("")
+        self.session_profile_status.setWordWrap(True)
+        form.addRow("", self.session_profile_status)
         return box
 
     def _build_sensor_box(self) -> QWidget:
@@ -327,6 +346,53 @@ class OperatorConsoleQtWindow(QMainWindow):
                 if existing_role:
                     device["role"] = existing_role
         self._set_session_devices(discovered_devices)
+
+    def _refresh_session_profile_choices(self, *, selected_name: str = "") -> None:
+        current_text = selected_name or self.session_profile_combo.currentText().strip()
+        self.session_profile_combo.blockSignals(True)
+        self.session_profile_combo.clear()
+        self.session_profile_combo.addItems(self.backend.list_session_profiles())
+        self.session_profile_combo.setEditText(current_text or "default")
+        self.session_profile_combo.blockSignals(False)
+
+    def _apply_form_config(self, config: dict[str, object]) -> None:
+        self._set_field("dataset_id", str(config.get("dataset_id", "")))
+        self._set_field("robot_id", str(config.get("robot_id", "")))
+        self._set_field("task_name", str(config.get("task_name", "")))
+        self._set_field("language_instruction", str(config.get("language_instruction", "")))
+        if "operator" in config:
+            self._set_field("operator", str(config.get("operator", "")))
+        self._set_field("active_arms", str(config.get("active_arms", "lightning")))
+        self._set_field("sensors_file", str(config.get("sensors_file", "data_pipeline/configs/sensors.local.yaml")))
+        self._set_field("viewer_base_url", str(config.get("viewer_base_url", "")))
+        discovery_config = {
+            "active_arms": str(config.get("active_arms", "lightning")),
+            "sensors_file": str(config.get("sensors_file", "")),
+            "session_devices": list(config.get("session_devices", [])) if isinstance(config.get("session_devices", []), list) else [],
+        }
+        devices = self.backend.discover_session_devices(discovery_config)
+        self._set_discovered_devices(devices, preserve_existing=False)
+
+    def _load_selected_session_profile(self) -> None:
+        profile_name = self.session_profile_combo.currentText().strip()
+        try:
+            config = self.backend.get_session_profile(profile_name)
+        except Exception as exc:
+            self.session_profile_status.setText(str(exc))
+            return
+        self._apply_form_config(config)
+        self._refresh_session_profile_choices(selected_name=profile_name or "default")
+        self.session_profile_status.setText(f"Loaded session profile: {profile_name or 'default'}")
+
+    def _save_selected_session_profile(self) -> None:
+        profile_name = self.session_profile_combo.currentText().strip()
+        try:
+            saved_name = self.backend.save_session_profile(profile_name, self._config())
+        except Exception as exc:
+            self.session_profile_status.setText(str(exc))
+            return
+        self._refresh_session_profile_choices(selected_name=saved_name)
+        self.session_profile_status.setText(f"Saved session profile: {saved_name}")
 
     def _append_session_device_row(self, device: dict[str, object]) -> None:
         row = self.session_devices_table.rowCount()
@@ -600,17 +666,9 @@ class OperatorConsoleQtWindow(QMainWindow):
         )
 
     def _load_defaults(self) -> None:
-        defaults = self.backend.default_form_config()
-        self._set_field("dataset_id", str(defaults.get("dataset_id", "")))
-        self._set_field("robot_id", str(defaults.get("robot_id", "")))
-        self._set_field("task_name", str(defaults.get("task_name", "")))
-        self._set_field("language_instruction", str(defaults.get("language_instruction", "")))
-        if defaults.get("operator"):
-            self._set_field("operator", str(defaults.get("operator", "")))
-        self._set_field("active_arms", str(defaults.get("active_arms", "lightning")))
-        self._set_field("sensors_file", str(defaults.get("sensors_file", "data_pipeline/configs/sensors.local.yaml")))
-        self._set_field("viewer_base_url", str(defaults.get("viewer_base_url", "")))
-        self._discover_session_devices()
+        self._refresh_session_profile_choices(selected_name="default")
+        self._apply_form_config(self.backend.default_form_config())
+        self.session_profile_status.setText("Loaded built-in default session profile.")
 
     def _set_field(self, key: str, value: str | bool) -> None:
         widget = self.form_widgets[key]

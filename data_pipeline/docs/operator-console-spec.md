@@ -31,14 +31,16 @@ See:
 ## Workflow
 
 1. fill session metadata
-2. choose the sensors file
-3. click `Discover Devices`
-4. set `Record` and `Role` for discovered devices
-5. click `Start Session`
-6. click `Validate`
-7. record one or more episodes
-8. convert
-9. open viewer
+2. optionally load a saved session profile
+3. choose the sensors file
+4. click `Discover Devices`
+5. set `Record` and `Role` for discovered devices
+6. optionally save the current session profile for later reuse
+7. click `Start Session`
+8. click `Validate`
+9. record one or more episodes
+10. convert
+11. open viewer
 
 The operator should not need to rebuild the rig model every episode.
 
@@ -49,6 +51,7 @@ The operator should not need to rebuild the rig model every episode.
 
 Includes:
 
+- session profile
 - dataset id
 - robot type
 - task name
@@ -59,6 +62,12 @@ Includes:
 - viewer base URL
 
 This is session-level metadata, not device identity.
+
+The session profile control may:
+
+- load the built-in `default` profile
+- load a user-local saved session profile
+- save the current session metadata and device choices as a user-local profile
 
 ### 2. Discovered devices
 

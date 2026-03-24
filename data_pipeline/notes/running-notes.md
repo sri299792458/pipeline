@@ -2088,3 +2088,18 @@
   - `selected_topics`
 - Collapsed [operator_console_presets.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.yaml) to one generic default instead of multiple hardware-combination presets.
 - Bumped the raw manifest schema to `6` because the embedded session object was simplified accordingly.
+
+### User-local session profiles
+
+- Added a minimal user-local session-profile layer on top of the simplified console.
+- The console now has an editable `Session Profile` field with:
+  - `Load`
+  - `Save`
+- The built-in `default` profile still comes from [operator_console_presets.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.yaml).
+- User-created profiles are stored locally at [.operator_console/session_profiles.yaml](/home/srinivas/Desktop/pipeline/.operator_console/session_profiles.yaml).
+- Saved session profiles capture:
+  - session metadata
+  - sensors file
+  - viewer URL
+  - current discovered-device selections and roles
+- This keeps reusable session setup without bringing back the old hardware-preset model.

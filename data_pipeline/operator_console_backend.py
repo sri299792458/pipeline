@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 import sys
 
@@ -44,6 +46,7 @@ SYSTEM_PYTHON = "/usr/bin/python3"
 PRESETS_PATH = REPO_ROOT / "data_pipeline" / "configs" / "operator_console_presets.yaml"
 STATE_DIR = REPO_ROOT / ".operator_console"
 CAPTURE_PLAN_DIR = STATE_DIR / "capture_plans"
+SESSION_PROFILES_PATH = STATE_DIR / "session_profiles.yaml"
 TOPIC_PROBE_SCRIPT = REPO_ROOT / "data_pipeline" / "ros_topic_probe.py"
 VIEWER_REPO = REPO_ROOT / "lerobot-dataset-visualizer"
 VIEWER_BUN = Path.home() / ".bun" / "bin" / "bun"
@@ -134,6 +137,89 @@ class OperatorConsoleBackend:
 
     def default_form_config(self) -> dict[str, Any]:
         return json.loads(json.dumps(self.default_config))
+
+    @staticmethod
+    def _normalize_profile_name(profile_name: str) -> str:
+        name = str(profile_name).strip()
+        if not name:
+            raise ValueError("Session profile name is empty.")
+        return name
+
+    def _load_session_profiles_file(self) -> dict[str, dict[str, Any]]:
+        if not SESSION_PROFILES_PATH.exists():
+            return {}
+        data = load_yaml(SESSION_PROFILES_PATH)
+        profiles = data.get("profiles", {})
+        if not isinstance(profiles, dict):
+            raise ValueError("session_profiles.yaml must contain a 'profiles' mapping")
+        return {
+            str(name): value
+            for name, value in profiles.items()
+            if isinstance(value, dict)
+        }
+
+    def _write_session_profiles_file(self, profiles: dict[str, dict[str, Any]]) -> None:
+        SESSION_PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SESSION_PROFILES_PATH.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump({"profiles": profiles}, handle, sort_keys=True)
+
+    def _session_profile_to_form_config(self, profile: dict[str, Any]) -> dict[str, Any]:
+        config = self.default_form_config()
+        for key in (
+            "dataset_id",
+            "robot_id",
+            "task_name",
+            "language_instruction",
+            "operator",
+            "active_arms",
+            "sensors_file",
+            "viewer_base_url",
+        ):
+            if key in profile:
+                config[key] = profile[key]
+        session_devices = profile.get("session_devices", [])
+        if isinstance(session_devices, list):
+            config["session_devices"] = json.loads(json.dumps(session_devices))
+        return config
+
+    def _form_config_to_session_profile(self, config: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "dataset_id": str(config.get("dataset_id", "")).strip(),
+            "robot_id": str(config.get("robot_id", "")).strip(),
+            "task_name": str(config.get("task_name", "")).strip(),
+            "language_instruction": str(config.get("language_instruction", "")).strip(),
+            "operator": str(config.get("operator", "")).strip(),
+            "active_arms": str(config.get("active_arms", "")).strip(),
+            "sensors_file": str(config.get("sensors_file", "")).strip(),
+            "viewer_base_url": str(config.get("viewer_base_url", "")).strip(),
+            "session_devices": json.loads(json.dumps(config.get("session_devices", []))),
+        }
+
+    def list_session_profiles(self) -> list[str]:
+        profiles = self._load_session_profiles_file()
+        names = ["default"]
+        for name in sorted(profiles):
+            if name != "default":
+                names.append(name)
+        return names
+
+    def get_session_profile(self, profile_name: str) -> dict[str, Any]:
+        name = self._normalize_profile_name(profile_name)
+        if name == "default":
+            return self.default_form_config()
+        profiles = self._load_session_profiles_file()
+        if name not in profiles:
+            raise KeyError(f"Unknown session profile: {name}")
+        return self._session_profile_to_form_config(profiles[name])
+
+    def save_session_profile(self, profile_name: str, config: dict[str, Any]) -> str:
+        name = self._normalize_profile_name(profile_name)
+        if name == "default":
+            raise ValueError("Cannot overwrite the built-in default session profile.")
+        profiles = self._load_session_profiles_file()
+        profiles[name] = self._form_config_to_session_profile(config)
+        self._write_session_profiles_file(profiles)
+        return name
 
     def session_state(self, config: dict[str, Any]) -> str:
         recorder = self.processes["recorder"]

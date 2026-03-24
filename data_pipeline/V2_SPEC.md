@@ -91,6 +91,9 @@ It defines:
 
 All episodes recorded in that session inherit the same session profile.
 
+Operators may save session profiles locally for reuse across sessions.
+These saved profiles are convenience artifacts, not shared-contract objects.
+
 
 ## Canonical Raw Topic Surface
 
