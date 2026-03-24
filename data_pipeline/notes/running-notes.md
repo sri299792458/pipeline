@@ -2054,3 +2054,37 @@
 - The note editor now resets when a new `latest_episode_id` appears, so notes do not leak from one take to the next.
 - Added [OperatorConsoleBackend.save_latest_episode_notes()](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) to rewrite only the `## Notes` section of the latest episode’s `notes.md`.
 - Removed Qt-side pre-record note injection into `record_episode.py`; notes are now a post-take annotation flow instead of session metadata.
+
+### Operator console unbloat pass
+
+- Simplified the active operator workflow around:
+  - session metadata
+  - one sensors file
+  - discovered devices
+  - session-level `Record` and `Role` choices
+- Removed the active Qt `Session Plan` pane and the related snapshot bookkeeping that exposed:
+  - preview session-plan errors
+  - publishable/blocked profile lists
+  - overlay paths
+  - resolved-topic explanation panes
+- Collapsed the discovered-device table to:
+  - `Record`
+  - `Kind`
+  - `Model`
+  - `Identifier`
+  - `Role`
+- Removed preset-driven device injection and the `Expected but Missing` pane from the active Qt workflow.
+- Discovery now uses only:
+  - live hardware enumeration
+  - sensors-file role suggestions
+  - current session selections for rediscovery preservation
+- Simplified [session_capture_plan.py](/home/srinivas/Desktop/pipeline/data_pipeline/session_capture_plan.py) to carry only the session truth used for recording:
+  - `session_id`
+  - `active_arms`
+  - `dataset_id`
+  - `robot_type`
+  - `sensors_file`
+  - `devices`
+  - `selected_topics`
+- Collapsed [operator_console_presets.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.yaml) to one generic default instead of multiple hardware-combination presets.
+- Bumped the raw manifest schema to `6` because the embedded session object was simplified accordingly.

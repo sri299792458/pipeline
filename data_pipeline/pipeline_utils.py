@@ -22,7 +22,20 @@ DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
 ARM_ORDER = ("lightning", "thunder")
-MANIFEST_SCHEMA_VERSION = 5
+CAMERA_ROLE_CHOICES = (
+    "lightning_wrist_1",
+    "thunder_wrist_1",
+    "scene_1",
+    "scene_2",
+    "scene_3",
+)
+TACTILE_ROLE_CHOICES = (
+    "lightning_finger_left",
+    "lightning_finger_right",
+    "thunder_finger_left",
+    "thunder_finger_right",
+)
+MANIFEST_SCHEMA_VERSION = 6
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
     "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",
@@ -92,6 +105,14 @@ def tactile_topic_prefix_for_role(role: str) -> str | None:
         return None
     arm, finger = parts
     return f"/spark/tactile/{arm}/{finger}"
+
+
+def role_choices_for_kind(kind: str) -> list[str]:
+    if kind == "realsense":
+        return list(CAMERA_ROLE_CHOICES)
+    if kind == "gelsight":
+        return list(TACTILE_ROLE_CHOICES)
+    return []
 
 
 def sensor_role_for_topic(topic: str) -> str | None:

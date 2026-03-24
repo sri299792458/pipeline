@@ -1,132 +1,101 @@
-# Session Capture Plan V2
+# Session Profile V2
 
 ## Purpose
 
-This document defines the session-level object that sits between:
+This document defines the session-level object used by the operator console and raw recorder.
 
-- the shared V2 topic contract
-- live hardware discovery
-- local defaults and rig facts
-- operator choices for this session
-- published-profile compatibility
+V2 keeps only three concepts here:
 
-The goal is to stop mixing these different concerns into one layer.
+- the shared topic contract
+- the local sensors file
+- one resolved session profile
+
+Everything else that had grown around this, such as overlay labels, expected-device lists,
+and profile-compatibility matrices, is intentionally out of the main workflow.
 
 
 ## Ground Rules
 
 ### Discovery is truth
 
-If a device is not discovered, it is not a live session device.
+If a device is not discovered, it is not part of the live session.
 
-Presets and local overlays may describe expected devices, but they must not fabricate live devices in the session plan.
+### The sensors file provides defaults, not fake devices
 
-### Presets and overlays are expectations, not reality
+The sensors file may tell the system:
 
-Presets and local overlays may contribute:
+- which serial or device path usually maps to which canonical role
+- optional local metadata for that role
+- optional geometry or calibration references
 
-- expected devices
-- default enabled flags
-- default role suggestions
-- display labels
-- rig metadata
+It does not create live devices.
 
-They must not claim that an undiscovered device is present.
+### One session has one fixed setup
 
-### The operator confirms intent, not hardware identity
+At session start, the operator chooses:
 
-The operator may choose:
+- session metadata
+- which discovered devices are recorded
+- which canonical role each recorded device uses
 
-- which discovered devices are enabled for this session
-- whether the suggested canonical role for a discovered device is correct
-- which optional discovered devices are recorded
+All episodes in that session inherit the same setup.
 
-The operator must not choose:
+### Operators confirm intent, not topic meaning
 
-- new canonical role names
-- ad hoc topic names
-- device kind
-- device identifier
+Operators may change:
+
+- whether a discovered device is recorded
+- which allowed canonical role a discovered device uses
+
+Operators do not redefine:
+
+- canonical role names
+- topic names
 - timestamp semantics
 
-### Published profiles are conversion contracts
 
-Published profiles matter for:
-
-- profile compatibility checks
-- later conversion into a fixed dataset schema
-
-They do not define what hardware exists in the live session.
-
-
-## Design Objects
+## Core Objects
 
 ### Shared contract
 
 The shared contract defines:
 
-- canonical role vocabulary
-- canonical raw topic names
-- timestamp semantics
-- dataset-facing field semantics
+- canonical V2 topic names
+- canonical role names
+- timestamp meanings
+- dataset-facing semantics
 
 See [topic-contract.md](./topic-contract.md).
 
-### Discovered device
+### Sensors file
 
-A discovered device is a live hardware fact seen on the current machine.
+The sensors file is the one local rig file.
 
-Examples:
+Its main job is:
 
-- `realsense/130322273305`
-- `realsense/213622251272`
-- `gelsight/28D8PXEC`
+- serial or device-path to canonical-role mapping
 
-A discovered device may carry:
+It may also carry optional metadata such as:
 
-- `device_id`
-- `kind`
-- `model`
-- `serial_number`
-- `device_path` when relevant
-- optional live metadata
+- display labels
+- sensor ids
+- mount information
+- calibration references
+- optional geometry
 
-### Expected device
+### Session profile
 
-An expected device comes from:
+The session profile is the resolved session truth.
 
-- a checked-in preset
-- a local overlay
+It contains:
 
-It represents a remembered lab setup, for example:
-
-- `scene_1` is usually RealSense `213622251272`
-- `lightning_finger_left` is usually GelSight `28D8PXEC`
-
-Expected devices are not live devices.
-
-### Resolved session device
-
-A resolved session device is a discovered device after the system has applied:
-
-- overlay and preset matches
-- default enable flags
-- default role suggestions
-- operator confirmation or correction
-
-This is the object the session actually launches and records.
-
-### Session capture plan
-
-The session capture plan is the resolved session truth:
-
-- discovered devices
-- expected devices
-- missing expected devices
-- resolved session devices
-- selected topics
-- local overlays used
-- published-profile compatibility
+- `session_id`
+- `active_arms`
+- `dataset_id`
+- `robot_type`
+- `sensors_file`
+- resolved `devices`
+- resolved `selected_topics`
 
 
 ## Canonical Role Vocabulary
@@ -149,261 +118,95 @@ The first V2 vocabulary is:
   - `thunder_finger_left`
   - `thunder_finger_right`
 
-Rules:
+Role choices are constrained by device kind:
 
-- canonical role names are lab-controlled
-- operators do not invent canonical names at runtime
-- display labels may differ locally, but canonical role names must stay stable
-- role assignment must be filtered by device kind
-
-### Role-to-kind constraints
-
-- `realsense` may resolve only to:
-  - `lightning_wrist_1`
-  - `thunder_wrist_1`
-  - `scene_1`
-  - `scene_2`
-  - `scene_3`
-- `gelsight` may resolve only to:
-  - `lightning_finger_left`
-  - `lightning_finger_right`
-  - `thunder_finger_left`
-  - `thunder_finger_right`
+- `realsense` may use only wrist or scene roles
+- `gelsight` may use only finger roles
 
 
-## Role To Topic Mapping
+## Session Profile Shape
 
-The session capture plan resolves canonical roles into canonical V2 raw topics.
+Example:
 
-Examples:
+```json
+{
+  "schema_version": 3,
+  "contract_version": "v2",
+  "session_id": "20260323-101500",
+  "active_arms": ["lightning"],
+  "dataset_id": "spark_multisensor_lightning_v1",
+  "robot_type": "spark_lightning",
+  "sensors_file": "data_pipeline/configs/sensors.local.yaml",
+  "devices": [
+    {
+      "kind": "realsense",
+      "identifier": "130322273305",
+      "serial_number": "130322273305",
+      "model": "Intel RealSense D405",
+      "role": "lightning_wrist_1",
+      "enabled": true
+    },
+    {
+      "kind": "realsense",
+      "identifier": "213622251272",
+      "serial_number": "213622251272",
+      "model": "Intel RealSense D455",
+      "role": "scene_1",
+      "enabled": true
+    }
+  ],
+  "selected_topics": [
+    "/spark/lightning/robot/joint_state",
+    "/spark/session/teleop_active",
+    "/spark/cameras/lightning/wrist_1/color/image_raw",
+    "/spark/cameras/world/scene_1/color/image_raw"
+  ]
+}
+```
 
-- `lightning_wrist_1` maps to:
-  - `/spark/cameras/lightning/wrist_1/color/image_raw`
-  - `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
-- `scene_1` maps to:
-  - `/spark/cameras/world/scene_1/color/image_raw`
-  - `/spark/cameras/world/scene_1/depth/image_rect_raw`
-- `lightning_finger_left` maps to:
-  - `/spark/tactile/lightning/finger_left/color/image_raw`
-  - `/spark/tactile/lightning/finger_left/depth/image_raw`
-  - `/spark/tactile/lightning/finger_left/marker_offset`
 
-The session plan does not invent ad hoc topic names. It only resolves canonical role names into the canonical V2 surface.
+## Workflow
 
+1. fill session metadata
+2. choose the sensors file
+3. discover devices
+4. adjust `Record` and `Role` for discovered devices
+5. start the session
+6. validate once
+7. record multiple episodes under that same session profile
 
-## Session Workflow
-
-The intended workflow is:
-
-1. discover live devices
-2. load local overlays and the chosen preset
-3. build expected-device matches and identify missing expected devices
-4. suggest canonical roles for discovered devices
-5. let the operator confirm or correct those suggested roles once
-6. let the operator enable or disable discovered devices for this session
-7. compute selected topics and profile compatibility
-8. record multiple episodes under that session plan
-
-The operator should not redo this flow for every episode unless the rig changed.
+If the rig setup changes materially, start a new session.
 
 
 ## UI Rules
 
-### Session Devices table
+The operator console should expose only:
 
-The main device table must show discovered devices only.
+- session metadata
+- discovered devices
+- subsystem health
+- actions
+- post-take episode notes
 
-It must not show fabricated rows for:
+The main device table should show discovered devices only, with:
 
-- preset-only devices
-- overlay-only devices
-- manually typed devices
-
-Allowed row actions:
-
-- toggle `Record`
-- change the canonical role within the allowed role set for that device kind
-
-Read-only row fields:
-
+- `Record`
 - `Kind`
-- `Identifier`
 - `Model`
-- discovery-backed device identity
+- `Identifier`
+- `Role`
 
-The table must not support:
+It must not expose:
 
-- `Add Camera`
-- `Add GelSight`
-- deleting discovered devices from the inventory view
-
-If the operator does not want a discovered device in this session, they should uncheck `Record`.
-
-### Expected but Missing
-
-Devices expected by preset or overlay but not discovered must appear in a separate section, for example:
-
-- `Expected but Missing`
-
-Those entries are useful for operator clarity, but they are not live session devices and must not be launch targets.
-
-### Source or match labels
-
-If the UI shows an origin column, it must describe expectation matching, not device existence.
-
-Acceptable meanings include:
-
-- `discovered`
-- `matched overlay`
-- `matched preset`
-- `unmatched`
-
-Unacceptable meaning:
-
-- `manual` as if the operator authored a live device into existence
+- fake devices from presets
+- overlay labels
+- expected-vs-missing device panes
+- publishable/blocked profile matrices
+- raw topic checkboxes in the main workflow
 
 
-## Preset And Overlay Semantics
+## Important Boundary
 
-### Preset
+The session profile decides what one session records.
 
-A preset may define:
-
-- metadata defaults
-- expected devices
-- default enabled roles
-- default dataset and robot identifiers
-
-A preset must not be treated as a live device list.
-
-### Local overlay
-
-A local overlay may define:
-
-- serial-to-role defaults
-- display labels
-- enabled-by-default flags
-- calibration references
-- geometry references or matrices
-- other rig-specific facts
-
-A local overlay may help match a discovered device to a canonical role.
-It must not redefine canonical meaning.
-
-
-## Session Capture Plan Shape
-
-The storage format may be JSON or YAML, but the resolved object should contain these sections:
-
-```yaml
-schema_version: 2
-contract_version: v2
-session_id: session-20260323-101500
-
-active_arms:
-  - lightning
-
-local_overlays:
-  - path: data_pipeline/configs/sensors.local.yaml
-    exists: true
-    kind: local_defaults
-
-expected_devices:
-  - expected_id: preset/lightning_wrist_1
-    kind: realsense
-    expected_role: lightning_wrist_1
-    preferred_identifier: "130322273305"
-    required: true
-    source: preset
-
-discovered_devices:
-  - device_id: realsense/130322273305
-    kind: realsense
-    model: Intel RealSense D405
-    serial_number: "130322273305"
-    matched_by:
-      - overlay
-      - preset
-
-  - device_id: realsense/213622251272
-    kind: realsense
-    model: Intel RealSense D455
-    serial_number: "213622251272"
-    matched_by:
-      - overlay
-      - preset
-
-  - device_id: realsense/f1380660
-    kind: realsense
-    model: Intel RealSense L515
-    serial_number: "f1380660"
-    matched_by: []
-
-missing_expected_devices:
-  - expected_id: preset/lightning_finger_left
-    kind: gelsight
-    expected_role: lightning_finger_left
-    preferred_identifier: "28D8PXEC"
-    source: preset
-
-resolved_devices:
-  - device_id: realsense/130322273305
-    kind: realsense
-    enabled: true
-    suggested_role: lightning_wrist_1
-    resolved_role: lightning_wrist_1
-    source: discovered
-
-  - device_id: realsense/213622251272
-    kind: realsense
-    enabled: true
-    suggested_role: scene_1
-    resolved_role: scene_1
-    source: discovered
-
-  - device_id: realsense/f1380660
-    kind: realsense
-    enabled: false
-    suggested_role: scene_2
-    resolved_role: scene_2
-    source: discovered
-
-selected_topics:
-  - /spark/session/teleop_active
-  - /spark/lightning/robot/joint_state
-  - /spark/lightning/robot/eef_pose
-  - /spark/lightning/robot/tcp_wrench
-  - /spark/lightning/robot/gripper_state
-  - /spark/lightning/teleop/cmd_joint_state
-  - /spark/lightning/teleop/cmd_gripper_state
-  - /spark/cameras/lightning/wrist_1/color/image_raw
-  - /spark/cameras/lightning/wrist_1/depth/image_rect_raw
-  - /spark/cameras/world/scene_1/color/image_raw
-  - /spark/cameras/world/scene_1/depth/image_rect_raw
-
-selected_extra_topics: []
-
-profile_compatibility:
-  publishable_profiles:
-    - name: multisensor_20hz_lightning
-      compatible: true
-  incompatible_profiles:
-    - name: multisensor_20hz
-      compatible: false
-      reasons:
-        - missing required arm thunder
-```
-
-
-## Episode Snapshot Rule
-
-Each episode manifest should snapshot the relevant resolved session information:
-
-- active arms
-- local overlays used
-- missing expected devices
-- resolved devices and roles
-- selected topics
-- profile compatibility at record time
-
-The operator resolves the session once, but every episode remains self-describing.
+It does not redefine the shared contract, and it does not change the canonical V2 topic surface.

@@ -240,23 +240,15 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             "operator": args.operator,
         },
         "session": {
-            "schema_version": 2,
+            "schema_version": 3,
             "contract_version": "v2",
             "session_id": "dummy-session",
             "active_arms": active_arms,
-            "local_overlays": [],
-            "default_published_profile": {
-                "name": profile["profile_name"],
-                "path": str(Path(args.profile)),
-                "selection_rule": "dummy_episode_generator_v2",
-            },
-            "discovered_devices": [],
+            "dataset_id": args.dataset_id,
+            "robot_type": args.robot_id,
+            "sensors_file": None,
+            "devices": [],
             "selected_topics": topics,
-            "selected_extra_topics": [],
-            "profile_compatibility": {
-                "publishable_profiles": [],
-                "incompatible_profiles": [],
-            },
         },
         "profile": {
             "name": profile["profile_name"],

@@ -33,7 +33,6 @@ from data_pipeline.pipeline_utils import (
 )
 from data_pipeline.device_discovery import (
     discover_session_devices as discover_runtime_session_devices,
-    discover_session_inventory as discover_runtime_session_inventory,
 )
 from data_pipeline.session_capture_plan import build_session_capture_plan
 
@@ -74,7 +73,7 @@ class ManagedProcess:
 class OperatorConsoleBackend:
     def __init__(self, presets_path: Path = PRESETS_PATH):
         self.presets_path = Path(presets_path)
-        self.presets = self._load_presets()
+        self.default_config = self._load_default_config()
         self.processes = {
             "spark_devices": ManagedProcess("spark_devices", "SPARK Devices"),
             "teleop_gui": ManagedProcess("teleop_gui", "Teleop GUI"),
@@ -121,22 +120,20 @@ class OperatorConsoleBackend:
     }
     STOP_GRACE_S = 5.0
 
-    def _load_presets(self) -> dict[str, dict[str, Any]]:
+    def _load_default_config(self) -> dict[str, Any]:
         data = load_yaml(self.presets_path)
         presets = data.get("presets", {})
-        if not isinstance(presets, dict):
+        if not isinstance(presets, dict) or not presets:
             raise ValueError("operator_console_presets.yaml must contain a 'presets' mapping")
-        return presets
-
-    def list_presets(self) -> list[tuple[str, str]]:
-        return [
-            (preset_id, str(spec.get("label", preset_id)))
-            for preset_id, spec in self.presets.items()
-        ]
-
-    def get_preset(self, preset_id: str) -> dict[str, Any]:
-        spec = self.presets[preset_id]
+        if "default" in presets and isinstance(presets["default"], dict):
+            spec = presets["default"]
+        else:
+            first_key = next(iter(presets))
+            spec = presets[first_key]
         return json.loads(json.dumps(spec))
+
+    def default_form_config(self) -> dict[str, Any]:
+        return json.loads(json.dumps(self.default_config))
 
     def session_state(self, config: dict[str, Any]) -> str:
         recorder = self.processes["recorder"]
@@ -162,7 +159,6 @@ class OperatorConsoleBackend:
         return "idle"
 
     def snapshot(self, config: dict[str, Any]) -> dict[str, Any]:
-        preview_capture_plan, preview_capture_plan_error = self._preview_session_capture_plan(config)
         return {
             "session_state": self.session_state(config),
             "validation_state": self.validation_state(config),
@@ -188,9 +184,6 @@ class OperatorConsoleBackend:
             "latest_recording_ok": self.latest_recording_ok,
             "latest_recording_check_output": self.latest_recording_check_output,
             "recording_check_running": self.recording_check_running,
-            "current_session_capture_plan": self.current_session_capture_plan,
-            "preview_session_capture_plan": preview_capture_plan,
-            "preview_session_capture_plan_error": preview_capture_plan_error,
         }
 
     def validation_state(self, config: dict[str, Any]) -> str:
@@ -369,18 +362,6 @@ class OperatorConsoleBackend:
         except Exception as exc:
             self.last_action_error = str(exc)
             return []
-
-    def discover_session_inventory(self, config: dict[str, Any]) -> dict[str, Any]:
-        self.last_action_error = ""
-        try:
-            return discover_runtime_session_inventory(config)
-        except Exception as exc:
-            self.last_action_error = str(exc)
-            return {
-                "discovered_devices": [],
-                "expected_devices": [],
-                "missing_expected_devices": [],
-            }
 
     def request_health_refresh(self, config: dict[str, Any]) -> None:
         if self.health_refresh_in_flight:
@@ -765,7 +746,7 @@ class OperatorConsoleBackend:
     def _realsense_required_topics(self, config: dict[str, Any]) -> list[str]:
         topics: list[str] = []
         for device in self._enabled_session_devices(config, "realsense"):
-            role = str(device.get("resolved_role", "")).strip()
+            role = str(device.get("role", "")).strip()
             parts = camera_path_parts_for_role(role)
             if parts is None:
                 continue
@@ -777,7 +758,7 @@ class OperatorConsoleBackend:
     def _gelsight_required_topics(self, config: dict[str, Any]) -> list[str]:
         topics: list[str] = []
         for device in self._enabled_session_devices(config, "gelsight"):
-            role = str(device.get("resolved_role", "")).strip()
+            role = str(device.get("role", "")).strip()
             parts = tactile_path_parts_for_role(role)
             if parts is None:
                 continue
@@ -1102,7 +1083,7 @@ class OperatorConsoleBackend:
     def _build_realsense_command(self, config: dict[str, Any]) -> str:
         camera_specs: list[str] = []
         for device in self._enabled_session_devices(config, "realsense"):
-            role = str(device.get("resolved_role", "")).strip()
+            role = str(device.get("role", "")).strip()
             serial = str(device.get("serial_number", "")).strip() or str(device.get("identifier", "")).strip()
             parts = camera_path_parts_for_role(role)
             if parts is None or not serial:
@@ -1120,7 +1101,7 @@ class OperatorConsoleBackend:
     def _build_gelsight_command(self, config: dict[str, Any]) -> str:
         sensor_specs: list[str] = []
         for device in self._enabled_session_devices(config, "gelsight"):
-            role = str(device.get("resolved_role", "")).strip()
+            role = str(device.get("role", "")).strip()
             device_path = str(device.get("device_path", "")).strip() or str(device.get("identifier", "")).strip()
             parts = tactile_path_parts_for_role(role)
             if parts is None or not device_path:
@@ -1155,11 +1136,8 @@ class OperatorConsoleBackend:
             "--sensors-file",
             shlex.quote(str(config["sensors_file"])),
         ]
-        extra_topics = str(config.get("extra_topics", "")).strip()
         if episode_id:
             args.extend(["--episode-id", shlex.quote(episode_id)])
-        if extra_topics:
-            args.extend(["--extra-topics", shlex.quote(extra_topics)])
         if self.current_session_capture_plan_path is not None:
             args.extend(["--session-plan-file", shlex.quote(str(self.current_session_capture_plan_path))])
         if dry_run:
@@ -1312,9 +1290,3 @@ class OperatorConsoleBackend:
 
         updated = lines[: notes_index + 1] + [""] + note_text.splitlines()
         return "\n".join(updated) + "\n"
-
-    def _preview_session_capture_plan(self, config: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
-        try:
-            return build_session_capture_plan(config, session_id=self.session_id), ""
-        except Exception as exc:
-            return None, str(exc)

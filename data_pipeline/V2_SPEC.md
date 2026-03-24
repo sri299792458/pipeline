@@ -57,7 +57,7 @@ Historical V1 material is archive-only and must not be used to justify new fallb
 
 ## Core Objects
 
-### Shared Contract
+### Shared contract
 
 The shared contract defines:
 
@@ -68,43 +68,28 @@ The shared contract defines:
 
 It is lab-wide and must not vary by operator.
 
-### Session Capture Plan
+### Sensors file
 
-The session capture plan defines:
+The sensors file is the one local rig file.
 
-- discovered devices
-- enabled devices
-- resolved canonical roles
-- resolved raw topics for this session
-- applied local overlays
-- published-profile compatibility
+Its main job is:
 
-It is session-level state, not episode-level repetition.
+- serial or device-path to canonical-role mapping
 
-### Published Profile
+It may also hold optional local metadata such as calibration references or geometry.
 
-A published profile defines a fixed shared dataset schema:
+### Session profile
 
-- which canonical raw topics are required
-- which canonical raw topics are optional
-- how raw topics map into published fields
-- alignment rules and thresholds
+The session profile is created once at session start.
 
-It is used for conversion, not for deciding which devices are allowed to exist in a session.
+It defines:
 
-### Local Overlay
+- session metadata
+- discovered devices chosen for recording
+- canonical roles confirmed for those devices
+- resolved raw topics for that session
 
-A local overlay is optional machine- or operator-local metadata, for example:
-
-- serial-to-role defaults
-- enabled-by-default flags
-- display labels
-- mount metadata
-- calibration references
-- optional geometry files or matrices
-- launch defaults
-
-It may add local facts. It must not redefine shared meaning.
+All episodes recorded in that session inherit the same session profile.
 
 
 ## Canonical Raw Topic Surface
