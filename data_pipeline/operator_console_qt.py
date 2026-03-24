@@ -20,6 +20,7 @@ try:
         QFrame,
         QGridLayout,
         QGroupBox,
+        QHeaderView,
         QHBoxLayout,
         QLabel,
         QLineEdit,
@@ -303,11 +304,17 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.session_devices_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.session_devices_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.session_devices_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.session_devices_table.horizontalHeader().setStretchLastSection(True)
-        self.session_devices_table.setColumnWidth(0, 70)
-        self.session_devices_table.setColumnWidth(1, 100)
-        self.session_devices_table.setColumnWidth(2, 120)
-        self.session_devices_table.setColumnWidth(3, 260)
+        header = self.session_devices_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.session_devices_table.setColumnWidth(0, 68)
+        self.session_devices_table.setColumnWidth(1, 92)
+        self.session_devices_table.setColumnWidth(2, 110)
+        self.session_devices_table.setColumnWidth(4, 150)
         layout.addWidget(self.session_devices_table)
 
         controls = QHBoxLayout()
