@@ -35,6 +35,8 @@ ACTIVE_ARMS_TO_PROFILE_NAME = {
 }
 
 _TOPIC_TYPE_PATTERN = re.compile(r"^(?P<topic>/\S+)\s+\[(?P<type>[^\]]+)\]\s*$")
+_CAMERA_TOPIC_PATTERN = re.compile(r"^/spark/cameras/(?P<camera_name>[^/]+)/(?P<suffix>color/image_raw|depth/image_rect_raw)$")
+_TACTILE_TOPIC_PATTERN = re.compile(r"^/spark/tactile/(?P<side>left|right)/(?P<suffix>color/image_raw|depth/image_raw|marker_offset)$")
 _STATE_SOURCE_COUNTS = (
     ("joint_state", 6),
     ("eef_pose", 6),
@@ -314,41 +316,62 @@ def infer_sensor_metadata(
     sensor_overrides = sensor_overrides or {}
     sensors: list[dict[str, Any]] = []
 
-    camera_specs = [
-        {
-            "sensor_name": "wrist",
-            "topic_prefix": "/spark/cameras/wrist",
-            "sensor_id": "cam_wrist_0",
+    def camera_defaults(camera_name: str) -> dict[str, Any]:
+        if camera_name == "wrist":
+            return {
+                "sensor_id": "cam_wrist_0",
+                "modality": "rgbd_camera",
+                "attached_to": "unknown",
+                "mount_site": "wrist",
+                "model": None,
+            }
+        if camera_name == "scene":
+            return {
+                "sensor_id": "cam_scene_0",
+                "modality": "rgbd_camera",
+                "attached_to": "world",
+                "mount_site": "scene_0",
+                "model": None,
+            }
+        if camera_name.startswith("scene_"):
+            return {
+                "sensor_id": f"cam_{camera_name}",
+                "modality": "rgbd_camera",
+                "attached_to": "world",
+                "mount_site": camera_name,
+                "model": None,
+            }
+        if "_wrist_" in camera_name:
+            attached_to = camera_name.split("_wrist_", 1)[0] or "unknown"
+            return {
+                "sensor_id": f"cam_{camera_name}",
+                "modality": "rgbd_camera",
+                "attached_to": attached_to,
+                "mount_site": "wrist",
+                "model": None,
+            }
+        return {
+            "sensor_id": f"cam_{camera_name}",
             "modality": "rgbd_camera",
             "attached_to": "unknown",
-            "mount_site": "wrist",
+            "mount_site": camera_name,
             "model": None,
-        },
-        {
-            "sensor_name": "scene",
-            "topic_prefix": "/spark/cameras/scene",
-            "sensor_id": "cam_scene_0",
-            "modality": "rgbd_camera",
-            "attached_to": "world",
-            "mount_site": "scene_0",
-            "model": None,
-        },
-    ]
-    for spec in camera_specs:
-        sensor_name = spec["sensor_name"]
-        topic_prefix = spec["topic_prefix"]
-        sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
-        if not sensor_topics:
-            continue
+        }
 
+    camera_topics: dict[str, list[str]] = {}
+    for topic in selected_topics:
+        match = _CAMERA_TOPIC_PATTERN.fullmatch(topic)
+        if not match:
+            continue
+        camera_topics.setdefault(match.group("camera_name"), []).append(topic)
+
+    for camera_name in sorted(camera_topics):
+        topic_prefix = f"/spark/cameras/{camera_name}"
+        sensor_topics = sorted(camera_topics[camera_name])
         sensor = {
-            "sensor_id": spec["sensor_id"],
-            "modality": spec["modality"],
-            "attached_to": spec["attached_to"],
-            "mount_site": spec["mount_site"],
+            **camera_defaults(camera_name),
             "topic_names": sensor_topics,
             "serial_number": None,
-            "model": spec["model"],
             "calibration_ref": None,
         }
 
@@ -363,7 +386,13 @@ def infer_sensor_metadata(
         if "device_type" in params and params["device_type"] not in {"", "''", '""'}:
             sensor["model"] = params["device_type"]
 
-        sensor.update(sensor_overrides.get(sensor_name, {}))
+        overlay = (
+            sensor_overrides.get(camera_name)
+            or (sensor_overrides.get("wrist") if camera_name == "wrist" else {})
+            or (sensor_overrides.get("scene") if camera_name == "scene" else {})
+        )
+        sensor.update(overlay)
+        sensor["topic_names"] = sensor_topics
         sensors.append(sensor)
 
     tactile_specs = [
@@ -506,78 +535,37 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
             "expected_rate_hz": _rate_range(20, 200),
         }
 
-    if topic == "/spark/cameras/wrist/color/image_raw":
+    camera_match = _CAMERA_TOPIC_PATTERN.fullmatch(topic)
+    if camera_match:
+        camera_name = camera_match.group("camera_name")
+        suffix = camera_match.group("suffix")
+        stream_name = {"wrist": "wrist", "scene": "scene"}.get(camera_name, camera_name)
+        if suffix == "color/image_raw":
+            return {
+                "producer": {
+                    "process": "data_pipeline/realsense_bridge.py",
+                    "node": f"/spark/cameras/{camera_name}",
+                    "upstream_source": f"Intel RealSense {stream_name} color stream",
+                },
+                "semantics": {
+                    "kind": "raw_sensor",
+                    "value_meaning": "RGB image observation",
+                    "units": None,
+                    "convention": None,
+                },
+                "timestamp": {
+                    "carrier": "header.stamp",
+                    "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
+                    "vocabulary": "host_capture_time_v1",
+                    "has_header": True,
+                },
+                "expected_rate_hz": _rate_range(20, 30),
+            }
         return {
             "producer": {
                 "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/wrist",
-                "upstream_source": "Intel RealSense wrist color stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "RGB image observation",
-                "units": None,
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    if topic == "/spark/cameras/wrist/depth/image_rect_raw":
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/wrist",
-                "upstream_source": "Intel RealSense wrist depth stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "Depth image",
-                "units": "millimeters",
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    if topic == "/spark/cameras/scene/color/image_raw":
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/scene",
-                "upstream_source": "Intel RealSense scene color stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "RGB image observation",
-                "units": None,
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    if topic == "/spark/cameras/scene/depth/image_rect_raw":
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/scene",
-                "upstream_source": "Intel RealSense scene depth stream",
+                "node": f"/spark/cameras/{camera_name}",
+                "upstream_source": f"Intel RealSense {stream_name} depth stream",
             },
             "semantics": {
                 "kind": "raw_sensor",
@@ -594,7 +582,7 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
             "expected_rate_hz": _rate_range(20, 30),
         }
 
-    tactile_match = re.fullmatch(r"/spark/tactile/(left|right)/(color/image_raw|depth/image_raw|marker_offset)", topic)
+    tactile_match = _TACTILE_TOPIC_PATTERN.fullmatch(topic)
     if tactile_match:
         side, suffix = tactile_match.groups()
         kind = "raw_sensor" if suffix == "color/image_raw" else "derived_sensor"

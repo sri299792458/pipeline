@@ -1960,3 +1960,11 @@
 - Discovery itself remains passive and does not spawn long-lived child processes.
 - Session-owned processes are still explicit and tracked in `self.processes`, but `_stop_process(...)` now escalates to `SIGKILL` after a short grace period if a child ignores the initial stop signal.
 - This is specifically to avoid the class of lab issue where a launcher or ROS subprocess keeps running in the background after the console thinks it was stopped.
+
+### Session devices now drive extra RealSense streams
+
+- Tightened the session-plan/backend boundary so enabled session devices now control more than just the primary `wrist` and `scene` camera slots.
+- [session_capture_plan.py](/home/srinivas/Desktop/pipeline/data_pipeline/session_capture_plan.py) now derives raw sensor topics from the enabled device list, including additional RealSense roles like `scene_1`.
+- [operator_console_backend.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) now translates those extra enabled RealSense devices into `extra_camera_specs` for [realsense_contract.launch.py](/home/srinivas/Desktop/pipeline/data_pipeline/launch/realsense_contract.launch.py), while keeping the first wrist-role and first scene-role cameras on the legacy `wrist` and `scene` topics for profile compatibility.
+- RealSense health checks, validation probes, and recording integrity checks now expect the enabled extra camera streams too, so an enabled `scene_1` device is no longer silently ignored.
+- [pipeline_utils.py](/home/srinivas/Desktop/pipeline/data_pipeline/pipeline_utils.py) now treats arbitrary `/spark/cameras/<camera_name>/...` topics as normal RealSense topics when building manifest sensor metadata and recorded-topic descriptors.

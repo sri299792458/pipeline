@@ -240,13 +240,13 @@ discovered_devices:
     resolved_role: lightning_finger_left
 
 selected_topics:
-  - /spark/cameras/lightning/wrist_0/color/image_raw
-  - /spark/cameras/lightning/wrist_0/depth/image_rect_raw
-  - /spark/cameras/world/scene_0/color/image_raw
-  - /spark/cameras/world/scene_0/depth/image_rect_raw
-  - /spark/cameras/world/scene_1/color/image_raw
-  - /spark/cameras/world/scene_1/depth/image_rect_raw
-  - /spark/tactile/lightning/finger_left/color/image_raw
+  - /spark/cameras/wrist/color/image_raw
+  - /spark/cameras/wrist/depth/image_rect_raw
+  - /spark/cameras/scene/color/image_raw
+  - /spark/cameras/scene/depth/image_rect_raw
+  - /spark/cameras/scene_1/color/image_raw
+  - /spark/cameras/scene_1/depth/image_rect_raw
+  - /spark/tactile/left/color/image_raw
   - /spark/lightning/robot/joint_state
   - /spark/lightning/teleop/cmd_joint_state
   - /spark/thunder/robot/joint_state
@@ -482,6 +482,14 @@ The operator console now uses discovery in two places:
 - the `Session Devices` table has a `Discover Devices` button to refresh the device list
 
 This means the current console no longer depends purely on stale preset values to know which RealSense cameras are available on the host.
+
+The next backend change after discovery made the enabled session device list authoritative for the current raw camera surface too:
+
+- the first enabled wrist-role RealSense still launches as the legacy `wrist` stream
+- the first enabled scene-role RealSense still launches as the legacy `scene` stream
+- any additional enabled RealSense devices are now launched through `extra_camera_specs`
+- those extra cameras now appear in `selected_topics` using their resolved role names, such as `/spark/cameras/scene_1/...`
+- health checks and validation now expect those extra color streams too, so an enabled extra camera is no longer silently ignored by the session
 
 The current limitations are still explicit:
 

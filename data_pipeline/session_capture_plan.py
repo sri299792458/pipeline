@@ -116,6 +116,111 @@ def _runtime_slot_for_device(device: dict[str, Any]) -> str | None:
     return None
 
 
+def _primary_realsense_roles(devices: list[dict[str, Any]]) -> tuple[str | None, str | None]:
+    primary_wrist_role: str | None = None
+    primary_scene_role: str | None = None
+    for device in devices:
+        if not bool(device.get("enabled", False)):
+            continue
+        if str(device.get("kind", "")).strip() != "realsense":
+            continue
+        role = str(device.get("resolved_role", "")).strip()
+        if primary_wrist_role is None and "_wrist_" in role:
+            primary_wrist_role = role
+            continue
+        if primary_scene_role is None and role.startswith("scene_"):
+            primary_scene_role = role
+    return primary_wrist_role, primary_scene_role
+
+
+def realsense_camera_name_for_device(
+    device: dict[str, Any],
+    *,
+    primary_wrist_role: str | None,
+    primary_scene_role: str | None,
+) -> str:
+    role = str(device.get("resolved_role", "")).strip()
+    if role and role == primary_wrist_role:
+        return "wrist"
+    if role and role == primary_scene_role:
+        return "scene"
+    return role or "camera"
+
+
+def realsense_launch_plan(devices: list[dict[str, Any]]) -> dict[str, Any]:
+    primary_wrist_role, primary_scene_role = _primary_realsense_roles(devices)
+    wrist_serial = ""
+    scene_serial = ""
+    extra_camera_specs: list[str] = []
+    launched_cameras: list[dict[str, str]] = []
+
+    for device in devices:
+        if not bool(device.get("enabled", False)):
+            continue
+        if str(device.get("kind", "")).strip() != "realsense":
+            continue
+        serial_number = (
+            str(device.get("serial_number", "")).strip()
+            or str(device.get("identifier", "")).strip()
+        )
+        if not serial_number:
+            continue
+        camera_name = realsense_camera_name_for_device(
+            device,
+            primary_wrist_role=primary_wrist_role,
+            primary_scene_role=primary_scene_role,
+        )
+        launched_cameras.append(
+            {
+                "camera_name": camera_name,
+                "serial_number": serial_number,
+                "color_profile": "640,480,30",
+                "depth_profile": "640,480,30",
+            }
+        )
+        if camera_name == "wrist" and not wrist_serial:
+            wrist_serial = serial_number
+            continue
+        if camera_name == "scene" and not scene_serial:
+            scene_serial = serial_number
+            continue
+        extra_camera_specs.append(f"{camera_name};{serial_number};640,480,30;640,480,30")
+
+    return {
+        "wrist_serial_no": wrist_serial,
+        "scene_serial_no": scene_serial,
+        "extra_camera_specs": extra_camera_specs,
+        "cameras": launched_cameras,
+    }
+
+
+def session_sensor_topics(devices: list[dict[str, Any]]) -> list[str]:
+    topics: set[str] = set()
+    launch_plan = realsense_launch_plan(devices)
+    for camera in launch_plan["cameras"]:
+        prefix = f"/spark/cameras/{camera['camera_name']}"
+        topics.add(prefix + "/color/image_raw")
+        topics.add(prefix + "/depth/image_rect_raw")
+
+    for device in devices:
+        if not bool(device.get("enabled", False)):
+            continue
+        if str(device.get("kind", "")).strip() != "gelsight":
+            continue
+        role = str(device.get("resolved_role", "")).strip()
+        if role.endswith("finger_left"):
+            prefix = "/spark/tactile/left"
+        elif role.endswith("finger_right"):
+            prefix = "/spark/tactile/right"
+        else:
+            continue
+        topics.add(prefix + "/color/image_raw")
+        topics.add(prefix + "/depth/image_raw")
+        topics.add(prefix + "/marker_offset")
+
+    return sorted(topics)
+
+
 def _selected_topics_for_session(
     *,
     profile: dict[str, Any],
@@ -136,21 +241,7 @@ def _selected_topics_for_session(
     if teleop_activity_topic:
         topics.add(teleop_activity_topic)
 
-    for image_spec in published.get("images", []):
-        topic = str(image_spec.get("topic", "")).strip()
-        if not topic:
-            continue
-        slot = _topic_sensor_slot(topic)
-        if slot is None or slot in enabled_slots:
-            topics.add(topic)
-
-    for depth_spec in profile.get("published_depth", []):
-        topic = str(depth_spec.get("topic", "")).strip()
-        if not topic:
-            continue
-        slot = _topic_sensor_slot(topic)
-        if slot is None or slot in enabled_slots:
-            topics.add(topic)
+    topics.update(session_sensor_topics(devices))
 
     for topic in profile.get("raw_only_topics", []):
         topic_str = str(topic).strip()
