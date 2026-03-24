@@ -1,4 +1,4 @@
-# Offline converter environment for the SPARK V1 pipeline.
+# Offline converter environment for the SPARK data pipeline.
 # Keep this narrower than the full LeRobot dependency set: the goal here is
 # rosbag reading plus dataset creation/export, not training or policy inference.
 

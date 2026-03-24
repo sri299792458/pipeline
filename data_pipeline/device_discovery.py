@@ -9,7 +9,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from data_pipeline.pipeline_utils import load_optional_sensor_overrides, normalize_active_arms, parse_task_list
+from data_pipeline.pipeline_utils import (
+    camera_path_parts_for_role,
+    load_optional_sensor_overrides,
+    normalize_active_arms,
+    parse_task_list,
+    tactile_path_parts_for_role,
+)
 
 try:
     import pyrealsense2 as rs
@@ -32,34 +38,32 @@ def _normalize_serial(value: str | None) -> str:
 
 
 def _canonical_role_from_sensor(sensor_name: str, sensor: dict[str, Any], active_arms: list[str]) -> str:
+    sensor_name = str(sensor_name).strip()
+    if camera_path_parts_for_role(sensor_name) is not None or tactile_path_parts_for_role(sensor_name) is not None:
+        return sensor_name
+
     attached_to = str(sensor.get("attached_to", "")).strip()
     mount_site = str(sensor.get("mount_site", "")).strip()
 
     if mount_site.startswith("scene_"):
         return mount_site
-    if mount_site == "wrist" and attached_to:
-        return f"{attached_to}_wrist_0"
+    if mount_site.startswith("wrist_") and attached_to:
+        return f"{attached_to}_{mount_site}"
     if mount_site.startswith("finger_") and attached_to:
         return f"{attached_to}_{mount_site}"
-
-    primary_arm = active_arms[0] if active_arms else "lightning"
-    fallback = {
-        "wrist": f"{primary_arm}_wrist_0",
-        "scene": "scene_0",
-        "left": f"{primary_arm}_finger_left",
-        "right": f"{primary_arm}_finger_right",
-    }
-    return fallback.get(sensor_name, sensor_name)
+    return sensor_name
 
 
-def _enabled_default_for_overlay(sensor_name: str, config: dict[str, Any]) -> bool:
-    if sensor_name in {"wrist", "scene"}:
-        return bool(config.get("realsense_enabled", True))
-    if sensor_name == "left":
-        return bool(config.get("gelsight_enable_left", False))
-    if sensor_name == "right":
-        return bool(config.get("gelsight_enable_right", False))
-    return False
+def _enabled_roles(config: dict[str, Any]) -> set[str]:
+    roles: set[str] = set()
+    for entry in config.get("session_devices", []) if isinstance(config.get("session_devices", []), list) else []:
+        if not isinstance(entry, dict):
+            continue
+        if bool(entry.get("enabled", False)):
+            role = str(entry.get("resolved_role", "")).strip() or str(entry.get("suggested_role", "")).strip()
+            if role:
+                roles.add(role)
+    return roles
 
 
 def _overlay_entry_from_sensor(
@@ -96,13 +100,10 @@ def _overlay_entry_from_sensor(
     return entry
 
 
-def _matched_overlay_for_realsense(
-    serial_number: str,
-    sensor_overrides: dict[str, dict[str, Any]],
-) -> tuple[str, dict[str, Any]] | tuple[None, None]:
+def _matched_overlay_for_realsense(serial_number: str, sensor_overrides: dict[str, dict[str, Any]]) -> tuple[str, dict[str, Any]] | tuple[None, None]:
     normalized = _normalize_serial(serial_number)
     for sensor_name, sensor in sensor_overrides.items():
-        if sensor_name not in {"wrist", "scene"}:
+        if camera_path_parts_for_role(sensor_name) is None:
             continue
         if _normalize_serial(sensor.get("serial_number")) == normalized:
             return sensor_name, sensor
@@ -117,7 +118,7 @@ def _matched_overlay_for_gelsight(
     normalized_serial = _normalize_serial(serial_number)
     path_lower = device_path.lower()
     for sensor_name, sensor in sensor_overrides.items():
-        if sensor_name not in {"left", "right"}:
+        if tactile_path_parts_for_role(sensor_name) is None:
             continue
         overlay_serial = _normalize_serial(sensor.get("serial_number"))
         if overlay_serial and overlay_serial == normalized_serial:
@@ -201,8 +202,8 @@ def _looks_like_gelsight(path: str, sensor_overrides: dict[str, dict[str, Any]])
         return True
     if "arducam" in lowered:
         return True
-    for sensor_name in ("left", "right"):
-        overlay_serial = _normalize_serial(sensor_overrides.get(sensor_name, {}).get("serial_number"))
+    for sensor in sensor_overrides.values():
+        overlay_serial = _normalize_serial(sensor.get("serial_number"))
         if overlay_serial and overlay_serial in lowered:
             return True
     return False
@@ -235,12 +236,14 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
     active_arms = normalize_active_arms(parse_task_list(str(config.get("active_arms", ""))))
     sensors_file = str(config.get("sensors_file", "")).strip()
     sensor_overrides = load_optional_sensor_overrides(sensors_file) if sensors_file and Path(sensors_file).exists() else {}
+    enabled_roles = _enabled_roles(config)
 
     devices: list[dict[str, Any]] = []
     used_roles: set[str] = set()
 
     realsense_cameras = _discover_realsense_sdk() or _discover_realsense_v4l()
     for camera in realsense_cameras:
+        primary_arm = active_arms[0] if active_arms else "lightning"
         sensor_name, sensor = _matched_overlay_for_realsense(camera["serial_number"], sensor_overrides)
         if sensor_name and sensor is not None:
             entry = _overlay_entry_from_sensor(
@@ -249,7 +252,7 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
                 kind="realsense",
                 identifier=camera["serial_number"],
                 active_arms=active_arms,
-                enabled=_enabled_default_for_overlay(sensor_name, config),
+                enabled=_canonical_role_from_sensor(sensor_name, sensor, active_arms) in enabled_roles,
                 source="discovered",
             )
             entry["model"] = camera["model"]
@@ -257,10 +260,10 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
             devices.append(entry)
             continue
 
-        if f"{active_arms[0]}_wrist_0" not in used_roles and " 405" in f" {camera['model']}":
-            suggested_role = f"{active_arms[0]}_wrist_0" if active_arms else "lightning_wrist_0"
+        if f"{primary_arm}_wrist_1" not in used_roles and " 405" in f" {camera['model']}":
+            suggested_role = f"{primary_arm}_wrist_1"
         else:
-            scene_index = 0
+            scene_index = 1
             while f"scene_{scene_index}" in used_roles:
                 scene_index += 1
             suggested_role = f"scene_{scene_index}"
@@ -281,6 +284,7 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
         )
 
     for tactile in _discover_gelsight_v4l(sensor_overrides):
+        primary_arm = active_arms[0] if active_arms else "lightning"
         sensor_name, sensor = _matched_overlay_for_gelsight(
             tactile["device_path"],
             tactile["serial_number"],
@@ -293,7 +297,7 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
                 kind="gelsight",
                 identifier=tactile["device_path"],
                 active_arms=active_arms,
-                enabled=_enabled_default_for_overlay(sensor_name, config),
+                enabled=_canonical_role_from_sensor(sensor_name, sensor, active_arms) in enabled_roles,
                 source="discovered",
             )
             entry["model"] = tactile["model"]
@@ -301,7 +305,6 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
             devices.append(entry)
             continue
 
-        primary_arm = active_arms[0] if active_arms else "lightning"
         candidate_roles = [f"{primary_arm}_finger_left", f"{primary_arm}_finger_right"]
         suggested_role = next((role for role in candidate_roles if role not in used_roles), candidate_roles[0])
         used_roles.add(suggested_role)

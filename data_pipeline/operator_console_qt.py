@@ -47,7 +47,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.operator_console_backend import OperatorConsoleBackend
-from data_pipeline.pipeline_utils import load_optional_sensor_overrides
 
 
 STATUS_STYLES = {
@@ -59,11 +58,11 @@ STATUS_STYLES = {
 }
 
 DEVICE_ROLE_CHOICES = [
-    "lightning_wrist_0",
-    "thunder_wrist_0",
-    "scene_0",
+    "lightning_wrist_1",
+    "thunder_wrist_1",
     "scene_1",
     "scene_2",
+    "scene_3",
     "lightning_finger_left",
     "lightning_finger_right",
     "thunder_finger_left",
@@ -368,131 +367,23 @@ class OperatorConsoleQtWindow(QMainWindow):
         layout.addWidget(self.session_plan_topics_text)
         return box
 
-    def _canonical_role_from_overlay(self, overlay_key: str, sensor: dict[str, object], active_arms: list[str]) -> str:
-        attached_to = str(sensor.get("attached_to", "")).strip()
-        mount_site = str(sensor.get("mount_site", "")).strip()
-        if mount_site.startswith("scene_"):
-            return mount_site
-        if mount_site == "wrist" and attached_to:
-            return f"{attached_to}_wrist_0"
-        if mount_site.startswith("finger_") and attached_to:
-            return f"{attached_to}_{mount_site}"
-        primary_arm = active_arms[0] if active_arms else "lightning"
-        fallback = {
-            "wrist": f"{primary_arm}_wrist_0",
-            "scene": "scene_0",
-            "left": f"{primary_arm}_finger_left",
-            "right": f"{primary_arm}_finger_right",
-        }
-        return fallback.get(overlay_key, overlay_key)
-
     def _default_session_devices_for_preset(self, preset: dict[str, object]) -> list[dict[str, object]]:
-        sensors_file = str(preset.get("sensors_file", "data_pipeline/configs/sensors.local.yaml")).strip()
-        try:
-            sensor_overrides = load_optional_sensor_overrides(sensors_file)
-        except Exception:
-            sensor_overrides = {}
-
-        active_arms = [arm.strip() for arm in str(preset.get("active_arms", "lightning")).split(",") if arm.strip()]
-        if not active_arms:
-            active_arms = ["lightning"]
-
-        devices: list[dict[str, object]] = []
-        realsense = preset.get("realsense", {}) if isinstance(preset.get("realsense", {}), dict) else {}
-        gelsight = preset.get("gelsight", {}) if isinstance(preset.get("gelsight", {}), dict) else {}
-
-        def add_overlay_device(
-            *,
-            kind: str,
-            overlay_key: str,
-            identifier: str,
-            enabled: bool,
-            source: str,
-            extra: dict[str, object] | None = None,
-        ) -> None:
-            sensor = dict(sensor_overrides.get(overlay_key, {}))
-            role = self._canonical_role_from_overlay(overlay_key, sensor, active_arms)
-            entry: dict[str, object] = {
-                "kind": kind,
-                "identifier": identifier,
-                "enabled": enabled,
-                "suggested_role": role,
-                "resolved_role": role,
-                "overlay_key": overlay_key,
-                "source": source,
-            }
-            for key in ("model", "sensor_id", "attached_to", "mount_site", "calibration_ref"):
-                if sensor.get(key) not in {"", None}:
-                    entry[key] = sensor[key]
-            if extra:
-                entry.update(extra)
-            devices.append(entry)
-
-        wrist_serial = str(realsense.get("wrist_serial_no", "")).strip()
-        if wrist_serial or bool(realsense.get("enabled", True)):
-            add_overlay_device(
-                kind="realsense",
-                overlay_key="wrist",
-                identifier=wrist_serial,
-                enabled=bool(realsense.get("enabled", True)),
-                source="preset",
-                extra={"serial_number": wrist_serial},
-            )
-
-        scene_serial = str(realsense.get("scene_serial_no", "")).strip()
-        if scene_serial or bool(realsense.get("enabled", True)):
-            add_overlay_device(
-                kind="realsense",
-                overlay_key="scene",
-                identifier=scene_serial,
-                enabled=bool(realsense.get("enabled", True)),
-                source="preset",
-                extra={"serial_number": scene_serial},
-            )
-
-        left_path = str(gelsight.get("left_device_path", "")).strip()
-        if left_path or bool(gelsight.get("enable_left", False)):
-            add_overlay_device(
-                kind="gelsight",
-                overlay_key="left",
-                identifier=left_path,
-                enabled=bool(gelsight.get("enable_left", False)),
-                source="preset",
-                extra={"device_path": left_path},
-            )
-
-        right_path = str(gelsight.get("right_device_path", "")).strip()
-        if right_path or bool(gelsight.get("enable_right", False)):
-            add_overlay_device(
-                kind="gelsight",
-                overlay_key="right",
-                identifier=right_path,
-                enabled=bool(gelsight.get("enable_right", False)),
-                source="preset",
-                extra={"device_path": right_path},
-            )
-
-        return devices
+        session_devices = preset.get("session_devices", [])
+        if isinstance(session_devices, list) and session_devices:
+            return [dict(device) for device in session_devices if isinstance(device, dict)]
+        return []
 
     def _discovery_seed_config(self, preset: dict[str, object] | None = None) -> dict[str, object]:
         active_arms = str((preset or {}).get("active_arms", self._get_field("active_arms"))).strip() or "lightning"
         sensors_file = str((preset or {}).get("sensors_file", self._get_field("sensors_file"))).strip()
-        realsense = (preset or {}).get("realsense", {}) if isinstance((preset or {}).get("realsense", {}), dict) else {}
-        gelsight = (preset or {}).get("gelsight", {}) if isinstance((preset or {}).get("gelsight", {}), dict) else {}
-
-        session_devices = self._session_devices() if self.session_devices_table.rowCount() > 0 else []
+        preset_devices = (preset or {}).get("session_devices", []) if isinstance((preset or {}).get("session_devices", []), list) else []
+        session_devices = [dict(device) for device in preset_devices if isinstance(device, dict)] if preset_devices else (
+            self._session_devices() if self.session_devices_table.rowCount() > 0 else []
+        )
         return {
             "active_arms": active_arms,
             "sensors_file": sensors_file,
-            "realsense_enabled": bool(realsense.get("enabled", True)) if preset is not None else True,
-            "gelsight_enable_left": bool(gelsight.get("enable_left", False)) if preset is not None else any(
-                str(device.get("resolved_role", "")).endswith("finger_left") and bool(device.get("enabled", False))
-                for device in session_devices
-            ),
-            "gelsight_enable_right": bool(gelsight.get("enable_right", False)) if preset is not None else any(
-                str(device.get("resolved_role", "")).endswith("finger_right") and bool(device.get("enabled", False))
-                for device in session_devices
-            ),
+            "session_devices": session_devices,
         }
 
     def _set_session_devices(self, devices: list[dict[str, object]]) -> None:
@@ -832,38 +723,6 @@ class OperatorConsoleQtWindow(QMainWindow):
             if bool(device.get("enabled", False)) and str(device.get("kind", "")).strip() == "gelsight"
         ]
 
-        wrist_device = next(
-            (
-                device
-                for device in enabled_realsense
-                if "_wrist_" in str(device.get("resolved_role", "")).strip()
-            ),
-            None,
-        )
-        scene_device = next(
-            (
-                device
-                for device in enabled_realsense
-                if str(device.get("resolved_role", "")).strip().startswith("scene_")
-            ),
-            None,
-        )
-        left_gelsight = next(
-            (
-                device
-                for device in enabled_gelsights
-                if str(device.get("resolved_role", "")).strip().endswith("finger_left")
-            ),
-            None,
-        )
-        right_gelsight = next(
-            (
-                device
-                for device in enabled_gelsights
-                if str(device.get("resolved_role", "")).strip().endswith("finger_right")
-            ),
-            None,
-        )
         return {
             "preset_id": self.preset_combo.currentText().strip(),
             "dataset_id": self._get_field("dataset_id"),
@@ -874,14 +733,8 @@ class OperatorConsoleQtWindow(QMainWindow):
             "active_arms": self._get_field("active_arms"),
             "sensors_file": self._get_field("sensors_file"),
             "session_devices": session_devices,
-            "wrist_serial_no": str((wrist_device or {}).get("serial_number", "")).strip(),
-            "scene_serial_no": str((scene_device or {}).get("serial_number", "")).strip(),
             "realsense_enabled": bool(enabled_realsense),
             "gelsight_enabled": bool(enabled_gelsights),
-            "gelsight_enable_left": left_gelsight is not None,
-            "gelsight_enable_right": right_gelsight is not None,
-            "gelsight_left_device_path": str((left_gelsight or {}).get("device_path", "")).strip(),
-            "gelsight_right_device_path": str((right_gelsight or {}).get("device_path", "")).strip(),
             "viewer_base_url": self._get_field("viewer_base_url"),
             "notes": self._get_field("notes"),
             "extra_topics": self._get_field("extra_topics"),

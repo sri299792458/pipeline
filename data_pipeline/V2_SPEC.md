@@ -143,16 +143,16 @@ Where:
   - `thunder`
   - `world`
 - `{camera_slot}` is a canonical slot name such as:
-  - `wrist_0`
-  - `scene_0`
+  - `wrist_1`
   - `scene_1`
   - `scene_2`
+  - `scene_3`
 
 Examples:
 
-- `/spark/cameras/lightning/wrist_0/color/image_raw`
-- `/spark/cameras/lightning/wrist_0/depth/image_rect_raw`
-- `/spark/cameras/world/scene_0/color/image_raw`
+- `/spark/cameras/lightning/wrist_1/color/image_raw`
+- `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
+- `/spark/cameras/world/scene_1/color/image_raw`
 - `/spark/cameras/world/scene_1/depth/image_rect_raw`
 
 ### Tactile topics
@@ -212,7 +212,7 @@ That means:
 - they do not use V1 shorthand camera/tactile names
 - they do not define session bring-up
 
-The existing `multisensor_20hz*.yaml` files are V1-era profiles and must be replaced, not extended with new fallback aliases.
+The active `multisensor_20hz*.yaml` files are now part of the V2 profile layer and must continue to point directly at canonical V2 raw topics.
 
 
 ## Timestamp Rule

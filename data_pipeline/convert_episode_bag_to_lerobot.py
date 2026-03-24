@@ -432,12 +432,12 @@ def read_topic_series(
 
 
 def apply_realsense_metadata_timestamps(series: dict[str, TopicSeries]) -> None:
-    image_to_metadata = {
-        "/spark/cameras/wrist/color/image_raw": "/spark/cameras/wrist/color/metadata",
-        "/spark/cameras/wrist/depth/image_rect_raw": "/spark/cameras/wrist/depth/metadata",
-        "/spark/cameras/scene/color/image_raw": "/spark/cameras/scene/color/metadata",
-        "/spark/cameras/scene/depth/image_rect_raw": "/spark/cameras/scene/depth/metadata",
-    }
+    image_to_metadata: dict[str, str] = {}
+    for topic in series:
+        if topic.endswith("/color/image_raw"):
+            image_to_metadata[topic] = topic.replace("/color/image_raw", "/color/metadata")
+        elif topic.endswith("/depth/image_rect_raw"):
+            image_to_metadata[topic] = topic.replace("/depth/image_rect_raw", "/depth/metadata")
 
     for image_topic, metadata_topic in image_to_metadata.items():
         image_series = series.get(image_topic)

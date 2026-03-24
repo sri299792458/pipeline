@@ -1,21 +1,29 @@
 sensors:
-  wrist:
-    sensor_id: "cam_lightning_wrist_0"
+  lightning_wrist_1:
+    sensor_id: "cam_lightning_wrist_1"
     attached_to: "lightning"
-    mount_site: "wrist"
+    mount_site: "wrist_1"
     serial_number: "WRIST-REALSENSE-SERIAL"
     model: "Intel RealSense D405"
     calibration_ref: "calib://realsense/wrist/v1"
 
-  scene:
-    sensor_id: "cam_scene_0"
+  scene_1:
+    sensor_id: "cam_scene_1"
     attached_to: "world"
-    mount_site: "scene_0"
+    mount_site: "scene_1"
     serial_number: "SCENE-REALSENSE-SERIAL"
     model: "Intel RealSense D435"
     calibration_ref: "calib://realsense/scene/v1"
 
-  left:
+  scene_2:
+    sensor_id: "cam_scene_2"
+    attached_to: "world"
+    mount_site: "scene_2"
+    serial_number: "SCENE-1-REALSENSE-SERIAL"
+    model: "Intel RealSense L515"
+    calibration_ref: "calib://realsense/scene_2/v1"
+
+  lightning_finger_left:
     sensor_id: "tac_lightning_finger_left_0"
     attached_to: "lightning"
     mount_site: "finger_left"
@@ -24,7 +32,7 @@ sensors:
     calibration_ref: "calib://gelsight/left/v1"
     gel_type: "marker"  # or "plain"
 
-  right:
+  lightning_finger_right:
     sensor_id: "tac_lightning_finger_right_0"
     attached_to: "lightning"
     mount_site: "finger_right"

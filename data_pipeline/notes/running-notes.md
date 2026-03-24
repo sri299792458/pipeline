@@ -1982,3 +1982,23 @@
   - [topic-contract-v1.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/archive/topic-contract-v1.md)
   - [session-capture-plan-pre-v2.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/archive/session-capture-plan-pre-v2.md)
 - The top-level [V1_SPEC.md](/home/srinivas/Desktop/pipeline/data_pipeline/V1_SPEC.md) now points to both the archive copies and the active V2 docs.
+
+### V2 topic-surface migration
+
+- Continued the active V2 migration from spec into runtime/config code instead of keeping a dual V1/V2 path.
+- Canonical camera slots are now 1-based in the active V2 docs and code:
+  - `lightning_wrist_1`
+  - `thunder_wrist_1`
+  - `scene_1`
+  - `scene_2`
+  - `scene_3`
+- Canonical camera/tactile raw topics now target the role-based V2 surface:
+  - `/spark/cameras/lightning/wrist_1/...`
+  - `/spark/cameras/world/scene_1/...`
+  - `/spark/tactile/lightning/finger_left/...`
+- Renamed the shared foot-pedal activity topic from the old per-device Spark path to the canonical V2 session topic:
+  - `/spark/session/teleop_active`
+- Updated the RealSense and GelSight launch/bridge path to take canonical V2 role specs instead of the old fixed `wrist/scene/left/right` launch arguments.
+- Updated the operator-console backend, discovery layer, session-plan layer, manifest helpers, and dummy-episode generator to use canonical V2 sensor roles.
+- Removed the old Tk operator console from the active `data_pipeline/` surface by archiving it under [data_pipeline/archive/operator_console_tk_v1.py](/home/srinivas/Desktop/pipeline/data_pipeline/archive/operator_console_tk_v1.py).
+- Updated the active README and bring-up/runbook docs so they no longer advertise the V1 launch arguments or topic names as live guidance.

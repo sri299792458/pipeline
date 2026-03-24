@@ -14,6 +14,7 @@ import rosbag2_py
 from geometry_msgs.msg import PoseStamped, WrenchStamped
 from rclpy.serialization import serialize_message
 from sensor_msgs.msg import Image, JointState
+from std_msgs.msg import Bool
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -37,12 +38,13 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
 
 
 TOPIC_TYPES = {
-    "/spark/cameras/wrist/color/image_raw": "sensor_msgs/msg/Image",
-    "/spark/cameras/wrist/depth/image_rect_raw": "sensor_msgs/msg/Image",
-    "/spark/cameras/scene/color/image_raw": "sensor_msgs/msg/Image",
-    "/spark/cameras/scene/depth/image_rect_raw": "sensor_msgs/msg/Image",
-    "/spark/tactile/left/color/image_raw": "sensor_msgs/msg/Image",
-    "/spark/tactile/right/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/session/teleop_active": "std_msgs/msg/Bool",
+    "/spark/cameras/lightning/wrist_1/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/cameras/lightning/wrist_1/depth/image_rect_raw": "sensor_msgs/msg/Image",
+    "/spark/cameras/world/scene_1/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/cameras/world/scene_1/depth/image_rect_raw": "sensor_msgs/msg/Image",
+    "/spark/tactile/lightning/finger_left/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/tactile/lightning/finger_right/color/image_raw": "sensor_msgs/msg/Image",
     "/spark/lightning/robot/joint_state": "sensor_msgs/msg/JointState",
     "/spark/lightning/robot/eef_pose": "geometry_msgs/msg/PoseStamped",
     "/spark/lightning/robot/tcp_wrench": "geometry_msgs/msg/WrenchStamped",
@@ -174,26 +176,26 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
 
     sensors = [
         {
-            "sensor_id": "cam_lightning_wrist_0",
+            "sensor_id": "cam_lightning_wrist_1",
             "modality": "rgbd_camera",
             "attached_to": "lightning",
-            "mount_site": "wrist",
+            "mount_site": "wrist_1",
             "topic_names": [
-                "/spark/cameras/wrist/color/image_raw",
-                "/spark/cameras/wrist/depth/image_rect_raw",
+                "/spark/cameras/lightning/wrist_1/color/image_raw",
+                "/spark/cameras/lightning/wrist_1/depth/image_rect_raw",
             ],
             "serial_number": "DUMMY-WRIST-001",
             "model": "Intel RealSense D405",
             "calibration_ref": "dummy://wrist",
         },
         {
-            "sensor_id": "cam_scene_0",
+            "sensor_id": "cam_scene_1",
             "modality": "rgbd_camera",
             "attached_to": "world",
-            "mount_site": "scene_0",
+            "mount_site": "scene_1",
             "topic_names": [
-                "/spark/cameras/scene/color/image_raw",
-                "/spark/cameras/scene/depth/image_rect_raw",
+                "/spark/cameras/world/scene_1/color/image_raw",
+                "/spark/cameras/world/scene_1/depth/image_rect_raw",
             ],
             "serial_number": "DUMMY-SCENE-001",
             "model": "Intel RealSense D435",
@@ -208,7 +210,7 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
                     "modality": "tactile_rgb",
                     "attached_to": "lightning",
                     "mount_site": "finger_left",
-                    "topic_names": ["/spark/tactile/left/color/image_raw"],
+                    "topic_names": ["/spark/tactile/lightning/finger_left/color/image_raw"],
                     "serial_number": "DUMMY-GS-LEFT",
                     "model": "GelSight Mini",
                     "calibration_ref": "dummy://gelsight_left",
@@ -218,7 +220,7 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
                     "modality": "tactile_rgb",
                     "attached_to": "lightning",
                     "mount_site": "finger_right",
-                    "topic_names": ["/spark/tactile/right/color/image_raw"],
+                    "topic_names": ["/spark/tactile/lightning/finger_right/color/image_raw"],
                     "serial_number": "DUMMY-GS-RIGHT",
                     "model": "GelSight Mini",
                     "calibration_ref": "dummy://gelsight_right",
@@ -236,6 +238,25 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             "robot_id": args.robot_id,
             "active_arms": active_arms,
             "operator": args.operator,
+        },
+        "session": {
+            "schema_version": 2,
+            "contract_version": "v2",
+            "session_id": "dummy-session",
+            "active_arms": active_arms,
+            "local_overlays": [],
+            "default_published_profile": {
+                "name": profile["profile_name"],
+                "path": str(Path(args.profile)),
+                "selection_rule": "dummy_episode_generator_v2",
+            },
+            "discovered_devices": [],
+            "selected_topics": topics,
+            "selected_extra_topics": [],
+            "profile_compatibility": {
+                "publishable_profiles": [],
+                "incompatible_profiles": [],
+            },
         },
         "profile": {
             "name": profile["profile_name"],
@@ -310,35 +331,41 @@ def main(argv: list[str] | None = None) -> int:
 
     for stamp_ns in range(start_ns, end_ns, image_period_ns):
         phase = (stamp_ns - start_ns) / 1_000_000_000
+        # Teleop active throughout the synthetic episode.
         writer.write(
-            "/spark/cameras/wrist/color/image_raw",
+            "/spark/session/teleop_active",
+            serialize_message(Bool(data=True)),
+            stamp_ns,
+        )
+        writer.write(
+            "/spark/cameras/lightning/wrist_1/color/image_raw",
             serialize_message(make_color_image(stamp_ns, 640, 480, phase)),
             stamp_ns,
         )
         writer.write(
-            "/spark/cameras/wrist/depth/image_rect_raw",
+            "/spark/cameras/lightning/wrist_1/depth/image_rect_raw",
             serialize_message(make_depth_image(stamp_ns, 640, 480, phase)),
             stamp_ns,
         )
         writer.write(
-            "/spark/cameras/scene/color/image_raw",
+            "/spark/cameras/world/scene_1/color/image_raw",
             serialize_message(make_color_image(stamp_ns, 640, 480, phase + 0.2)),
             stamp_ns,
         )
         writer.write(
-            "/spark/cameras/scene/depth/image_rect_raw",
+            "/spark/cameras/world/scene_1/depth/image_rect_raw",
             serialize_message(make_depth_image(stamp_ns, 640, 480, phase + 0.2)),
             stamp_ns,
         )
 
         if args.include_tactile:
             writer.write(
-                "/spark/tactile/left/color/image_raw",
+                "/spark/tactile/lightning/finger_left/color/image_raw",
                 serialize_message(make_color_image(stamp_ns, 320, 240, phase + 0.4)),
                 stamp_ns,
             )
             writer.write(
-                "/spark/tactile/right/color/image_raw",
+                "/spark/tactile/lightning/finger_right/color/image_raw",
                 serialize_message(make_color_image(stamp_ns, 320, 240, phase + 0.6)),
                 stamp_ns,
             )

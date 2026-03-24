@@ -56,8 +56,7 @@ class TeleopROSAdapter:
         self._node.create_subscription(Float32MultiArray, "/SpaceMouseLightning", self.lightning_sm_data, 10)
         self._node.create_subscription(Float32MultiArray, "/Spark_angle/thunder", self.spark_angle_thunder, 10)
         self._node.create_subscription(Float32MultiArray, "/Spark_angle/lightning", self.spark_angle_lightning, 10)
-        self._node.create_subscription(Bool, "/Spark_enable/thunder", self.spark_enable_thunder, 10)
-        self._node.create_subscription(Bool, "/Spark_enable/lightning", self.spark_enable_lightning, 10)
+        self._node.create_subscription(Bool, "/spark/session/teleop_active", self.spark_session_enable, 10)
 
     def thunder_sm_log(self, data):
         self._ros_data["thunder_sm_log"] = data.data
@@ -79,8 +78,6 @@ class TeleopROSAdapter:
     def spark_angle_lightning(self, data):
         self._ros_data["lightning_spark_angle"] = data.data
 
-    def spark_enable_thunder(self, data):
-        self._ros_data["thunder_spark_enable"] = data.data
-
-    def spark_enable_lightning(self, data):
+    def spark_session_enable(self, data):
         self._ros_data["lightning_spark_enable"] = data.data
+        self._ros_data["thunder_spark_enable"] = data.data

@@ -24,7 +24,13 @@ import sys
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from data_pipeline.pipeline_utils import get_git_commit, load_yaml, make_episode_id
+from data_pipeline.pipeline_utils import (
+    camera_path_parts_for_role,
+    get_git_commit,
+    load_yaml,
+    make_episode_id,
+    tactile_path_parts_for_role,
+)
 from data_pipeline.device_discovery import discover_session_devices as discover_runtime_session_devices
 from data_pipeline.session_capture_plan import build_session_capture_plan
 
@@ -481,10 +487,10 @@ class OperatorConsoleBackend:
 
     def _spark_health(self, config: dict[str, Any], live_topics: dict[str, str]) -> dict[str, Any]:
         arms = self._active_arm_list(config)
-        required_topics = []
+        required_topics = ["/spark/session/teleop_active"]
         sample_topics = []
         for arm in arms:
-            required_topics.extend([f"/Spark_angle/{arm}", f"/Spark_enable/{arm}"])
+            required_topics.append(f"/Spark_angle/{arm}")
             sample_topics.append(f"/Spark_angle/{arm}")
         card = self._build_health_card(
             process_name="spark_devices",
@@ -545,10 +551,7 @@ class OperatorConsoleBackend:
     def _realsense_health(self, config: dict[str, Any], live_topics: dict[str, str]) -> dict[str, Any]:
         if not config.get("realsense_enabled", True):
             return {"status": "off", "summary": "RealSense disabled", "details": []}
-        required_topics = [
-            "/spark/cameras/wrist/color/image_raw",
-            "/spark/cameras/scene/color/image_raw",
-        ]
+        required_topics = [topic for topic in self._realsense_required_topics(config) if topic.endswith("/color/image_raw")]
         return self._build_health_card(
             process_name="realsense_contract",
             live_topics=live_topics,
@@ -559,11 +562,7 @@ class OperatorConsoleBackend:
     def _gelsight_health(self, config: dict[str, Any], live_topics: dict[str, str]) -> dict[str, Any]:
         if not config.get("gelsight_enabled", False):
             return {"status": "off", "summary": "GelSight disabled", "details": []}
-        required_topics = []
-        if config.get("gelsight_enable_left", False):
-            required_topics.append("/spark/tactile/left/color/image_raw")
-        if config.get("gelsight_enable_right", False):
-            required_topics.append("/spark/tactile/right/color/image_raw")
+        required_topics = self._gelsight_required_topics(config)
         return self._build_health_card(
             process_name="gelsight_contract",
             live_topics=live_topics,
@@ -702,6 +701,41 @@ class OperatorConsoleBackend:
             for item in str(config.get("active_arms", "")).split(",")
             if item.strip()
         ]
+
+    def _enabled_session_devices(self, config: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+        devices = config.get("session_devices", [])
+        if not isinstance(devices, list):
+            return []
+        return [
+            device
+            for device in devices
+            if isinstance(device, dict)
+            and bool(device.get("enabled", False))
+            and str(device.get("kind", "")).strip() == kind
+        ]
+
+    def _realsense_required_topics(self, config: dict[str, Any]) -> list[str]:
+        topics: list[str] = []
+        for device in self._enabled_session_devices(config, "realsense"):
+            role = str(device.get("resolved_role", "")).strip()
+            parts = camera_path_parts_for_role(role)
+            if parts is None:
+                continue
+            attachment, slot = parts
+            prefix = f"/spark/cameras/{attachment}/{slot}"
+            topics.extend([f"{prefix}/color/image_raw", f"{prefix}/depth/image_rect_raw"])
+        return topics
+
+    def _gelsight_required_topics(self, config: dict[str, Any]) -> list[str]:
+        topics: list[str] = []
+        for device in self._enabled_session_devices(config, "gelsight"):
+            role = str(device.get("resolved_role", "")).strip()
+            parts = tactile_path_parts_for_role(role)
+            if parts is None:
+                continue
+            arm, finger = parts
+            topics.append(f"/spark/tactile/{arm}/{finger}/color/image_raw")
+        return topics
 
     def _list_live_topics(self) -> dict[str, str]:
         result = self._run_ros_command("ros2 topic list -t", timeout=5.0)
@@ -869,23 +903,17 @@ class OperatorConsoleBackend:
             spark_topic = f"/Spark_angle/{active_arms[0]}"
             if not self._topic_has_message(spark_topic, topic_type="std_msgs/msg/Float32MultiArray", timeout_s=2.5):
                 errors.append(f"Timed out waiting for Spark stream: {spark_topic}")
+            if not self._topic_has_message("/spark/session/teleop_active", topic_type="std_msgs/msg/Bool", timeout_s=2.5):
+                errors.append("Timed out waiting for shared teleop activity: /spark/session/teleop_active")
             robot_topic = f"/spark/{active_arms[0]}/robot/joint_state"
             if not self._topic_has_message(robot_topic, topic_type="sensor_msgs/msg/JointState", timeout_s=2.5):
                 errors.append(f"Timed out waiting for robot state: {robot_topic}")
         if config.get("realsense_enabled", True):
-            for topic in [
-                "/spark/cameras/wrist/color/image_raw",
-                "/spark/cameras/scene/color/image_raw",
-            ]:
+            for topic in [topic for topic in self._realsense_required_topics(config) if topic.endswith("/color/image_raw")]:
                 if not self._topic_has_message(topic, topic_type="sensor_msgs/msg/Image", timeout_s=2.5):
                     errors.append(f"Timed out waiting for camera stream: {topic}")
         if config.get("gelsight_enabled", False):
-            if config.get("gelsight_enable_left", False):
-                topic = "/spark/tactile/left/color/image_raw"
-                if not self._topic_has_message(topic, topic_type="sensor_msgs/msg/Image", timeout_s=2.5):
-                    errors.append(f"Timed out waiting for tactile stream: {topic}")
-            if config.get("gelsight_enable_right", False):
-                topic = "/spark/tactile/right/color/image_raw"
+            for topic in self._gelsight_required_topics(config):
                 if not self._topic_has_message(topic, topic_type="sensor_msgs/msg/Image", timeout_s=2.5):
                     errors.append(f"Timed out waiting for tactile stream: {topic}")
         return errors
@@ -1024,27 +1052,40 @@ class OperatorConsoleBackend:
         )
 
     def _build_realsense_command(self, config: dict[str, Any]) -> str:
-        wrist = shlex.quote(str(config.get("wrist_serial_no", "")).strip())
-        scene = shlex.quote(str(config.get("scene_serial_no", "")).strip())
+        camera_specs: list[str] = []
+        for device in self._enabled_session_devices(config, "realsense"):
+            role = str(device.get("resolved_role", "")).strip()
+            serial = str(device.get("serial_number", "")).strip() or str(device.get("identifier", "")).strip()
+            parts = camera_path_parts_for_role(role)
+            if parts is None or not serial:
+                continue
+            attachment, slot = parts
+            camera_specs.append(f"{attachment};{slot};{serial};640,480,30;640,480,30")
+        if not camera_specs:
+            raise RuntimeError("No enabled RealSense session devices are configured.")
         return (
             f"source {shlex.quote(ROS_SETUP)} && "
             f"ros2 launch data_pipeline/launch/realsense_contract.launch.py "
-            f"wrist_serial_no:={wrist} scene_serial_no:={scene}"
+            f"camera_specs:={shlex.quote('|'.join(camera_specs))}"
         )
 
     def _build_gelsight_command(self, config: dict[str, Any]) -> str:
+        sensor_specs: list[str] = []
+        for device in self._enabled_session_devices(config, "gelsight"):
+            role = str(device.get("resolved_role", "")).strip()
+            device_path = str(device.get("device_path", "")).strip() or str(device.get("identifier", "")).strip()
+            parts = tactile_path_parts_for_role(role)
+            if parts is None or not device_path:
+                continue
+            arm, finger = parts
+            sensor_specs.append(f"{arm};{finger};{device_path}")
+        if not sensor_specs:
+            raise RuntimeError("No enabled GelSight session devices are configured.")
         parts = [
             f"source {shlex.quote(ROS_SETUP)}",
             "ros2 launch data_pipeline/launch/gelsight_contract.launch.py",
-            f"enable_left:={'true' if config.get('gelsight_enable_left', False) else 'false'}",
-            f"enable_right:={'true' if config.get('gelsight_enable_right', False) else 'false'}",
+            f"sensor_specs:={shlex.quote('|'.join(sensor_specs))}",
         ]
-        left_path = str(config.get("gelsight_left_device_path", "")).strip()
-        right_path = str(config.get("gelsight_right_device_path", "")).strip()
-        if left_path:
-            parts.append(f"left_device_path:={shlex.quote(left_path)}")
-        if right_path:
-            parts.append(f"right_device_path:={shlex.quote(right_path)}")
         return " && ".join(parts[:1]) + " && " + " ".join(parts[1:])
 
     def _build_record_command(self, config: dict[str, Any], *, episode_id: str, dry_run: bool) -> str:
@@ -1095,7 +1136,7 @@ class OperatorConsoleBackend:
         return f"source {shlex.quote(ROS_SETUP)} && " + " ".join(args)
 
     def _required_record_topics(self, config: dict[str, Any]) -> list[str]:
-        topics: list[str] = ["/Spark_enable/lightning"]
+        topics: list[str] = ["/spark/session/teleop_active"]
         for arm in self._active_arm_list(config):
             topics.extend(
                 [
@@ -1108,19 +1149,9 @@ class OperatorConsoleBackend:
                 ]
             )
         if config.get("realsense_enabled", True):
-            topics.extend(
-                [
-                    "/spark/cameras/wrist/color/image_raw",
-                    "/spark/cameras/wrist/depth/image_rect_raw",
-                    "/spark/cameras/scene/color/image_raw",
-                    "/spark/cameras/scene/depth/image_rect_raw",
-                ]
-            )
+            topics.extend(self._realsense_required_topics(config))
         if config.get("gelsight_enabled", False):
-            if config.get("gelsight_enable_left", False):
-                topics.append("/spark/tactile/left/color/image_raw")
-            if config.get("gelsight_enable_right", False):
-                topics.append("/spark/tactile/right/color/image_raw")
+            topics.extend(self._gelsight_required_topics(config))
         return topics
 
     def _finalize_recording_after_exit(self, exit_code: int) -> None:
@@ -1183,13 +1214,7 @@ class OperatorConsoleBackend:
             "operator",
             "active_arms",
             "sensors_file",
-            "wrist_serial_no",
-            "scene_serial_no",
             "gelsight_enabled",
-            "gelsight_enable_left",
-            "gelsight_enable_right",
-            "gelsight_left_device_path",
-            "gelsight_right_device_path",
             "session_devices",
         ]
         payload = {key: config.get(key) for key in keys}

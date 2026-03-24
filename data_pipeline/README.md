@@ -12,9 +12,7 @@ For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-
 
 For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).
 
-For the planned lab-facing capture GUI, use [docs/operator-console-spec.md](./docs/operator-console-spec.md).
-
-The current reference frontend is the new Qt implementation:
+The current reference frontend is the Qt implementation:
 
 ```bash
 source .venv/bin/activate
@@ -28,18 +26,11 @@ On Ubuntu/X11, the Qt frontend also needs the system package:
 sudo apt-get install -y libxcb-cursor0
 ```
 
-The older Tk prototype is still available as a fallback/reference:
-
-```bash
-python3 data_pipeline/operator_console.py
-```
-
-
 ## Current Scope
 
-The non-hardware V1 path is in place:
+The current V2-direction path is in place:
 
-- stable `/spark/...` topic contract for robot, camera, and tactile streams
+- stable `/spark/...` topic contract for robot, camera, tactile, and teleop-activity streams
 - raw episode recording as one rosbag per demo
 - raw-to-LeRobot conversion for the current bimanual `multisensor_20hz` profile
 - dummy-data eval path
@@ -51,7 +42,7 @@ The remaining work is live hardware validation with the actual full sensor set a
 
 ## Embodiments
 
-The accepted V1 direction is:
+The accepted direction is:
 
 - raw recording should work with `lightning` only, `thunder` only, or both arms
 - published LeRobot datasets should stay embodiment-specific
@@ -101,29 +92,27 @@ The current intended RealSense path is the direct SDK bridge, backed by a local 
 source /opt/ros/jazzy/setup.bash
 ./data_pipeline/setup_realsense_contract_runtime.sh
 ros2 launch data_pipeline/launch/realsense_contract.launch.py \
-  wrist_serial_no:=<WRIST_SERIAL> \
-  scene_serial_no:=<SCENE_SERIAL>
+  camera_specs:='lightning;wrist_1;<WRIST_SERIAL>;640,480,30;640,480,30|world;scene_1;<SCENE_SERIAL>;640,480,30;640,480,30'
 ```
 
 That setup script builds the local `pyrealsense2` binding for system ROS Python, not for `.venv`.
 
-This bridge stamps `Image.header.stamp` with host ROS time immediately after `wait_for_frames()` returns, which matches the V1 topic contract directly. Older bags that include official RealSense metadata topics are still supported by the converter.
+This bridge stamps `Image.header.stamp` with host ROS time immediately after `wait_for_frames()` returns, which matches the V2 topic contract directly. Older bags that include official RealSense metadata topics are still supported by the converter.
 
 See [docs/hardware-bringup.md](./docs/hardware-bringup.md) for the exact bring-up sequence.
 
 To launch the GelSight contract publishers:
 
 ```bash
-/usr/bin/python3 data_pipeline/gelsight_bridge.py --sensor-name left --device-path /dev/v4l/by-id/<LEFT_GELSIGHT>
-/usr/bin/python3 data_pipeline/gelsight_bridge.py --sensor-name right --device-path /dev/v4l/by-id/<RIGHT_GELSIGHT>
+/usr/bin/python3 data_pipeline/gelsight_bridge.py --arm lightning --finger-slot finger_left --device-path /dev/v4l/by-id/<LEFT_GELSIGHT>
+/usr/bin/python3 data_pipeline/gelsight_bridge.py --arm lightning --finger-slot finger_right --device-path /dev/v4l/by-id/<RIGHT_GELSIGHT>
 ```
 
 Or with the existing launch wrapper:
 
 ```bash
 ros2 launch data_pipeline/launch/gelsight_contract.launch.py \
-  left_device_path:=/dev/v4l/by-id/<LEFT_GELSIGHT> \
-  right_device_path:=/dev/v4l/by-id/<RIGHT_GELSIGHT>
+  sensor_specs:='lightning;finger_left;/dev/v4l/by-id/<LEFT_GELSIGHT>|lightning;finger_right;/dev/v4l/by-id/<RIGHT_GELSIGHT>'
 ```
 
 The arm-side `/spark/{arm}/...` robot topics still come from the Teleop runtime in [TeleopSoftware](../TeleopSoftware/).

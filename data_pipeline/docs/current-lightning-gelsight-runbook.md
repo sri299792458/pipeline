@@ -80,8 +80,7 @@ Terminal 3:
 ```bash
 spark
 ros2 launch data_pipeline/launch/realsense_contract.launch.py \
-  wrist_serial_no:=130322273305 \
-  scene_serial_no:=213622251272
+  camera_specs:='lightning;wrist_1;130322273305;640,480,30;640,480,30|world;scene_1;213622251272;640,480,30;640,480,30'
 ```
 
 Note:
@@ -96,8 +95,7 @@ Terminal 4:
 ```bash
 spark
 ros2 launch data_pipeline/launch/gelsight_contract.launch.py \
-  enable_right:=false \
-  left_device_path:=/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._GelSight_Mini_R0B_28D8-PXEC_28D8PXEC-video-index0
+  sensor_specs:='lightning;finger_left;/dev/v4l/by-id/usb-Arducam_Technology_Co.__Ltd._GelSight_Mini_R0B_28D8-PXEC_28D8PXEC-video-index0'
 ```
 
 
@@ -108,14 +106,16 @@ Terminal 5:
 ```bash
 spark
 ros2 topic hz /spark/lightning/robot/joint_state
-ros2 topic hz /spark/cameras/wrist/color/image_raw
-ros2 topic hz /spark/cameras/scene/color/image_raw
-ros2 topic hz /spark/tactile/left/color/image_raw
+ros2 topic hz /spark/session/teleop_active
+ros2 topic hz /spark/cameras/lightning/wrist_1/color/image_raw
+ros2 topic hz /spark/cameras/world/scene_1/color/image_raw
+ros2 topic hz /spark/tactile/lightning/finger_left/color/image_raw
 ```
 
 Expected:
 
 - Lightning robot state is live
+- teleop activity is live
 - wrist and scene RGB are live
 - GelSight left RGB is live
 

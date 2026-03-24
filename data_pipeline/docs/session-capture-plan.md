@@ -69,12 +69,12 @@ Suggested first V2 vocabulary:
   - `lightning`
   - `thunder`
 - wrist cameras
-  - `lightning_wrist_0`
-  - `thunder_wrist_0`
+  - `lightning_wrist_1`
+  - `thunder_wrist_1`
 - scene cameras
-  - `scene_0`
   - `scene_1`
   - `scene_2`
+  - `scene_3`
 - tactile sensors
   - `lightning_finger_left`
   - `lightning_finger_right`
@@ -94,12 +94,12 @@ The session capture plan resolves canonical roles into canonical raw topics defi
 
 Examples:
 
-- `lightning_wrist_0` maps to:
-  - `/spark/cameras/lightning/wrist_0/color/image_raw`
-  - `/spark/cameras/lightning/wrist_0/depth/image_rect_raw`
-- `scene_0` maps to:
-  - `/spark/cameras/world/scene_0/color/image_raw`
-  - `/spark/cameras/world/scene_0/depth/image_rect_raw`
+- `lightning_wrist_1` maps to:
+  - `/spark/cameras/lightning/wrist_1/color/image_raw`
+  - `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
+- `scene_1` maps to:
+  - `/spark/cameras/world/scene_1/color/image_raw`
+  - `/spark/cameras/world/scene_1/depth/image_rect_raw`
 - `lightning_finger_left` maps to:
   - `/spark/tactile/lightning/finger_left/color/image_raw`
   - `/spark/tactile/lightning/finger_left/depth/image_raw`
@@ -176,24 +176,24 @@ discovered_devices:
     model: Intel RealSense D405
     serial_number: "130322273305"
     enabled: true
-    suggested_role: lightning_wrist_0
-    resolved_role: lightning_wrist_0
+    suggested_role: lightning_wrist_1
+    resolved_role: lightning_wrist_1
 
   - device_id: realsense/213622251272
     kind: realsense
     model: Intel RealSense D455
     serial_number: "213622251272"
     enabled: true
-    suggested_role: scene_0
-    resolved_role: scene_0
+    suggested_role: scene_1
+    resolved_role: scene_1
 
   - device_id: realsense/f1380660
     kind: realsense
     model: Intel RealSense L515
     serial_number: "f1380660"
     enabled: true
-    suggested_role: scene_1
-    resolved_role: scene_1
+    suggested_role: scene_2
+    resolved_role: scene_2
 
   - device_id: gelsight/28D8PXEC
     kind: gelsight
@@ -217,12 +217,12 @@ selected_topics:
   - /spark/thunder/robot/gripper_state
   - /spark/thunder/teleop/cmd_joint_state
   - /spark/thunder/teleop/cmd_gripper_state
-  - /spark/cameras/lightning/wrist_0/color/image_raw
-  - /spark/cameras/lightning/wrist_0/depth/image_rect_raw
-  - /spark/cameras/world/scene_0/color/image_raw
-  - /spark/cameras/world/scene_0/depth/image_rect_raw
+  - /spark/cameras/lightning/wrist_1/color/image_raw
+  - /spark/cameras/lightning/wrist_1/depth/image_rect_raw
   - /spark/cameras/world/scene_1/color/image_raw
   - /spark/cameras/world/scene_1/depth/image_rect_raw
+  - /spark/cameras/world/scene_2/color/image_raw
+  - /spark/cameras/world/scene_2/depth/image_rect_raw
   - /spark/tactile/lightning/finger_left/color/image_raw
   - /spark/tactile/lightning/finger_left/depth/image_raw
   - /spark/tactile/lightning/finger_left/marker_offset
@@ -237,7 +237,7 @@ profile_compatibility:
     - name: bimanual_dual_wrist_v2
       compatible: false
       reasons:
-        - missing required role thunder_wrist_0
+        - missing required role thunder_wrist_1
 ```
 
 
@@ -259,18 +259,18 @@ The operator does the resolution once per session, but every episode remains sel
 ```yaml
 devices:
   realsense/130322273305:
-    role: lightning_wrist_0
+    role: lightning_wrist_1
     enabled_by_default: true
     display_label: Lightning wrist D405
     metadata:
-      calibration_ref: calib://realsense/lightning_wrist_0/v2
+      calibration_ref: calib://realsense/lightning_wrist_1/v2
 
   realsense/213622251272:
-    role: scene_0
+    role: scene_1
     enabled_by_default: true
 
   realsense/f1380660:
-    role: scene_1
+    role: scene_2
     enabled_by_default: false
 
   gelsight/28D8PXEC:

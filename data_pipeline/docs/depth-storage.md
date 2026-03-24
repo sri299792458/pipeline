@@ -175,8 +175,8 @@ Depth must align to the same published frame grid as RGB/state/action.
 For each published depth field:
 
 - source topic:
-  - wrist: `/spark/cameras/wrist/depth/image_rect_raw`
-  - scene: `/spark/cameras/scene/depth/image_rect_raw`
+  - wrist: `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
+  - scene: `/spark/cameras/world/scene_1/depth/image_rect_raw`
 - selection rule:
   - nearest frame to the published timestamp
 - tolerance:

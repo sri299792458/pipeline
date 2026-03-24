@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Publish one or more RealSense devices into the V1 `/spark/cameras/...` contract."""
+"""Publish one or more RealSense devices into the V2 `/spark/cameras/...` contract."""
 
 from __future__ import annotations
 
@@ -29,7 +29,8 @@ class StreamProfile:
 
 @dataclass(frozen=True)
 class CameraSpec:
-    camera_name: str
+    attachment: str
+    camera_slot: str
     serial_no: str
     color_profile: StreamProfile
     depth_profile: StreamProfile
@@ -46,19 +47,22 @@ def parse_profile(value: str) -> StreamProfile:
 
 
 def parse_camera_spec(value: str) -> CameraSpec:
-    tokens = [token.strip() for token in value.split(";", maxsplit=3)]
-    if len(tokens) != 4:
+    tokens = [token.strip() for token in value.split(";", maxsplit=4)]
+    if len(tokens) != 5:
         raise ValueError(
-            "Expected camera spec CAMERA_NAME;SERIAL_NO;COLOR_PROFILE;DEPTH_PROFILE, "
+            "Expected camera spec ATTACHMENT;CAMERA_SLOT;SERIAL_NO;COLOR_PROFILE;DEPTH_PROFILE, "
             f"got {value!r}"
         )
-    camera_name, serial_no, color_profile, depth_profile = tokens
-    if not camera_name:
-        raise ValueError(f"Camera spec is missing a camera name: {value!r}")
+    attachment, camera_slot, serial_no, color_profile, depth_profile = tokens
+    if attachment not in {"lightning", "thunder", "world"}:
+        raise ValueError(f"Camera spec has unsupported attachment {attachment!r}: {value!r}")
+    if not camera_slot or "/" in camera_slot:
+        raise ValueError(f"Camera spec has invalid camera slot {camera_slot!r}: {value!r}")
     if not normalize_serial(serial_no):
         raise ValueError(f"Camera spec is missing a serial number: {value!r}")
     return CameraSpec(
-        camera_name=camera_name,
+        attachment=attachment,
+        camera_slot=camera_slot,
         serial_no=serial_no,
         color_profile=parse_profile(color_profile),
         depth_profile=parse_profile(depth_profile),
@@ -104,7 +108,8 @@ def resolve_camera_specs(camera_specs: list[CameraSpec]) -> list[CameraSpec]:
         resolved_serials.add(resolved_serial)
         resolved_specs.append(
             CameraSpec(
-                camera_name=spec.camera_name,
+                attachment=spec.attachment,
+                camera_slot=spec.camera_slot,
                 serial_no=resolved_serial,
                 color_profile=spec.color_profile,
                 depth_profile=spec.depth_profile,
@@ -117,7 +122,7 @@ class RealSenseContractBridge(Node):
     def __init__(
         self,
         *,
-        camera_name: str,
+        camera_slot: str,
         camera_namespace: str,
         serial_no: str,
         color_profile: StreamProfile,
@@ -125,13 +130,22 @@ class RealSenseContractBridge(Node):
         enable_depth: bool,
         wait_for_frames_timeout_ms: int,
     ) -> None:
-        super().__init__(camera_name, namespace=camera_namespace)
+        super().__init__(camera_slot, namespace=camera_namespace)
 
         self.serial_no = serial_no
+        self.camera_namespace = camera_namespace
+        self.camera_slot = camera_slot
         self.color_profile = color_profile
         self.depth_profile = depth_profile
         self.enable_depth = enable_depth
         self.wait_for_frames_timeout_ms = wait_for_frames_timeout_ms
+        self.frame_id = (
+            "spark_"
+            + camera_namespace.strip("/").replace("/", "_")
+            + "_"
+            + camera_slot
+            + "_optical_frame"
+        )
         self._stop_event = threading.Event()
         self._capture_thread: threading.Thread | None = None
         self._warned_missing_frame = False
@@ -264,7 +278,7 @@ class RealSenseContractBridge(Node):
     def _frame_to_image_msg(self, frame, stamp, encoding: str) -> Image:
         msg = Image()
         msg.header.stamp = stamp
-        msg.header.frame_id = self.get_name()
+        msg.header.frame_id = self.frame_id
         msg.height = frame.get_height()
         msg.width = frame.get_width()
         msg.encoding = encoding
@@ -286,62 +300,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=[],
         help=(
             "Repeatable multi-camera spec in the form "
-            "CAMERA_NAME;SERIAL_NO;COLOR_PROFILE;DEPTH_PROFILE"
+            "ATTACHMENT;CAMERA_SLOT;SERIAL_NO;COLOR_PROFILE;DEPTH_PROFILE"
         ),
     )
-
-    parser.add_argument("--camera-name")
-    parser.add_argument("--serial-no")
-    parser.add_argument("--color-profile", default="640,480,30")
-    parser.add_argument("--depth-profile", default="640,480,30")
-
-    parser.add_argument("--wrist-serial-no", default="")
-    parser.add_argument("--scene-serial-no", default="")
-    parser.add_argument("--wrist-color-profile", default="640,480,30")
-    parser.add_argument("--scene-color-profile", default="640,480,30")
-    parser.add_argument("--wrist-depth-profile", default="640,480,30")
-    parser.add_argument("--scene-depth-profile", default="640,480,30")
     return parser
 
 
 def build_camera_specs(args: argparse.Namespace) -> list[CameraSpec]:
     if args.camera_spec:
         return [parse_camera_spec(value) for value in args.camera_spec]
-
-    if args.camera_name or args.serial_no:
-        if not args.camera_name or not args.serial_no:
-            raise ValueError("Legacy single-camera mode requires both --camera-name and --serial-no.")
-        return [
-            CameraSpec(
-                camera_name=args.camera_name,
-                serial_no=args.serial_no,
-                color_profile=parse_profile(args.color_profile),
-                depth_profile=parse_profile(args.depth_profile),
-            )
-        ]
-
-    specs: list[CameraSpec] = []
-    if normalize_serial(args.wrist_serial_no):
-        specs.append(
-            CameraSpec(
-                camera_name="wrist",
-                serial_no=args.wrist_serial_no,
-                color_profile=parse_profile(args.wrist_color_profile),
-                depth_profile=parse_profile(args.wrist_depth_profile),
-            )
-        )
-    if normalize_serial(args.scene_serial_no):
-        specs.append(
-            CameraSpec(
-                camera_name="scene",
-                serial_no=args.scene_serial_no,
-                color_profile=parse_profile(args.scene_color_profile),
-                depth_profile=parse_profile(args.scene_depth_profile),
-            )
-        )
-    if not specs:
-        raise ValueError("Provide at least one camera via legacy single-camera args or wrist/scene serial args.")
-    return specs
+    raise ValueError("Provide at least one --camera-spec ATTACHMENT;CAMERA_SLOT;SERIAL_NO;COLOR_PROFILE;DEPTH_PROFILE.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -354,9 +322,10 @@ def main(argv: list[str] | None = None) -> int:
     executor = MultiThreadedExecutor(num_threads=max(2, len(camera_specs)))
     try:
         for spec in camera_specs:
+            camera_namespace = f"{args.camera_namespace.rstrip('/')}/{spec.attachment}"
             node = RealSenseContractBridge(
-                camera_name=spec.camera_name,
-                camera_namespace=args.camera_namespace,
+                camera_slot=spec.camera_slot,
+                camera_namespace=camera_namespace,
                 serial_no=spec.serial_no,
                 color_profile=spec.color_profile,
                 depth_profile=spec.depth_profile,
@@ -366,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
             node.start()
             if not node.wait_until_streaming(timeout_s=args.startup_timeout_s):
                 raise RuntimeError(
-                    f"Camera {spec.camera_name} (serial={node.serial_no}) did not produce frames within "
+                    f"Camera {spec.attachment}/{spec.camera_slot} (serial={node.serial_no}) did not produce frames within "
                     f"{args.startup_timeout_s:.1f}s."
                 )
             nodes.append(node)

@@ -35,7 +35,9 @@ class SparkNode(Node):
         else:
             topic = f"Spark_angle/{device_id}"
         pose_publisher = self.create_publisher(Float32MultiArray, topic, 1)
-        enable_publisher = self.create_publisher(Bool, f"Spark_enable/{device_id}", 1)
+        enable_publisher = None
+        if device_id == "lightning":
+            enable_publisher = self.create_publisher(Bool, "/spark/session/teleop_active", 1)
 
         try:
             while True:
@@ -50,7 +52,8 @@ class SparkNode(Node):
                 if False in sample.status:
                     print(f"Spark {device_id} has an error in the status: {sample.status}")
                 pose_publisher.publish(Float32MultiArray(data=sample.angles_rad))
-                enable_publisher.publish(Bool(data=sample.enable_switch))
+                if enable_publisher is not None:
+                    enable_publisher.publish(Bool(data=sample.enable_switch))
         finally:
             runner.close()
             print("Connection closed")

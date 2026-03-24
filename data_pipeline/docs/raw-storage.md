@@ -15,7 +15,7 @@ Keep raw episode capture lossless while reducing bag size and removing the old `
   - policy: trim only head and tail idle time
   - default padding: `1.0 s` before and after
 - Raw capture must also include the current shared teleop-activity signal:
-  - basis: `/Spark_enable/lightning`
+  - basis: `/spark/session/teleop_active`
   - role: distinguish intentional pedal-off pauses from stale-action failures during published conversion
 - Published LeRobot export remains unchanged:
   - parquet for low-dimensional data

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines how raw episode bags are converted into the published V1 LeRobot dataset.
+This document defines how raw episode bags are converted into the published V2 LeRobot dataset.
 
 The raw bag preserves asynchronous truth.
 The published dataset is a fixed-rate aligned view of that raw data.
@@ -10,7 +10,7 @@ The published dataset is a fixed-rate aligned view of that raw data.
 
 ## Published Profiles
 
-V1 should publish three profile shapes at `20 Hz`:
+V2 publishes three profile shapes at `20 Hz`:
 
 - `multisensor_20hz`
   - current bimanual profile
@@ -85,7 +85,7 @@ This creates one explicit frame timeline for the published episode. The timeline
 
 ## Published Observation Schema
 
-V1 publishes:
+V2 publishes:
 
 - `observation.state`
 - `action`
@@ -207,7 +207,7 @@ The current bimanual `multisensor_20hz` profile uses this flat `action` order:
 
 ### Why
 
-The V1 action is the command sent by the teleoperation/runtime stack. This is more stable and more semantically honest than silently replacing action with a derived delta later in the pipeline.
+The V2 action is the command sent by the teleoperation/runtime stack. This is more stable and more semantically honest than silently replacing action with a derived delta later in the pipeline.
 
 For both arms:
 
@@ -271,7 +271,7 @@ Action is also causal. A nearest-future command would make the published sample 
 
 Raw source:
 
-- `/Spark_enable/lightning`
+- `/spark/session/teleop_active`
 
 Alignment rule:
 
@@ -287,8 +287,8 @@ The action topics encode what command was issued, not whether the operator inten
 
 Sources:
 
-- `/spark/cameras/wrist/color/image_raw`
-- `/spark/cameras/scene/color/image_raw`
+- `/spark/cameras/lightning/wrist_1/color/image_raw`
+- `/spark/cameras/world/scene_1/color/image_raw`
 
 Alignment rule:
 
@@ -307,8 +307,8 @@ Image streams are observations, not control signals. Nearest is the correct rule
 
 Sources:
 
-- `/spark/tactile/left/color/image_raw`
-- `/spark/tactile/right/color/image_raw`
+- `/spark/tactile/lightning/finger_left/color/image_raw`
+- `/spark/tactile/lightning/finger_right/color/image_raw`
 
 Alignment rule:
 
@@ -342,15 +342,15 @@ Silent filling of large gaps hides real collection problems and makes the datase
 
 ## Raw-Only Modalities
 
-The following topics remain raw-only in V1:
+The following topics remain raw-only in V2:
 
-- `/spark/cameras/wrist/depth/image_rect_raw`
-- `/spark/cameras/scene/depth/image_rect_raw`
-- `/spark/tactile/left/depth/image_raw`
-- `/spark/tactile/right/depth/image_raw`
-- `/spark/tactile/left/marker_offset`
-- `/spark/tactile/right/marker_offset`
-- `/Spark_enable/lightning`
+- `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
+- `/spark/cameras/world/scene_1/depth/image_rect_raw`
+- `/spark/tactile/lightning/finger_left/depth/image_raw`
+- `/spark/tactile/lightning/finger_right/depth/image_raw`
+- `/spark/tactile/lightning/finger_left/marker_offset`
+- `/spark/tactile/lightning/finger_right/marker_offset`
+- `/spark/session/teleop_active`
 - optional point cloud or debugging topics
 
 ### Why
@@ -360,7 +360,7 @@ These topics are valuable to preserve, but they complicate the first published d
 
 ## Multi-Sensor Rules
 
-V1 supports:
+V2 supports:
 
 - multiple RealSense sensors
 - multiple GelSight sensors

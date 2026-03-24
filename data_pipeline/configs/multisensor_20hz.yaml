@@ -1,5 +1,5 @@
 profile_name: multisensor_20hz
-profile_version: 2
+profile_version: 3
 
 dataset:
   fps: 20
@@ -19,7 +19,7 @@ notes:
     - thunder
 
 teleop_activity:
-  topic: /Spark_enable/lightning
+  topic: /spark/session/teleop_active
   active_value: true
   required_for_record: true
   required_for_convert: false
@@ -110,47 +110,47 @@ published:
 
   images:
     - field: observation.images.wrist
-      topic: /spark/cameras/wrist/color/image_raw
+      topic: /spark/cameras/lightning/wrist_1/color/image_raw
       align: nearest
       max_skew_ms: 25
       required: true
 
     - field: observation.images.scene
-      topic: /spark/cameras/scene/color/image_raw
+      topic: /spark/cameras/world/scene_1/color/image_raw
       align: nearest
       max_skew_ms: 25
       required: true
 
     - field: observation.images.gelsight_left
-      topic: /spark/tactile/left/color/image_raw
+      topic: /spark/tactile/lightning/finger_left/color/image_raw
       align: nearest
       max_skew_ms: 25
       required: false
 
     - field: observation.images.gelsight_right
-      topic: /spark/tactile/right/color/image_raw
+      topic: /spark/tactile/lightning/finger_right/color/image_raw
       align: nearest
       max_skew_ms: 25
       required: false
 
 raw_only_topics:
-  - /spark/cameras/wrist/depth/image_rect_raw
-  - /spark/cameras/scene/depth/image_rect_raw
-  - /spark/tactile/left/depth/image_raw
-  - /spark/tactile/right/depth/image_raw
-  - /spark/tactile/left/marker_offset
-  - /spark/tactile/right/marker_offset
+  - /spark/cameras/lightning/wrist_1/depth/image_rect_raw
+  - /spark/cameras/world/scene_1/depth/image_rect_raw
+  - /spark/tactile/lightning/finger_left/depth/image_raw
+  - /spark/tactile/lightning/finger_right/depth/image_raw
+  - /spark/tactile/lightning/finger_left/marker_offset
+  - /spark/tactile/lightning/finger_right/marker_offset
 
 published_depth:
   - field: observation.depth.wrist
-    topic: /spark/cameras/wrist/depth/image_rect_raw
+    topic: /spark/cameras/lightning/wrist_1/depth/image_rect_raw
     align: nearest
     max_skew_ms: 25
     required: true
     unit: millimeters
 
   - field: observation.depth.scene
-    topic: /spark/cameras/scene/depth/image_rect_raw
+    topic: /spark/cameras/world/scene_1/depth/image_rect_raw
     align: nearest
     max_skew_ms: 25
     required: true

@@ -16,22 +16,15 @@ def _is_unset(value: str) -> bool:
     return value.strip() in {"", "''", '""'}
 
 
-def _append_camera_spec(cmd: list[str], *, camera_name: str, serial_no: str, color_profile: str, depth_profile: str) -> None:
-    cmd.extend(
-        [
-            "--camera-spec",
-            f"{camera_name};{serial_no};{color_profile};{depth_profile}",
-        ]
-    )
+def _append_camera_spec(cmd: list[str], spec: str) -> None:
+    cmd.extend(["--camera-spec", spec])
 
 
 def _launch_setup(context):
-    wrist_serial = LaunchConfiguration("wrist_serial_no").perform(context).strip().strip("'").strip('"')
-    scene_serial = LaunchConfiguration("scene_serial_no").perform(context).strip().strip("'").strip('"')
-    extra_specs = LaunchConfiguration("extra_camera_specs").perform(context).strip()
+    camera_specs = LaunchConfiguration("camera_specs").perform(context).strip()
 
-    if _is_unset(wrist_serial) and _is_unset(scene_serial) and _is_unset(extra_specs):
-        raise RuntimeError("Provide at least one of wrist_serial_no, scene_serial_no, or extra_camera_specs.")
+    if _is_unset(camera_specs):
+        raise RuntimeError("Provide camera_specs in the form ATTACHMENT;CAMERA_SLOT;SERIAL_NO;COLOR_PROFILE;DEPTH_PROFILE.")
 
     pythonpath = str(LOCAL_LIBREALSENSE_RELEASE)
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
@@ -56,27 +49,10 @@ def _launch_setup(context):
         LaunchConfiguration("startup_timeout_s").perform(context),
     ]
 
-    if not _is_unset(wrist_serial):
-        _append_camera_spec(
-            cmd,
-            camera_name="wrist",
-            serial_no=wrist_serial,
-            color_profile=LaunchConfiguration("wrist_color_profile").perform(context),
-            depth_profile=LaunchConfiguration("wrist_depth_profile").perform(context),
-        )
-    if not _is_unset(scene_serial):
-        _append_camera_spec(
-            cmd,
-            camera_name="scene",
-            serial_no=scene_serial,
-            color_profile=LaunchConfiguration("scene_color_profile").perform(context),
-            depth_profile=LaunchConfiguration("scene_depth_profile").perform(context),
-        )
-    if not _is_unset(extra_specs):
-        for spec in (item.strip() for item in extra_specs.split("|")):
-            if not spec:
-                continue
-            cmd.extend(["--camera-spec", spec])
+    for spec in (item.strip() for item in camera_specs.split("|")):
+        if not spec:
+            continue
+        _append_camera_spec(cmd, spec)
 
     return [
         ExecuteProcess(
@@ -95,13 +71,7 @@ def _launch_setup(context):
 def generate_launch_description() -> LaunchDescription:
     arguments = [
         DeclareLaunchArgument("camera_namespace", default_value="spark/cameras"),
-        DeclareLaunchArgument("wrist_serial_no", default_value=""),
-        DeclareLaunchArgument("scene_serial_no", default_value=""),
-        DeclareLaunchArgument("extra_camera_specs", default_value=""),
-        DeclareLaunchArgument("wrist_color_profile", default_value="640,480,30"),
-        DeclareLaunchArgument("scene_color_profile", default_value="640,480,30"),
-        DeclareLaunchArgument("wrist_depth_profile", default_value="640,480,30"),
-        DeclareLaunchArgument("scene_depth_profile", default_value="640,480,30"),
+        DeclareLaunchArgument("camera_specs", default_value=""),
         DeclareLaunchArgument("enable_depth", default_value="true"),
         DeclareLaunchArgument("wait_for_frames_timeout_ms", default_value="5000"),
         DeclareLaunchArgument("startup_timeout_s", default_value="15.0"),

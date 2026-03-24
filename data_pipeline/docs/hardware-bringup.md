@@ -1,6 +1,6 @@
 # Hardware Bring-Up
 
-This is the step-by-step sequence for the first real capture run with the current V1 pipeline.
+This is the step-by-step sequence for the first real capture run with the current V2 pipeline.
 
 For the current known-good Lightning-only command sequence on this machine, use [current-lightning-gelsight-runbook.md](./current-lightning-gelsight-runbook.md).
 
@@ -147,7 +147,7 @@ Notes:
 - The current local Teleop bring-up path still uses `.venv` because that environment contains the Teleop Python dependencies such as `ur_rtde`.
 - If the GUI logs `Please enable remote control on the robot!`, the dashboard connection succeeded but UR RTDE control was refused by the robot-side remote-control setting.
 
-Expected V1 robot topics come from this process:
+Expected robot topics come from this process:
 
 - `/spark/lightning/robot/joint_state`
 - `/spark/lightning/robot/eef_pose`
@@ -170,18 +170,17 @@ In a new terminal:
 ```bash
 source /opt/ros/jazzy/setup.bash
 ros2 launch data_pipeline/launch/realsense_contract.launch.py \
-  wrist_serial_no:=<WRIST_SERIAL> \
-  scene_serial_no:=<SCENE_SERIAL>
+  camera_specs:='lightning;wrist_1;<WRIST_SERIAL>;640,480,30;640,480,30|world;scene_1;<SCENE_SERIAL>;640,480,30;640,480,30'
 ```
 
 Replace the placeholders with the serials from step 1.
 
 Expected topics:
 
-- `/spark/cameras/wrist/color/image_raw`
-- `/spark/cameras/wrist/depth/image_rect_raw`
-- `/spark/cameras/scene/color/image_raw`
-- `/spark/cameras/scene/depth/image_rect_raw`
+- `/spark/cameras/lightning/wrist_1/color/image_raw`
+- `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
+- `/spark/cameras/world/scene_1/color/image_raw`
+- `/spark/cameras/world/scene_1/depth/image_rect_raw`
 
 This bridge uses `pyrealsense2` directly and stamps both color and depth images with host ROS time immediately after `wait_for_frames()` returns.
 The setup script builds and validates the local official `librealsense v2.54.2` runtime for system ROS Python, which is currently required for stable L515 support on this host.
@@ -194,8 +193,7 @@ If you are using two tactile sensors, start them in another terminal:
 ```bash
 source /opt/ros/jazzy/setup.bash
 ros2 launch data_pipeline/launch/gelsight_contract.launch.py \
-  left_device_path:=<LEFT_GELSIGHT_DEV> \
-  right_device_path:=<RIGHT_GELSIGHT_DEV>
+  sensor_specs:='lightning;finger_left;<LEFT_GELSIGHT_DEV>|lightning;finger_right;<RIGHT_GELSIGHT_DEV>'
 ```
 
 If you are using only one tactile sensor, launch only one side:
@@ -203,14 +201,13 @@ If you are using only one tactile sensor, launch only one side:
 ```bash
 source /opt/ros/jazzy/setup.bash
 ros2 launch data_pipeline/launch/gelsight_contract.launch.py \
-  enable_right:=false \
-  left_device_path:=<LEFT_GELSIGHT_DEV>
+  sensor_specs:='lightning;finger_left;<LEFT_GELSIGHT_DEV>'
 ```
 
 Expected topics when both are present:
 
-- `/spark/tactile/left/color/image_raw`
-- `/spark/tactile/right/color/image_raw`
+- `/spark/tactile/lightning/finger_left/color/image_raw`
+- `/spark/tactile/lightning/finger_right/color/image_raw`
 
 If only one side is present, you should see only the enabled topic. If tactile is not ready yet, skip this step. The profile allows optional tactile fields, but tactile and non-tactile episodes should still use separate published `dataset_id`s so the LeRobot feature schema stays homogeneous.
 
@@ -227,17 +224,18 @@ ros2 topic list | rg '^/spark/'
 Then spot-check a few topic rates:
 
 ```bash
-ros2 topic hz /spark/cameras/wrist/color/image_raw
-ros2 topic hz /spark/cameras/scene/color/image_raw
+ros2 topic hz /spark/cameras/lightning/wrist_1/color/image_raw
+ros2 topic hz /spark/cameras/world/scene_1/color/image_raw
 ros2 topic hz /spark/lightning/robot/joint_state
 ros2 topic hz /spark/thunder/robot/joint_state
+ros2 topic hz /spark/session/teleop_active
 ```
 
 If tactile is enabled, also check:
 
 ```bash
-ros2 topic hz /spark/tactile/left/color/image_raw
-ros2 topic hz /spark/tactile/right/color/image_raw
+ros2 topic hz /spark/tactile/lightning/finger_left/color/image_raw
+ros2 topic hz /spark/tactile/lightning/finger_right/color/image_raw
 ```
 
 Before recording, run the recorder dry-run:
@@ -364,10 +362,10 @@ Use these checks first:
 ```bash
 ros2 topic list | rg '^/spark/'
 ros2 topic echo --once /spark/lightning/robot/joint_state
-ros2 topic echo --once /spark/cameras/wrist/color/image_raw
-ros2 topic echo --once /spark/cameras/scene/color/image_raw
-ros2 param dump /spark/cameras/wrist
-ros2 param dump /spark/cameras/scene
+ros2 topic echo --once /spark/cameras/lightning/wrist_1/color/image_raw
+ros2 topic echo --once /spark/cameras/world/scene_1/color/image_raw
+ros2 param dump /spark/cameras/lightning/wrist_1
+ros2 param dump /spark/cameras/world/scene_1
 ```
 
 Common failure boundaries:

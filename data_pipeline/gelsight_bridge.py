@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-"""Publish GelSight Mini frames onto the stable V1 ROS 2 topic contract."""
+"""Publish GelSight Mini frames onto the V2 tactile ROS 2 topic contract."""
 
 from __future__ import annotations
 
@@ -30,7 +30,8 @@ from utilities.image_processing import crop_and_resize  # noqa: E402
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sensor-name", choices=["left", "right"], required=True)
+    parser.add_argument("--arm", choices=["lightning", "thunder"], required=True)
+    parser.add_argument("--finger-slot", choices=["finger_left", "finger_right"], required=True)
     parser.add_argument("--device-path", default="")
     parser.add_argument("--device-index", type=int, default=-1)
     parser.add_argument("--width", type=int, default=320)
@@ -45,10 +46,10 @@ class GelSightBridge(Node):
     """Publish tactile RGB frames with host-capture timestamps."""
 
     def __init__(self, args: argparse.Namespace) -> None:
-        super().__init__(f"gelsight_{args.sensor_name}_bridge")
+        super().__init__(f"gelsight_{args.arm}_{args.finger_slot}_bridge")
         self.args = args
         self.bridge = CvBridge()
-        self.topic_name = f"/spark/tactile/{args.sensor_name}/color/image_raw"
+        self.topic_name = f"/spark/tactile/{args.arm}/{args.finger_slot}/color/image_raw"
         self.publisher = self.create_publisher(
             Image,
             self.topic_name,
@@ -62,7 +63,7 @@ class GelSightBridge(Node):
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
         capture_width = int(round(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH)))
         capture_height = int(round(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        frame_id = args.frame_id or f"spark_tactile_{args.sensor_name}_optical_frame"
+        frame_id = args.frame_id or f"spark_tactile_{args.arm}_{args.finger_slot}_optical_frame"
         self.frame_id = frame_id
         self.declare_parameter("device_path", args.device_path)
         self.declare_parameter("device_index", int(args.device_index))

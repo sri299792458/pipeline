@@ -53,10 +53,12 @@ The following are not canonical dataset-alignment times:
 
 `{camera_slot}` is a canonical semantic slot such as:
 
-- `wrist_0`
-- `scene_0`
+- `wrist_1`
 - `scene_1`
 - `scene_2`
+- `scene_3`
+
+Camera slots are 1-based. This is intentional for user-facing consistency with joint numbering such as `joint_1 ... joint_6`.
 
 ### Finger slot
 
@@ -91,8 +93,8 @@ Examples of valid V2 raw topics:
 - `/spark/lightning/robot/joint_state`
 - `/spark/thunder/teleop/cmd_gripper_state`
 - `/spark/session/teleop_active`
-- `/spark/cameras/lightning/wrist_0/color/image_raw`
-- `/spark/cameras/world/scene_0/color/image_raw`
+- `/spark/cameras/lightning/wrist_1/color/image_raw`
+- `/spark/cameras/world/scene_1/color/image_raw`
 - `/spark/cameras/world/scene_2/depth/image_rect_raw`
 - `/spark/tactile/lightning/finger_left/color/image_raw`
 - `/spark/tactile/thunder/finger_right/marker_offset`
@@ -135,7 +137,7 @@ Topic names define semantic identity, not physical geometry.
 Examples:
 
 - `scene_1` identifies the canonical scene-camera slot
-- `lightning/wrist_0` identifies the wrist-camera slot attached to Lightning
+- `lightning/wrist_1` identifies the wrist-camera slot attached to Lightning
 
 Actual intrinsics and extrinsics, when available, belong in local overlays and manifest snapshots, not in the topic name itself.
 

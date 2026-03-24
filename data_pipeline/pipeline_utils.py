@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-"""Shared helpers for the V1 data pipeline scripts."""
+"""Shared helpers for the V2 data pipeline scripts."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
 ARM_ORDER = ("lightning", "thunder")
-MANIFEST_SCHEMA_VERSION = 4
+MANIFEST_SCHEMA_VERSION = 5
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
     "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",
@@ -35,6 +35,17 @@ ACTIVE_ARMS_TO_PROFILE_NAME = {
 }
 
 _TOPIC_TYPE_PATTERN = re.compile(r"^(?P<topic>/\S+)\s+\[(?P<type>[^\]]+)\]\s*$")
+_CAMERA_ROLE_PATTERN = re.compile(r"^(?P<arm>lightning|thunder)_(?P<slot>wrist_\d+)$")
+_SCENE_ROLE_PATTERN = re.compile(r"^(?P<slot>scene_\d+)$")
+_TACTILE_ROLE_PATTERN = re.compile(r"^(?P<arm>lightning|thunder)_(?P<finger>finger_left|finger_right)$")
+_CAMERA_TOPIC_PATTERN = re.compile(
+    r"^/spark/cameras/(?P<attachment>lightning|thunder|world)/(?P<slot>[a-z0-9_]+)/"
+    r"(?P<suffix>color/image_raw|depth/image_rect_raw|color/metadata|depth/metadata)$"
+)
+_TACTILE_TOPIC_PATTERN = re.compile(
+    r"^/spark/tactile/(?P<arm>lightning|thunder)/(?P<finger>finger_left|finger_right)/"
+    r"(?P<suffix>color/image_raw|depth/image_raw|marker_offset)$"
+)
 _STATE_SOURCE_COUNTS = (
     ("joint_state", 6),
     ("eef_pose", 6),
@@ -45,6 +56,58 @@ _ACTION_SOURCE_COUNTS = (
     ("cmd_joint_state", 6),
     ("cmd_gripper_state", 1),
 )
+
+
+def camera_path_parts_for_role(role: str) -> tuple[str, str] | None:
+    role_str = str(role).strip()
+    if not role_str:
+        return None
+    scene_match = _SCENE_ROLE_PATTERN.fullmatch(role_str)
+    if scene_match:
+        return "world", scene_match.group("slot")
+    wrist_match = _CAMERA_ROLE_PATTERN.fullmatch(role_str)
+    if wrist_match:
+        return wrist_match.group("arm"), wrist_match.group("slot")
+    return None
+
+
+def tactile_path_parts_for_role(role: str) -> tuple[str, str] | None:
+    match = _TACTILE_ROLE_PATTERN.fullmatch(str(role).strip())
+    if not match:
+        return None
+    return match.group("arm"), match.group("finger")
+
+
+def camera_topic_prefix_for_role(role: str) -> str | None:
+    parts = camera_path_parts_for_role(role)
+    if parts is None:
+        return None
+    attachment, slot = parts
+    return f"/spark/cameras/{attachment}/{slot}"
+
+
+def tactile_topic_prefix_for_role(role: str) -> str | None:
+    parts = tactile_path_parts_for_role(role)
+    if parts is None:
+        return None
+    arm, finger = parts
+    return f"/spark/tactile/{arm}/{finger}"
+
+
+def sensor_role_for_topic(topic: str) -> str | None:
+    camera_match = _CAMERA_TOPIC_PATTERN.fullmatch(str(topic).strip())
+    if camera_match:
+        attachment = camera_match.group("attachment")
+        slot = camera_match.group("slot")
+        if attachment == "world":
+            return slot
+        return f"{attachment}_{slot}"
+
+    tactile_match = _TACTILE_TOPIC_PATTERN.fullmatch(str(topic).strip())
+    if tactile_match:
+        return f"{tactile_match.group('arm')}_{tactile_match.group('finger')}"
+
+    return None
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
@@ -314,41 +377,28 @@ def infer_sensor_metadata(
     sensor_overrides = sensor_overrides or {}
     sensors: list[dict[str, Any]] = []
 
-    camera_specs = [
-        {
-            "sensor_name": "wrist",
-            "topic_prefix": "/spark/cameras/wrist",
-            "sensor_id": "cam_wrist_0",
-            "modality": "rgbd_camera",
-            "attached_to": "unknown",
-            "mount_site": "wrist",
-            "model": None,
-        },
-        {
-            "sensor_name": "scene",
-            "topic_prefix": "/spark/cameras/scene",
-            "sensor_id": "cam_scene_0",
-            "modality": "rgbd_camera",
-            "attached_to": "world",
-            "mount_site": "scene_0",
-            "model": None,
-        },
-    ]
-    for spec in camera_specs:
-        sensor_name = spec["sensor_name"]
-        topic_prefix = spec["topic_prefix"]
+    camera_roles = {
+        role
+        for role in (sensor_role_for_topic(topic) for topic in selected_topics)
+        if role and camera_topic_prefix_for_role(role) is not None
+    }
+    for role in sorted(camera_roles):
+        topic_prefix = camera_topic_prefix_for_role(role)
+        if topic_prefix is None:
+            continue
+        attachment, mount_site = camera_path_parts_for_role(role) or ("world", role)
         sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
         if not sensor_topics:
             continue
 
         sensor = {
-            "sensor_id": spec["sensor_id"],
-            "modality": spec["modality"],
-            "attached_to": spec["attached_to"],
-            "mount_site": spec["mount_site"],
+            "sensor_id": f"cam_{role}",
+            "modality": "rgbd_camera",
+            "attached_to": attachment,
+            "mount_site": mount_site,
             "topic_names": sensor_topics,
             "serial_number": None,
-            "model": spec["model"],
+            "model": None,
             "calibration_ref": None,
         }
 
@@ -363,50 +413,37 @@ def infer_sensor_metadata(
         if "device_type" in params and params["device_type"] not in {"", "''", '""'}:
             sensor["model"] = params["device_type"]
 
-        sensor.update(sensor_overrides.get(sensor_name, {}))
+        sensor.update(sensor_overrides.get(role, {}))
         sensors.append(sensor)
 
-    tactile_specs = [
-        {
-            "sensor_name": "left",
-            "topic_prefix": "/spark/tactile/left",
-            "node_name": "gelsight_left_bridge",
-            "sensor_id": "tac_finger_left_0",
-            "modality": "tactile_rgb",
-            "attached_to": "unknown",
-            "mount_site": "finger_left",
-            "model": "GelSight Mini",
-        },
-        {
-            "sensor_name": "right",
-            "topic_prefix": "/spark/tactile/right",
-            "node_name": "gelsight_right_bridge",
-            "sensor_id": "tac_finger_right_0",
-            "modality": "tactile_rgb",
-            "attached_to": "unknown",
-            "mount_site": "finger_right",
-            "model": "GelSight Mini",
-        },
-    ]
-    for spec in tactile_specs:
-        sensor_name = spec["sensor_name"]
-        topic_prefix = spec["topic_prefix"]
+    tactile_roles = {
+        role
+        for role in (sensor_role_for_topic(topic) for topic in selected_topics)
+        if role and tactile_topic_prefix_for_role(role) is not None
+    }
+    for role in sorted(tactile_roles):
+        topic_prefix = tactile_topic_prefix_for_role(role)
+        if topic_prefix is None:
+            continue
+        arm, mount_site = tactile_path_parts_for_role(role) or ("lightning", "finger_left")
         sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
         if not sensor_topics:
             continue
 
         sensor = {
-            "sensor_id": spec["sensor_id"],
-            "modality": spec["modality"],
-            "attached_to": spec["attached_to"],
-            "mount_site": spec["mount_site"],
+            "sensor_id": f"tac_{role}_0",
+            "modality": "tactile_rgb",
+            "attached_to": arm,
+            "mount_site": mount_site,
             "topic_names": sensor_topics,
             "serial_number": None,
-            "model": spec["model"],
+            "model": "GelSight Mini",
             "calibration_ref": None,
         }
+
+        node_name = f"/gelsight_{arm}_{mount_site}_bridge"
         try:
-            params = read_param_dump(spec["node_name"])
+            params = read_param_dump(node_name)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             params = {}
 
@@ -459,7 +496,7 @@ def infer_sensor_metadata(
         if preprocessing:
             sensor["preprocessing"] = preprocessing
 
-        sensor.update(sensor_overrides.get(sensor_name, {}))
+        sensor.update(sensor_overrides.get(role, {}))
         sensors.append(sensor)
 
     return sensors
@@ -484,7 +521,7 @@ def _rate_range(min_hz: float | None, max_hz: float | None) -> dict[str, float |
 
 
 def _static_topic_descriptor(topic: str) -> dict[str, Any]:
-    if topic == "/Spark_enable/lightning":
+    if topic == "/spark/session/teleop_active":
         return {
             "producer": {
                 "process": "TeleopSoftware/Spark/SparkNode.py",
@@ -506,17 +543,24 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
             "expected_rate_hz": _rate_range(20, 200),
         }
 
-    if topic == "/spark/cameras/wrist/color/image_raw":
+    camera_match = _CAMERA_TOPIC_PATTERN.fullmatch(topic)
+    if camera_match:
+        attachment = camera_match.group("attachment")
+        slot = camera_match.group("slot")
+        suffix = camera_match.group("suffix")
+        kind = "raw_sensor"
+        value_meaning = "RGB image observation" if suffix == "color/image_raw" else "Depth image"
+        units = None if suffix == "color/image_raw" else "millimeters"
         return {
             "producer": {
                 "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/wrist",
-                "upstream_source": "Intel RealSense wrist color stream",
+                "node": f"/spark/cameras/{attachment}/{slot}",
+                "upstream_source": f"Intel RealSense {attachment}/{slot} stream",
             },
             "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "RGB image observation",
-                "units": None,
+                "kind": kind,
+                "value_meaning": value_meaning,
+                "units": units,
                 "convention": None,
             },
             "timestamp": {
@@ -528,75 +572,11 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
             "expected_rate_hz": _rate_range(20, 30),
         }
 
-    if topic == "/spark/cameras/wrist/depth/image_rect_raw":
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/wrist",
-                "upstream_source": "Intel RealSense wrist depth stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "Depth image",
-                "units": "millimeters",
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    if topic == "/spark/cameras/scene/color/image_raw":
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/scene",
-                "upstream_source": "Intel RealSense scene color stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "RGB image observation",
-                "units": None,
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    if topic == "/spark/cameras/scene/depth/image_rect_raw":
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": "/spark/cameras/scene",
-                "upstream_source": "Intel RealSense scene depth stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "Depth image",
-                "units": "millimeters",
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    tactile_match = re.fullmatch(r"/spark/tactile/(left|right)/(color/image_raw|depth/image_raw|marker_offset)", topic)
+    tactile_match = _TACTILE_TOPIC_PATTERN.fullmatch(topic)
     if tactile_match:
-        side, suffix = tactile_match.groups()
+        arm = tactile_match.group("arm")
+        finger = tactile_match.group("finger")
+        suffix = tactile_match.group("suffix")
         kind = "raw_sensor" if suffix == "color/image_raw" else "derived_sensor"
         value_meaning = {
             "color/image_raw": "GelSight tactile RGB frame",
@@ -607,8 +587,8 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
         return {
             "producer": {
                 "process": "data_pipeline/gelsight_bridge.py",
-                "node": f"/gelsight_{side}_bridge",
-                "upstream_source": f"GelSight Mini {side} tactile stream",
+                "node": f"/gelsight_{arm}_{finger}_bridge",
+                "upstream_source": f"GelSight Mini {arm}/{finger} tactile stream",
             },
             "semantics": {
                 "kind": kind,
