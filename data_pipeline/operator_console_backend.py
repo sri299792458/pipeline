@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.pipeline_utils import get_git_commit, load_yaml, make_episode_id
+from data_pipeline.device_discovery import discover_session_devices as discover_runtime_session_devices
 from data_pipeline.session_capture_plan import build_session_capture_plan
 
 
@@ -317,6 +318,14 @@ class OperatorConsoleBackend:
             stderr=subprocess.DEVNULL,
         )
         self._record_event("open_viewer", {"url": url})
+
+    def discover_session_devices(self, config: dict[str, Any]) -> list[dict[str, Any]]:
+        self.last_action_error = ""
+        try:
+            return discover_runtime_session_devices(config)
+        except Exception as exc:
+            self.last_action_error = str(exc)
+            return []
 
     def request_health_refresh(self, config: dict[str, Any]) -> None:
         if self.health_refresh_in_flight:

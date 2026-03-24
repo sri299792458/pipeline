@@ -467,3 +467,30 @@ But it is the first UI/backend form where:
 - the operator edits an explicit device list
 - the backend uses that same device list to build the session plan
 - the session plan chooses the raw sensor topics that will be recorded
+
+## Third UI Slice
+
+The third UI slice introduces actual runtime discovery.
+
+- RealSense discovery uses `pyrealsense2` from `.venv` when available
+- GelSight discovery uses `/dev/v4l/by-id/*-video-index0`
+- discovered devices are matched back through the local sensor overlay when possible so canonical roles can be suggested from lab defaults instead of guessed blindly
+
+The operator console now uses discovery in two places:
+
+- preset load prefers discovered devices over preset-baked serial/path values when hardware is present
+- the `Session Devices` table has a `Discover Devices` button to refresh the device list
+
+This means the current console no longer depends purely on stale preset values to know which RealSense cameras are available on the host.
+
+The current limitations are still explicit:
+
+- GelSight discovery is only as good as the current `/dev/v4l/by-id` names and overlay serials
+- extra discovered RealSense devices without overlay matches still get heuristic role suggestions
+- there is still no live preview attached to discovery
+
+But the important boundary is now in place:
+
+- the session device table can be populated from actual available hardware
+- overlay metadata supplies stable lab meaning where possible
+- the session plan and raw topic selection can now follow actual discovered devices instead of just preset literals

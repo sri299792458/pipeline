@@ -1934,3 +1934,22 @@
   - this prevents plans without GelSight from incorrectly selecting tactile topics and then failing later when the recorder expects them to be live
 - This is still transitional because runtime discovery is not yet live hardware discovery.
   - But the UI/backend contract is now aligned around an explicit device list rather than hidden one-off fields.
+
+### Third session-plan UI slice
+
+- Added [device_discovery.py](/home/srinivas/Desktop/pipeline/data_pipeline/device_discovery.py) as the first real runtime discovery helper for the operator console.
+- RealSense discovery now uses `pyrealsense2` from `.venv` directly when available, which correctly enumerates the current cameras on this host:
+  - D455 `213622251272`
+  - D405 `130322273305`
+  - L515 `f1380660`
+- GelSight discovery still uses `/dev/v4l/by-id/*-video-index0` because that is the most practical current source for those cameras.
+- Discovery maps devices back through `sensors.local.yaml` when serials match so canonical roles can be suggested from the lab overlay instead of guessed from scratch.
+- Updated [operator_console_backend.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_backend.py) with a `discover_session_devices(...)` helper.
+- Updated [operator_console_qt.py](/home/srinivas/Desktop/pipeline/data_pipeline/operator_console_qt.py) so:
+  - presets now prefer live discovery over stale preset serials when devices are available
+  - the `Session Devices` table gets a `Discover Devices` button
+  - discovered devices populate the table with canonical-role suggestions and enabled defaults where the local overlay matches
+- This is still not full discovery in the final sense:
+  - GelSight identification remains limited by what is visible in `/dev/v4l/by-id`
+  - and no live image preview is attached yet
+  - but the session device list is now driven by actual available hardware rather than only by preset text fields

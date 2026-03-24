@@ -302,6 +302,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         controls.setSpacing(8)
         self.reset_devices_button = QPushButton("Reset From Preset")
         self.reset_devices_button.clicked.connect(self._reset_session_devices_from_current_preset)
+        self.discover_devices_button = QPushButton("Discover Devices")
+        self.discover_devices_button.clicked.connect(self._discover_session_devices)
         add_camera = QPushButton("Add Camera")
         add_camera.clicked.connect(lambda: self._append_session_device_row({"kind": "realsense"}))
         add_gelsight = QPushButton("Add GelSight")
@@ -309,6 +311,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         remove_selected = QPushButton("Remove Selected")
         remove_selected.clicked.connect(self._remove_selected_session_device_row)
         controls.addWidget(self.reset_devices_button)
+        controls.addWidget(self.discover_devices_button)
         controls.addWidget(add_camera)
         controls.addWidget(add_gelsight)
         controls.addWidget(remove_selected)
@@ -471,6 +474,27 @@ class OperatorConsoleQtWindow(QMainWindow):
 
         return devices
 
+    def _discovery_seed_config(self, preset: dict[str, object] | None = None) -> dict[str, object]:
+        active_arms = str((preset or {}).get("active_arms", self._get_field("active_arms"))).strip() or "lightning"
+        sensors_file = str((preset or {}).get("sensors_file", self._get_field("sensors_file"))).strip()
+        realsense = (preset or {}).get("realsense", {}) if isinstance((preset or {}).get("realsense", {}), dict) else {}
+        gelsight = (preset or {}).get("gelsight", {}) if isinstance((preset or {}).get("gelsight", {}), dict) else {}
+
+        session_devices = self._session_devices() if self.session_devices_table.rowCount() > 0 else []
+        return {
+            "active_arms": active_arms,
+            "sensors_file": sensors_file,
+            "realsense_enabled": bool(realsense.get("enabled", True)) if preset is not None else True,
+            "gelsight_enable_left": bool(gelsight.get("enable_left", False)) if preset is not None else any(
+                str(device.get("resolved_role", "")).endswith("finger_left") and bool(device.get("enabled", False))
+                for device in session_devices
+            ),
+            "gelsight_enable_right": bool(gelsight.get("enable_right", False)) if preset is not None else any(
+                str(device.get("resolved_role", "")).endswith("finger_right") and bool(device.get("enabled", False))
+                for device in session_devices
+            ),
+        }
+
     def _set_session_devices(self, devices: list[dict[str, object]]) -> None:
         self.session_devices_table.setRowCount(0)
         for device in devices:
@@ -571,6 +595,12 @@ class OperatorConsoleQtWindow(QMainWindow):
         if not preset_id:
             return
         self._set_session_devices(self._default_session_devices_for_preset(self.backend.get_preset(preset_id)))
+
+    def _discover_session_devices(self) -> None:
+        config = self._discovery_seed_config()
+        devices = self.backend.discover_session_devices(config)
+        if devices:
+            self._set_session_devices(devices)
 
     def _build_optional_box(self) -> QWidget:
         box = QGroupBox("Optional")
@@ -765,7 +795,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         self._set_field("viewer_base_url", str(preset.get("viewer_base_url", "")))
         self._set_field("notes", "")
         self._set_field("extra_topics", "")
-        self._set_session_devices(self._default_session_devices_for_preset(preset))
+        discovered_devices = self.backend.discover_session_devices(self._discovery_seed_config(preset))
+        self._set_session_devices(discovered_devices or self._default_session_devices_for_preset(preset))
 
     def _set_field(self, key: str, value: str | bool) -> None:
         widget = self.form_widgets[key]
