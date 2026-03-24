@@ -270,9 +270,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.form_widgets["language_instruction"] = QLineEdit()
         self.form_widgets["operator"] = QLineEdit(os.environ.get("USER", ""))
         active_arms = QComboBox()
-        active_arms.addItem("lightning", "lightning")
-        active_arms.addItem("thunder", "thunder")
-        active_arms.addItem("lightning + thunder", "lightning,thunder")
+        active_arms.addItems(["lightning", "thunder", "lightning,thunder"])
         self.form_widgets["active_arms"] = active_arms
 
         for label, key in [
@@ -788,9 +786,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         if isinstance(widget, QLineEdit):
             widget.setText(str(value))
         elif isinstance(widget, QComboBox):
-            index = widget.findData(str(value))
-            if index < 0:
-                index = widget.findText(str(value))
+            index = widget.findText(str(value))
             if index >= 0:
                 widget.setCurrentIndex(index)
             else:
@@ -803,9 +799,6 @@ class OperatorConsoleQtWindow(QMainWindow):
         if isinstance(widget, QLineEdit):
             return widget.text().strip()
         if isinstance(widget, QComboBox):
-            data = widget.currentData()
-            if data not in {None, ""}:
-                return str(data).strip()
             return widget.currentText().strip()
         if isinstance(widget, QCheckBox):
             return widget.isChecked()
