@@ -139,7 +139,7 @@ Examples:
 - `scene_1` identifies the canonical scene-camera slot
 - `lightning/wrist_1` identifies the wrist-camera slot attached to Lightning
 
-Actual intrinsics and extrinsics, when available, belong in the sensors file and manifest snapshots, not in the topic name itself.
+Actual intrinsics and extrinsics, when available, belong in the local calibration results file and manifest snapshots, not in the topic name itself.
 
 
 ## Producer Expectations

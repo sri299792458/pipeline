@@ -40,6 +40,26 @@ The current V2-direction path is in place:
 The remaining work is live hardware validation with the actual full sensor set attached.
 
 
+## Calibration
+
+The pipeline now has a first-class camera calibration workflow for:
+
+- wrist-camera hand-eye calibration
+- static scene-camera extrinsics
+- click-point validation
+
+Use:
+
+- [docs/calibration.md](./docs/calibration.md)
+
+The local split is:
+
+- `sensors.local.yaml`
+  - device identity and canonical roles
+- `calibration.local.json`
+  - solved calibration results
+
+
 ## Embodiments
 
 The accepted direction is:
@@ -148,6 +168,8 @@ Each episode is written under `raw_episodes/<episode_id>/` with:
 - `bag/`
 - `episode_manifest.json`
 - `notes.md`
+
+If `data_pipeline/configs/calibration.local.json` exists, the recorder also snapshots the current solved calibration into the sensor entries of `episode_manifest.json`.
 
 `episode_manifest.json` is now the single resolved per-episode snapshot. The reusable profile stays in YAML, and the manifest carries the resolved episode-specific sections:
 

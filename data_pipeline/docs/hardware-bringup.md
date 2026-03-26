@@ -117,6 +117,23 @@ Notes:
 - Fill in `sensor_id`, `attached_to`, and `mount_site` as well. Those fields are what make the raw episode remappable later if published naming changes.
 
 
+## 2.5. Calibrate Cameras
+
+If you want solved camera geometry in the raw manifests, run the calibration workflow before recording.
+
+Use:
+
+- [calibration.md](./calibration.md)
+
+The important output files are:
+
+- `data_pipeline/configs/world_board.local.json`
+- `data_pipeline/configs/calibration_poses.local.json`
+- `data_pipeline/configs/calibration.local.json`
+
+`record_episode.py` will automatically snapshot `calibration.local.json` into each raw manifest when that file exists.
+
+
 ## 3. Start The Teleop Input Devices
 
 If you are using SPARK, SpaceMouse, or VR inputs, start the legacy device launcher:

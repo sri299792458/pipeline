@@ -76,7 +76,9 @@ Its main job is:
 
 - serial or device-path to canonical-role mapping
 
-It may also hold optional local metadata such as calibration references or geometry.
+It may also hold optional local metadata such as calibration references.
+
+Solved camera geometry lives separately in `calibration.local.json` and is snapshotted into raw manifests when present.
 
 ### Session profile
 

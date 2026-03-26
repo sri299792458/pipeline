@@ -81,7 +81,8 @@ It may also carry optional metadata such as:
 - sensor ids
 - mount information
 - calibration references
-- optional geometry
+
+Solved camera geometry is a separate local file, not something the operator should type into the session profile.
 
 ### Session profile
 

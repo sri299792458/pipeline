@@ -30,6 +30,7 @@ from data_pipeline.pipeline_utils import (
     get_git_commit,
     infer_sensor_metadata,
     list_live_topics,
+    load_optional_calibration_results,
     load_optional_sensor_overrides,
     MANIFEST_SCHEMA_VERSION,
     make_episode_id,
@@ -57,6 +58,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--storage-id", default=DEFAULT_BAG_STORAGE_ID)
     parser.add_argument("--storage-preset-profile", default=DEFAULT_BAG_STORAGE_PRESET_PROFILE)
     parser.add_argument("--sensors-file", default=None)
+    parser.add_argument("--calibration-file", default="")
     parser.add_argument("--session-plan-file", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--dry-run", action="store_true")
@@ -116,11 +118,19 @@ def build_manifest(
     live_topics: dict[str, str],
     extra_topics: list[str],
     sensor_overrides: dict[str, dict],
+    sensors_file: Path | None,
+    calibration_results: dict[str, object],
+    calibration_results_path: Path | None,
     start_time_ns: int,
     end_time_ns: int,
     session_capture_plan: dict | None,
 ) -> dict:
-    sensors = infer_sensor_metadata(selected_topics, sensor_overrides=sensor_overrides)
+    sensors = infer_sensor_metadata(
+        selected_topics,
+        sensor_overrides=sensor_overrides,
+        calibration_results=calibration_results,
+        calibration_results_path=calibration_results_path,
+    )
     recorded_topics = build_recorded_topics_snapshot(
         profile=profile,
         selected_topics=selected_topics,
@@ -164,6 +174,12 @@ def build_manifest(
             },
             "sensors": {
                 "inventory_version": 2,
+                "sensors_file": str(sensors_file.relative_to(REPO_ROOT)) if sensors_file and sensors_file.is_relative_to(REPO_ROOT) else (str(sensors_file) if sensors_file else None),
+                "calibration_results_file": (
+                    str(calibration_results_path.relative_to(REPO_ROOT))
+                    if calibration_results_path and calibration_results_path.is_relative_to(REPO_ROOT)
+                    else (str(calibration_results_path) if calibration_results_path else None)
+                ),
                 "devices": sensors,
             },
             "recorded_topics": recorded_topics,
@@ -366,7 +382,9 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_root = Path(args.raw_root)
     args.episode_id = args.episode_id or make_episode_id()
-    sensor_overrides = load_optional_sensor_overrides(args.sensors_file)
+    sensors_file = Path(args.sensors_file).expanduser().resolve() if args.sensors_file else None
+    sensor_overrides = load_optional_sensor_overrides(sensors_file)
+    calibration_results, calibration_results_path = load_optional_calibration_results(args.calibration_file)
     session_capture_plan = load_optional_json(args.session_plan_file)
     extra_topics = parse_task_list(args.extra_topics)
 
@@ -404,6 +422,9 @@ def main(argv: list[str] | None = None) -> int:
             live_topics=live_topics,
             extra_topics=extra_topics,
             sensor_overrides=sensor_overrides,
+            sensors_file=sensors_file,
+            calibration_results=calibration_results,
+            calibration_results_path=calibration_results_path,
             start_time_ns=0,
             end_time_ns=0,
             session_capture_plan=session_capture_plan,
@@ -451,6 +472,9 @@ def main(argv: list[str] | None = None) -> int:
         live_topics=live_topics,
         extra_topics=extra_topics,
         sensor_overrides=sensor_overrides,
+        sensors_file=sensors_file,
+        calibration_results=calibration_results,
+        calibration_results_path=calibration_results_path,
         start_time_ns=start_time_ns,
         end_time_ns=start_time_ns,
         session_capture_plan=session_capture_plan,
@@ -489,6 +513,9 @@ def main(argv: list[str] | None = None) -> int:
         live_topics=live_topics,
         extra_topics=extra_topics,
         sensor_overrides=sensor_overrides,
+        sensors_file=sensors_file,
+        calibration_results=calibration_results,
+        calibration_results_path=calibration_results_path,
         start_time_ns=start_time_ns,
         end_time_ns=end_time_ns,
         session_capture_plan=session_capture_plan,

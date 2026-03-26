@@ -2129,3 +2129,23 @@
 - The stable raw-to-published link remains:
   - raw identity: `episode_id`
   - publish artifacts: `published/<dataset_id>/meta/spark_conversion/<episode_id>/conversion_summary.json`
+
+### Calibration subsystem
+
+- Added a first-class V2 calibration workflow under `data_pipeline/`:
+  - `record_calibration_poses.py`
+  - `compute_world_board.py`
+  - `calibrate_rig.py`
+  - `validate_calibration_click.py`
+  - `data_pipeline/calibration/`
+- The calibration design now matches the intended split:
+  - `sensors.local.yaml` for local rig identity and canonical roles
+  - `calibration.local.json` for solved intrinsics / extrinsics / hand-eye results
+- Wrist-camera calibration uses ChArUco observations plus UR `getActualTCPPose()` and explicitly assumes the active UR TCP is the tool flange.
+- Static scene-camera calibration uses a direct measured `T_world_board` path rather than chaining through a wrist camera.
+- `record_episode.py` now snapshots the active solved calibration into raw manifests when `data_pipeline/configs/calibration.local.json` exists or `--calibration-file` is provided.
+- Each manifest now records:
+  - `sensors.sensors_file`
+  - `sensors.calibration_results_file`
+  - per-sensor `calibration_snapshot` entries when available
+- Added [calibration.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/calibration.md) and linked calibration into the active README / hardware bring-up docs.

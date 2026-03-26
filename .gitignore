@@ -26,6 +26,8 @@ Thumbs.db
 raw_episodes/
 published/
 .operator_console/
+data_pipeline/configs/*.local.yaml
+data_pipeline/configs/*.local.json
 
 # Local upstream checkouts used for reference/integration work
 lerobot/

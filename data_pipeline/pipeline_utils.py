@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIGS_DIR = REPO_ROOT / "data_pipeline" / "configs"
 DEFAULT_PROFILE_PATH = REPO_ROOT / "data_pipeline" / "configs" / "multisensor_20hz.yaml"
 DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
+DEFAULT_CALIBRATION_RESULTS_PATH = CONFIGS_DIR / "calibration.local.json"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
 ARM_ORDER = ("lightning", "thunder")
@@ -391,11 +392,84 @@ def load_optional_sensor_overrides(path: str | Path | None) -> dict[str, dict[st
     raise ValueError("Sensor override file must contain a 'sensors' mapping or list.")
 
 
+def _repo_relative_path(path: str | Path | None) -> str | None:
+    if path in {None, ""}:
+        return None
+    resolved = Path(path).expanduser().resolve()
+    try:
+        return str(resolved.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(resolved)
+
+
+def resolve_optional_calibration_results_path(path: str | Path | None) -> Path | None:
+    if path in {None, ""}:
+        candidate = DEFAULT_CALIBRATION_RESULTS_PATH
+        return candidate if candidate.exists() else None
+
+    candidate = Path(path).expanduser()
+    if not candidate.exists():
+        raise FileNotFoundError(f"Calibration results file not found: {candidate}")
+    return candidate.resolve()
+
+
+def load_optional_calibration_results(path: str | Path | None) -> tuple[dict[str, Any], Path | None]:
+    resolved_path = resolve_optional_calibration_results_path(path)
+    if resolved_path is None:
+        return {}, None
+
+    with resolved_path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Expected a JSON object in calibration results file {resolved_path}, "
+            f"got {type(data).__name__}"
+        )
+    return data, resolved_path
+
+
+def _calibration_snapshot_for_role(
+    role: str,
+    calibration_results: dict[str, Any],
+    calibration_results_path: Path | None,
+) -> dict[str, Any] | None:
+    cameras = calibration_results.get("cameras", {})
+    if not isinstance(cameras, dict):
+        return None
+    entry = cameras.get(role)
+    if not isinstance(entry, dict):
+        return None
+
+    snapshot: dict[str, Any] = {
+        "role": role,
+        "source_file": _repo_relative_path(calibration_results_path),
+    }
+    for key in ("version", "timestamp", "tcp_frame_assumption", "charuco_config"):
+        if key in calibration_results:
+            snapshot[key] = calibration_results[key]
+    for key in (
+        "type",
+        "serial_number",
+        "model",
+        "attached_to",
+        "mount_site",
+        "intrinsics",
+        "hand_eye_calibration",
+        "extrinsics",
+    ):
+        if key in entry:
+            snapshot[key] = entry[key]
+    return snapshot
+
+
 def infer_sensor_metadata(
     selected_topics: list[str],
     sensor_overrides: dict[str, dict[str, Any]] | None = None,
+    calibration_results: dict[str, Any] | None = None,
+    calibration_results_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     sensor_overrides = sensor_overrides or {}
+    calibration_results = calibration_results or {}
     sensors: list[dict[str, Any]] = []
 
     camera_roles = {
@@ -413,6 +487,7 @@ def infer_sensor_metadata(
             continue
 
         sensor = {
+            "role": role,
             "sensor_id": f"cam_{role}",
             "modality": "rgbd_camera",
             "attached_to": attachment,
@@ -435,6 +510,9 @@ def infer_sensor_metadata(
             sensor["model"] = params["device_type"]
 
         sensor.update(sensor_overrides.get(role, {}))
+        calibration_snapshot = _calibration_snapshot_for_role(role, calibration_results, calibration_results_path)
+        if calibration_snapshot is not None:
+            sensor["calibration_snapshot"] = calibration_snapshot
         sensors.append(sensor)
 
     tactile_roles = {
@@ -452,6 +530,7 @@ def infer_sensor_metadata(
             continue
 
         sensor = {
+            "role": role,
             "sensor_id": f"tac_{role}_0",
             "modality": "tactile_rgb",
             "attached_to": arm,
