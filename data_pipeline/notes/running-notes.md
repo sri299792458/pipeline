@@ -1,5 +1,14 @@
 # Running Notes
 
+## 2026-03-25
+
+### Raiden comparison pass
+
+- Cloned [`raiden/`](../../raiden/) as a serious reference point for the whole lab system, not just isolated abstractions.
+- Wrote [`docs/raiden-reference-analysis.md`](../docs/raiden-reference-analysis.md) to compare Raiden against the current V2 pipeline.
+- Main conclusion: the recent V2 moves toward discovery, one local rig file, session-level fixed setup, and convert-time publish choice were directionally right.
+- Bigger conclusion: the current stack is still incomplete at the lab-system level. The main missing subsystems compared with Raiden are first-class calibration, replay, clearer metadata-management separation, and a later export layer beyond direct LeRobot conversion.
+
 ## 2026-03-19
 
 ### Initial setup
