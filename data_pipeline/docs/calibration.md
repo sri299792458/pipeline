@@ -96,6 +96,8 @@ Notes:
 - if any selected role is a static scene camera, the runner also needs a wrist camera reference:
   - if a wrist role is already selected, it uses that
   - otherwise it auto-picks a configured wrist role from the sensors file
+  - if both `lightning_wrist_1` and `thunder_wrist_1` are available and no explicit `--reference-wrist-role` is given, the default is `lightning_wrist_1`
+    - mnemonic: lightning travels before thunder
 - the runner reads factory intrinsics from the RealSense SDK and solves:
   - wrist cameras as hand-eye calibration
   - scene cameras automatically from the wrist-calibrated board observations

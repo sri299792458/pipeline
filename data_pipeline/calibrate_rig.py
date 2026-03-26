@@ -137,6 +137,8 @@ def _default_poses_path() -> Path | None:
 
 
 def _reference_wrist_sort_key(target: CameraTarget) -> tuple[int, str]:
+    # Lab default: when both wrists are available and no explicit reference is
+    # requested, prefer Lightning as the scene-camera reference arm.
     if target.attached_to == "lightning":
         return (0, target.role)
     if target.attached_to == "thunder":
@@ -332,7 +334,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run V2 camera calibration for scene and wrist RealSense cameras.")
     parser.add_argument("--sensors-file", default=str(DEFAULT_SENSORS_FILE))
     parser.add_argument("--camera-role", action="append", default=[])
-    parser.add_argument("--reference-wrist-role", default="")
+    parser.add_argument(
+        "--reference-wrist-role",
+        default="",
+        help=(
+            "Explicit wrist role to use as the scene-camera reference frame. "
+            "If omitted and both wrists are available, lightning_wrist_1 is the default."
+        ),
+    )
     parser.add_argument("--poses-file", default="")
     parser.add_argument("--output-file", default=str(DEFAULT_RESULTS_FILE))
     parser.add_argument("--width", type=int, default=1280)
