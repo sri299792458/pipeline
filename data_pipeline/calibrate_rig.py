@@ -187,8 +187,20 @@ def _capture_pose_driven_observations(
 
     try:
         for target in targets:
-            target.camera.open()
-            target.camera.warmup(warmup_frames)
+            try:
+                print(
+                    f"Opening {target.role} ({target.model or 'Intel RealSense'} {target.serial_number}) "
+                    f"at {target.camera.width}x{target.camera.height}@{target.camera.fps}..."
+                )
+                target.camera.open()
+                print(f"  Warming up {target.role} with {warmup_frames} frames...")
+                target.camera.warmup(warmup_frames)
+                print(f"  {target.role}: ready")
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to start camera role {target.role} ({target.serial_number}). "
+                    "This usually means the device is unplugged, wedged, or already in use."
+                ) from exc
 
         for pose_index, pose in enumerate(pose_list, start=1):
             pose_name = str(pose.get("name", f"pose_{pose_index:03d}"))
@@ -344,18 +356,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--poses-file", default="")
     parser.add_argument("--output-file", default=str(DEFAULT_RESULTS_FILE))
-    parser.add_argument("--width", type=int, default=1280)
-    parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--width", type=int, default=640)
+    parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--warmup-frames", type=int, default=10)
     parser.add_argument("--stabilization-s", type=float, default=1.0)
     parser.add_argument("--move-speed", type=float, default=0.6)
     parser.add_argument("--move-acceleration", type=float, default=0.8)
-    parser.add_argument("--squares-x", type=int, default=9)
+    parser.add_argument("--squares-x", type=int, default=6)
     parser.add_argument("--squares-y", type=int, default=9)
     parser.add_argument("--square-length", type=float, default=0.03)
-    parser.add_argument("--marker-length", type=float, default=0.023)
-    parser.add_argument("--dictionary", default="DICT_6X6_250")
+    parser.add_argument("--marker-length", type=float, default=0.022)
+    parser.add_argument("--dictionary", default="DICT_4X4_50")
     return parser
 
 
@@ -461,4 +473,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("\nCalibration interrupted. Closed camera and robot resources.")
+        raise SystemExit(130)

@@ -12,6 +12,13 @@ The calibration system has two parts:
 The sensors file tells the pipeline which physical device is which role.
 The calibration results file tells the pipeline where that camera is.
 
+Current lab board default:
+
+- dictionary: `DICT_4X4_50`
+- squares: `6 x 9`
+- square length: `0.03 m`
+- marker length: `0.022 m`
+
 
 ## Current Assumptions
 
@@ -81,6 +88,8 @@ python data_pipeline/calibrate_rig.py \
   --sensors-file data_pipeline/configs/sensors.local.yaml
 ```
 
+The runner now defaults to the current lab board above, so you only need to pass board flags if you are calibrating against a different ChArUco target.
+
 To calibrate only selected camera roles:
 
 ```bash
@@ -135,7 +144,16 @@ Click a pixel in the RGB image window. The tool prints:
 - depth
 - camera-frame point
 - calibrated reference-frame point
-- current TCP pose for wrist cameras
+- current tip point
+- current tip delta to the clicked point
+
+Then it asks whether to move. If you confirm:
+
+- the validation arm moves to its configured home joint pose first
+- the home orientation is reused
+- the tip offset defaults to `0 0 0.162`
+- the robot moves the tip to the clicked point
+- the script prints the reached tip delta and exits
 
 
 ## 5. Recording Integration

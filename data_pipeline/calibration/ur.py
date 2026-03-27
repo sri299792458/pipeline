@@ -27,6 +27,7 @@ class ArmConnectionInfo:
     arm: str
     display_name: str
     ip_address: str
+    home_joints_rad: tuple[float, ...]
 
 
 def load_arm_connection_info(active_arms: list[str] | tuple[str, ...] | None = None) -> dict[str, ArmConnectionInfo]:
@@ -43,6 +44,7 @@ def load_arm_connection_info(active_arms: list[str] | tuple[str, ...] | None = N
             arm=canonical,
             display_name=arm_config.name,
             ip_address=arm_config.ip_address,
+            home_joints_rad=tuple(float(angle) for angle in arm_config.home_joints_rad),
         )
     return info
 
@@ -73,11 +75,21 @@ class CalibrationArm:
             raise RuntimeError(f"moveJ is unavailable for {self.arm_info.arm}: control interface not connected.")
         self.control.moveJ(list(joint_positions), speed, acceleration)
 
+    def movel(self, tcp_pose: list[float], speed: float = 0.08, acceleration: float = 0.2) -> None:
+        if self.control is None:
+            raise RuntimeError(f"moveL is unavailable for {self.arm_info.arm}: control interface not connected.")
+        self.control.moveL(list(tcp_pose), speed, acceleration)
+
     def close(self) -> None:
         try:
             self.disable_freedrive()
         except Exception:
             pass
+        if self.control is not None:
+            try:
+                self.control.stopScript()
+            except Exception:
+                pass
         try:
             self.state.disconnect()
         except Exception:

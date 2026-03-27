@@ -11,8 +11,8 @@ import pyrealsense2 as rs
 class RealSenseCalibrationCamera:
     name: str
     serial_number: str
-    width: int = 1280
-    height: int = 720
+    width: int = 640
+    height: int = 480
     fps: int = 30
 
     def __post_init__(self) -> None:

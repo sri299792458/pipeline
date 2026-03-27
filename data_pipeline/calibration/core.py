@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation
 
 def _aruco_dictionary(dictionary_name: str):
     if not hasattr(cv2, "aruco"):
-        raise ImportError("cv2.aruco is missing. Install opencv-contrib-python-headless.")
+        raise ImportError("cv2.aruco is missing. Install opencv-contrib-python.")
     if not hasattr(cv2.aruco, dictionary_name):
         raise ValueError(f"Unknown ArUco dictionary: {dictionary_name}")
     return cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dictionary_name))
@@ -20,11 +20,11 @@ def _aruco_dictionary(dictionary_name: str):
 
 @dataclass(frozen=True)
 class CharucoBoardConfig:
-    squares_x: int = 9
+    squares_x: int = 6
     squares_y: int = 9
     square_length: float = 0.03
-    marker_length: float = 0.023
-    dictionary: str = "DICT_6X6_250"
+    marker_length: float = 0.022
+    dictionary: str = "DICT_4X4_50"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -175,7 +175,7 @@ class CharucoDetector:
         distortion_coeffs: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, float]:
         success, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(
-            np.asarray(charuco_corners, dtype=np.float64),
+            np.asarray(charuco_corners, dtype=np.float32),
             np.asarray(charuco_ids, dtype=np.int32),
             self.board,
             np.asarray(camera_matrix, dtype=np.float64),
