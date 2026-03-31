@@ -39,6 +39,7 @@ fi
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip "setuptools<80" wheel
 "${VENV_DIR}/bin/python" -m pip install -r "${ROOT_DIR}/data_pipeline/requirements-converter.txt"
 "${VENV_DIR}/bin/python" -m pip install -r "${ROOT_DIR}/data_pipeline/requirements-teleop.txt"
+"${VENV_DIR}/bin/python" -m pip install -r "${ROOT_DIR}/data_pipeline/requirements-operator-console.txt"
 "${VENV_DIR}/bin/python" -m pip install torch==2.6.0 torchvision==0.21.0
 "${VENV_DIR}/bin/python" -m pip install --no-deps -e "${LEROBOT_DIR}"
 

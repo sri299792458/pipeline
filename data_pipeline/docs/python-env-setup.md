@@ -72,21 +72,12 @@ What that script currently installs:
 
 - [requirements-converter.txt](../requirements-converter.txt)
 - [requirements-teleop.txt](../requirements-teleop.txt)
+- [requirements-operator-console.txt](../requirements-operator-console.txt)
 - `torch==2.6.0`
 - `torchvision==0.21.0`
 - editable `lerobot` from the sibling workspace checkout
 
-## Install The Qt Operator Console Dependency
-
-If the user wants the Qt operator console, install:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source .venv/bin/activate
-pip install -r data_pipeline/requirements-operator-console.txt
-```
-
-That currently adds:
+That includes the Qt operator console dependency:
 
 - `PySide6`
 
@@ -128,7 +119,7 @@ print("shared .venv imports look good")
 PY
 ```
 
-If the Qt operator console dependency was installed, this should also work:
+The Qt operator console import check should also work:
 
 ```bash
 source /opt/ros/jazzy/setup.bash

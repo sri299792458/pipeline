@@ -25,8 +25,9 @@ For the current exact Lightning-only command sequence on this machine, use [docs
 The current reference frontend is the Qt implementation:
 
 ```bash
+source /opt/ros/jazzy/setup.bash
+./data_pipeline/setup_shared_venv.sh
 source .venv/bin/activate
-pip install -r data_pipeline/requirements-operator-console.txt
 python data_pipeline/operator_console_qt.py
 ```
 

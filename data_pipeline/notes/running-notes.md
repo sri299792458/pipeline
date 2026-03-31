@@ -2291,6 +2291,9 @@
 - Added [requirements-teleop.txt](/home/srinivas/Desktop/pipeline/data_pipeline/requirements-teleop.txt) to encode the core Teleop runtime dependencies that were previously only implied by local machine state:
   - `ur_rtde==1.6.3`
   - `pyserial`
+- Updated [setup_shared_venv.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_shared_venv.sh) again so the shared `.venv` bootstrap also installs:
+  - [requirements-operator-console.txt](/home/srinivas/Desktop/pipeline/data_pipeline/requirements-operator-console.txt)
+  - which makes `PySide6` part of the standard new-user setup instead of a separate optional step
 - Renamed the shared `.venv` bootstrap from [setup_converter_env.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_converter_env.sh) to [setup_shared_venv.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_shared_venv.sh) because it now prepares more than just the converter environment.
 - Updated [setup_shared_venv.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_shared_venv.sh) so the shared `.venv` bootstrap now installs that Teleop requirement set in addition to the converter requirements.
 - Added [python-env-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/python-env-setup.md) as the next setup slice.
