@@ -148,5 +148,5 @@ apt-cache show ros-jazzy-rosbag2-storage-mcap
 After system setup is done, move on to:
 
 - [workspace-setup.md](./workspace-setup.md) if the workspace does not exist yet
-- local Python environment setup
+- [python-env-setup.md](./python-env-setup.md)
 - RealSense runtime setup

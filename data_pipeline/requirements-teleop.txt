@@ -1,0 +1,6 @@
+# Core Teleop runtime dependencies that live in the shared local .venv.
+# Keep optional peripherals like SpaceMouse / VR out of this file until their
+# setup path is documented and validated.
+
+ur_rtde==1.6.3
+pyserial>=3.5,<4.0

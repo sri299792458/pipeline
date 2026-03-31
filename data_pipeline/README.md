@@ -16,6 +16,8 @@ For the required Ubuntu and ROS Jazzy packages on a fresh machine, use [docs/sys
 
 For the local dataset viewer toolchain and build step, use [docs/viewer-setup.md](./docs/viewer-setup.md).
 
+For the shared local `.venv` and interpreter split, use [docs/python-env-setup.md](./docs/python-env-setup.md).
+
 For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-bringup.md).
 
 For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).
@@ -99,7 +101,7 @@ Live ROS capture should use system ROS Jazzy and `/usr/bin/python3`. The RealSen
 Offline conversion and LeRobot export should use the local `.venv` created by:
 
 ```bash
-./data_pipeline/setup_converter_env.sh
+./data_pipeline/setup_shared_venv.sh
 ```
 
 
@@ -108,7 +110,7 @@ Offline conversion and LeRobot export should use the local `.venv` created by:
 ### Offline converter environment
 
 ```bash
-./data_pipeline/setup_converter_env.sh
+./data_pipeline/setup_shared_venv.sh
 source .venv/bin/activate
 ```
 

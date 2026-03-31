@@ -48,11 +48,13 @@ Before running the setup commands below on a new machine, create the sibling wor
 
 Also install the required Ubuntu and ROS packages from [system-setup.md](./system-setup.md).
 
+Also create the shared local `.venv` described in [python-env-setup.md](./python-env-setup.md).
+
 Run these once from the repository root:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-./data_pipeline/setup_converter_env.sh
+./data_pipeline/setup_shared_venv.sh
 ./data_pipeline/setup_realsense_contract_runtime.sh
 ```
 

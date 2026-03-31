@@ -2285,3 +2285,22 @@
 - Also tightened the RealSense wording there so it now clearly means:
   - the pipeline does not primarily depend on `realsense2_camera`
   - the pipeline does not treat an arbitrary system `librealsense` version as the RealSense runtime contract
+
+### Python environment setup docs and Teleop dependency encoding
+
+- Added [requirements-teleop.txt](/home/srinivas/Desktop/pipeline/data_pipeline/requirements-teleop.txt) to encode the core Teleop runtime dependencies that were previously only implied by local machine state:
+  - `ur_rtde==1.6.3`
+  - `pyserial`
+- Renamed the shared `.venv` bootstrap from [setup_converter_env.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_converter_env.sh) to [setup_shared_venv.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_shared_venv.sh) because it now prepares more than just the converter environment.
+- Updated [setup_shared_venv.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_shared_venv.sh) so the shared `.venv` bootstrap now installs that Teleop requirement set in addition to the converter requirements.
+- Added [python-env-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/python-env-setup.md) as the next setup slice.
+- The new page explains the current interpreter contract explicitly:
+  - system ROS Python for raw ROS-facing capture paths and the pinned RealSense runtime
+  - shared local `.venv` for conversion, Teleop runtime dependencies, SPARK serial support, and the Qt operator console
+- It also makes one important operational point explicit:
+  - even when using `.venv`, ROS still needs to be sourced before running tools that import `rclpy` or `rosbag2_py`
+- Added the corresponding cross-links in:
+  - [workspace-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/workspace-setup.md)
+  - [system-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/system-setup.md)
+  - [README.md](/home/srinivas/Desktop/pipeline/data_pipeline/README.md)
+  - [hardware-bringup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/hardware-bringup.md)

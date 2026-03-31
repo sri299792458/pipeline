@@ -110,6 +110,6 @@ Once this workspace layout exists, move on to:
 
 - [system-setup.md](./system-setup.md)
 - [viewer-setup.md](./viewer-setup.md) if the user needs local dataset viewing
-- Python environment setup
+- [python-env-setup.md](./python-env-setup.md)
 - RealSense runtime setup
 - hardware bring-up
