@@ -46,6 +46,8 @@ Current implementation note:
 
 Before running the setup commands below on a new machine, create the sibling workspace layout described in [workspace-setup.md](./workspace-setup.md).
 
+Also install the required Ubuntu and ROS packages from [system-setup.md](./system-setup.md).
+
 Run these once from the repository root:
 
 ```bash

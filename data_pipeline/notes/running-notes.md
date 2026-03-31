@@ -2227,3 +2227,31 @@
 - The real bag now passes both verification levels:
   - lightweight verification: `ok`
   - full payload verification: `ok`
+
+### New-user setup docs: ROS and system packages
+
+- Added [system-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/system-setup.md) as the next setup slice after workspace layout.
+- The new page documents the current package contract for a fresh machine:
+  - base Ubuntu packages:
+    - `git`
+    - `curl`
+    - `build-essential`
+    - `cmake`
+    - `pkg-config`
+    - `python3-dev`
+    - `python3-pip`
+    - `python3-venv`
+    - `v4l-utils`
+    - `libxcb-cursor0`
+  - ROS Jazzy packages used directly by this repo:
+    - `ros-jazzy-cv-bridge`
+    - `ros-jazzy-image-transport-plugins`
+    - `ros-jazzy-rosbag2-storage-mcap`
+- Kept the scope intentionally narrow:
+  - assumes ROS Jazzy itself is already installed
+  - does not yet document `.venv` creation or hardware bring-up
+  - treats `nodejs`, `npm`, and `bun` as viewer-side requirements, not core recording requirements
+- Added the corresponding cross-links in:
+  - [workspace-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/workspace-setup.md)
+  - [README.md](/home/srinivas/Desktop/pipeline/data_pipeline/README.md)
+  - [hardware-bringup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/hardware-bringup.md)

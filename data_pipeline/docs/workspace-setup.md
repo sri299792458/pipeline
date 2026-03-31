@@ -108,7 +108,7 @@ If someone only needs to use the viewer, cloning the lab fork is enough. The `up
 
 Once this workspace layout exists, move on to:
 
-- ROS Jazzy and system package installation
+- [system-setup.md](./system-setup.md)
 - Python environment setup
 - RealSense runtime setup
 - hardware bring-up
