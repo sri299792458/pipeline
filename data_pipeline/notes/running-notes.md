@@ -2204,3 +2204,7 @@
   - archive bag: `106,070,231` bytes, `13,299` messages
   - preserved all four image streams as compressed archive topics
 - The image-transport graph needed a conservative playback-start delay for reliable startup, so the archive tool now defaults that settle delay to `5.0s`.
+
+### USB helper
+
+- Moved the local USB port-mapping helper to [helpers/watch_usb_ports.py](/home/srinivas/Desktop/pipeline/data_pipeline/helpers/watch_usb_ports.py) so it sits with other non-core utilities instead of at the package root.
