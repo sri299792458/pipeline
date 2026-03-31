@@ -70,7 +70,7 @@ Camera slots are 1-based. This is intentional for user-facing consistency with j
 
 ## Canonical V2 Topics
 
-| Topic Pattern | Message Type | Semantic Type | Timestamp Meaning | Expected Rate | V2 Role |
+| Topic Pattern | Message Type | Semantic Type | Timestamp Meaning | Expected Rate | Usage |
 |---|---|---|---|---:|---|
 | `/spark/{arm}/robot/joint_state` | `sensor_msgs/msg/JointState` | measured state | `control_tick_time_v1` | 50-200 Hz | published source |
 | `/spark/{arm}/robot/eef_pose` | `geometry_msgs/msg/PoseStamped` | measured state | `control_tick_time_v1` | 50-200 Hz | published source |

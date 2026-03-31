@@ -29,7 +29,8 @@ from data_pipeline.calibration import (
 )
 from data_pipeline.pipeline_utils import (
     REPO_ROOT as PIPELINE_REPO_ROOT,
-    camera_path_parts_for_role,
+    camera_path_parts_for_sensor_key,
+    canonical_sensor_key,
     load_optional_sensor_overrides,
 )
 
@@ -50,11 +51,9 @@ class CameraObservation:
 
 @dataclass
 class CameraTarget:
-    role: str
+    sensor_key: str
     serial_number: str
     model: str
-    attached_to: str
-    mount_site: str
     camera: RealSenseCalibrationCamera
     observations: list[CameraObservation] = field(default_factory=list)
 
@@ -75,33 +74,34 @@ def _load_pose_file(path: Path | None) -> dict[str, Any] | None:
 
 def _sensor_targets(
     sensors_file: Path,
-    selected_roles: list[str] | None,
+    selected_sensor_keys: list[str] | None,
     width: int,
     height: int,
     fps: int,
 ) -> list[CameraTarget]:
     sensor_overrides = load_optional_sensor_overrides(sensors_file)
     targets: list[CameraTarget] = []
-    requested = {role.strip() for role in (selected_roles or []) if role.strip()}
-    for role, sensor in sensor_overrides.items():
-        camera_parts = camera_path_parts_for_role(role)
+    requested = {
+        canonical_sensor_key(sensor_key)
+        for sensor_key in (selected_sensor_keys or [])
+        if canonical_sensor_key(sensor_key)
+    }
+    for sensor_key, sensor in sensor_overrides.items():
+        camera_parts = camera_path_parts_for_sensor_key(sensor_key)
         if camera_parts is None:
             continue
-        if requested and role not in requested:
+        if requested and sensor_key not in requested:
             continue
         serial_number = str(sensor.get("serial_number", "")).strip()
         if not serial_number:
-            raise ValueError(f"Camera role {role} is missing serial_number in {sensors_file}")
-        attached_to, mount_site = camera_parts
+            raise ValueError(f"Camera {sensor_key} is missing serial_number in {sensors_file}")
         targets.append(
             CameraTarget(
-                role=role,
+                sensor_key=sensor_key,
                 serial_number=serial_number,
                 model=str(sensor.get("model", "")).strip() or "Intel RealSense",
-                attached_to=attached_to,
-                mount_site=mount_site,
                 camera=RealSenseCalibrationCamera(
-                    name=role,
+                    name=sensor_key,
                     serial_number=serial_number,
                     width=width,
                     height=height,
@@ -110,12 +110,12 @@ def _sensor_targets(
             )
         )
     if not targets:
-        raise RuntimeError(f"No calibratable camera roles found in {sensors_file}")
+        raise RuntimeError(f"No calibratable cameras found in {sensors_file}")
     return targets
 
 
-def _arm_from_role(role: str) -> str | None:
-    camera_parts = camera_path_parts_for_role(role)
+def _arm_from_sensor_key(sensor_key: str) -> str | None:
+    camera_parts = camera_path_parts_for_sensor_key(sensor_key)
     if camera_parts is None:
         return None
     attachment, mount_site = camera_parts
@@ -125,11 +125,13 @@ def _arm_from_role(role: str) -> str | None:
 
 
 def _is_wrist_target(target: CameraTarget) -> bool:
-    return target.mount_site.startswith("wrist_")
+    camera_parts = camera_path_parts_for_sensor_key(target.sensor_key)
+    return camera_parts is not None and camera_parts[1].startswith("wrist_")
 
 
 def _is_scene_target(target: CameraTarget) -> bool:
-    return target.mount_site.startswith("scene_")
+    camera_parts = camera_path_parts_for_sensor_key(target.sensor_key)
+    return camera_parts is not None and camera_parts[1].startswith("scene_")
 
 
 def _default_poses_path() -> Path | None:
@@ -139,28 +141,30 @@ def _default_poses_path() -> Path | None:
 def _reference_wrist_sort_key(target: CameraTarget) -> tuple[int, str]:
     # Lab default: when both wrists are available and no explicit reference is
     # requested, prefer Lightning as the scene-camera reference arm.
-    if target.attached_to == "lightning":
-        return (0, target.role)
-    if target.attached_to == "thunder":
-        return (1, target.role)
-    return (2, target.role)
+    camera_parts = camera_path_parts_for_sensor_key(target.sensor_key)
+    attachment = camera_parts[0] if camera_parts is not None else ""
+    if attachment == "lightning":
+        return (0, target.sensor_key)
+    if attachment == "thunder":
+        return (1, target.sensor_key)
+    return (2, target.sensor_key)
 
 
 def _select_reference_wrist_target(
     wrist_targets: list[CameraTarget],
-    reference_wrist_role: str | None,
+    reference_wrist_sensor_key: str | None,
 ) -> CameraTarget:
     if not wrist_targets:
-        raise RuntimeError("Automatic scene-camera calibration requires at least one wrist camera role.")
+        raise RuntimeError("Automatic scene-camera calibration requires at least one wrist camera.")
 
-    if reference_wrist_role:
-        requested = str(reference_wrist_role).strip()
+    if reference_wrist_sensor_key:
+        requested = canonical_sensor_key(str(reference_wrist_sensor_key).strip())
         for target in wrist_targets:
-            if target.role == requested:
+            if target.sensor_key == requested:
                 return target
         raise RuntimeError(
-            f"Reference wrist role {requested} was not selected. "
-            f"Available wrist roles: {[target.role for target in wrist_targets]}"
+            f"Reference wrist camera {requested} was not selected. "
+            f"Available wrist cameras: {[target.sensor_key for target in wrist_targets]}"
         )
 
     return sorted(wrist_targets, key=_reference_wrist_sort_key)[0]
@@ -189,16 +193,16 @@ def _capture_pose_driven_observations(
         for target in targets:
             try:
                 print(
-                    f"Opening {target.role} ({target.model or 'Intel RealSense'} {target.serial_number}) "
+                    f"Opening {target.sensor_key} ({target.model or 'Intel RealSense'} {target.serial_number}) "
                     f"at {target.camera.width}x{target.camera.height}@{target.camera.fps}..."
                 )
                 target.camera.open()
-                print(f"  Warming up {target.role} with {warmup_frames} frames...")
+                print(f"  Warming up {target.sensor_key} with {warmup_frames} frames...")
                 target.camera.warmup(warmup_frames)
-                print(f"  {target.role}: ready")
+                print(f"  {target.sensor_key}: ready")
             except Exception as exc:
                 raise RuntimeError(
-                    f"Failed to start camera role {target.role} ({target.serial_number}). "
+                    f"Failed to start camera {target.sensor_key} ({target.serial_number}). "
                     "This usually means the device is unplugged, wedged, or already in use."
                 ) from exc
 
@@ -223,7 +227,7 @@ def _capture_pose_driven_observations(
                 image = target.camera.grab_color()
                 charuco_corners, charuco_ids = detector.detect(image)
                 if charuco_corners is None or charuco_ids is None:
-                    print(f"    {target.role}: board not detected")
+                    print(f"    {target.sensor_key}: board not detected")
                     continue
                 intrinsics = target.camera.get_intrinsics()
                 camera_matrix = np.asarray(intrinsics["camera_matrix"], dtype=np.float64)
@@ -237,7 +241,7 @@ def _capture_pose_driven_observations(
                 target_to_camera = np.eye(4, dtype=np.float64)
                 target_to_camera[:3, :3] = pose6d_to_transform([0.0, 0.0, 0.0, *rvec])[:3, :3]
                 target_to_camera[:3, 3] = tvec
-                arm = _arm_from_role(target.role)
+                arm = _arm_from_sensor_key(target.sensor_key)
                 base_to_flange = None
                 if arm is not None:
                     base_to_flange = pose6d_to_transform(arm_handles[arm].get_actual_tcp_pose())
@@ -251,7 +255,7 @@ def _capture_pose_driven_observations(
                     )
                 )
                 print(
-                    f"    {target.role}: detected ({len(charuco_ids)} corners, reproj={reprojection_error_px:.2f}px)"
+                    f"    {target.sensor_key}: detected ({len(charuco_ids)} corners, reproj={reprojection_error_px:.2f}px)"
                 )
     finally:
         for target in targets:
@@ -262,10 +266,9 @@ def _capture_pose_driven_observations(
 def _build_wrist_camera_result(target: CameraTarget) -> tuple[dict[str, Any], np.ndarray | None]:
     intrinsics = target.camera.get_intrinsics()
     result = {
+        "sensor_key": target.sensor_key,
         "serial_number": target.serial_number,
         "model": target.model,
-        "attached_to": target.attached_to,
-        "mount_site": target.mount_site,
         "intrinsics": intrinsics,
     }
 
@@ -294,10 +297,9 @@ def _build_scene_camera_result(
 ) -> dict[str, Any]:
     intrinsics = target.camera.get_intrinsics()
     result = {
+        "sensor_key": target.sensor_key,
         "serial_number": target.serial_number,
         "model": target.model,
-        "attached_to": target.attached_to,
-        "mount_site": target.mount_site,
         "intrinsics": intrinsics,
         "type": "scene",
     }
@@ -305,7 +307,7 @@ def _build_scene_camera_result(
     if reference_flange_from_camera is None:
         result["extrinsics"] = {
             "success": False,
-            "error": f"Reference wrist calibration for {reference_wrist_target.role} did not succeed.",
+            "error": f"Reference wrist calibration for {reference_wrist_target.sensor_key} did not succeed.",
         }
         return result
 
@@ -331,13 +333,16 @@ def _build_scene_camera_result(
         scene_target_to_camera_transforms.append(np.asarray(scene_obs.target_to_camera, dtype=np.float64))
         reprojection_errors_px.append(float(scene_obs.reprojection_error_px))
 
-    reference_frame = f"{reference_wrist_target.attached_to}_base"
+    reference_camera_parts = camera_path_parts_for_sensor_key(reference_wrist_target.sensor_key)
+    if reference_camera_parts is None:
+        raise RuntimeError(f"Reference wrist camera {reference_wrist_target.sensor_key} is not a valid camera sensor key.")
+    reference_frame = f"{reference_camera_parts[0]}_base"
     result["extrinsics"] = calibrate_scene_camera_from_reference(
         base_to_target_transforms=base_to_target_transforms,
         target_to_camera_transforms=scene_target_to_camera_transforms,
         reprojection_errors_px=reprojection_errors_px,
         reference_frame=reference_frame,
-        reference_camera_role=reference_wrist_target.role,
+        reference_camera=reference_wrist_target.sensor_key,
     )
     return result
 
@@ -345,13 +350,14 @@ def _build_scene_camera_result(
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run V2 camera calibration for scene and wrist RealSense cameras.")
     parser.add_argument("--sensors-file", default=str(DEFAULT_SENSORS_FILE))
-    parser.add_argument("--camera-role", action="append", default=[])
+    parser.add_argument("--camera", action="append", default=[], dest="camera")
     parser.add_argument(
-        "--reference-wrist-role",
+        "--reference-wrist-camera",
         default="",
+        dest="reference_wrist_camera",
         help=(
-            "Explicit wrist role to use as the scene-camera reference frame. "
-            "If omitted and both wrists are available, lightning_wrist_1 is the default."
+            "Explicit wrist camera sensor key to use as the scene-camera reference frame. "
+            "If omitted and both wrist cameras are available, Lightning wrist is the default."
         ),
     )
     parser.add_argument("--poses-file", default="")
@@ -385,7 +391,7 @@ def main() -> int:
     sensors_file = Path(args.sensors_file).expanduser()
     targets = _sensor_targets(
         sensors_file=sensors_file,
-        selected_roles=list(args.camera_role),
+        selected_sensor_keys=list(args.camera),
         width=args.width,
         height=args.height,
         fps=args.fps,
@@ -395,7 +401,7 @@ def main() -> int:
     if scene_targets and not wrist_targets:
         available_targets = _sensor_targets(
             sensors_file=sensors_file,
-            selected_roles=None,
+            selected_sensor_keys=None,
             width=args.width,
             height=args.height,
             fps=args.fps,
@@ -403,12 +409,12 @@ def main() -> int:
         available_wrist_targets = [target for target in available_targets if _is_wrist_target(target)]
         reference_wrist_target = _select_reference_wrist_target(
             available_wrist_targets,
-            str(args.reference_wrist_role).strip() or None,
+            str(args.reference_wrist_camera).strip() or None,
         )
         targets.append(reference_wrist_target)
         wrist_targets = [reference_wrist_target]
         print(
-            f"Using reference wrist camera {reference_wrist_target.role} automatically "
+            f"Using reference wrist camera {reference_wrist_target.sensor_key} automatically "
             f"for scene calibration."
         )
 
@@ -446,21 +452,26 @@ def main() -> int:
     wrist_transforms: dict[str, np.ndarray | None] = {}
     for target in wrist_targets:
         wrist_result, flange_from_camera = _build_wrist_camera_result(target)
-        wrist_transforms[target.role] = flange_from_camera
-        results["cameras"][target.role] = wrist_result
+        wrist_transforms[target.sensor_key] = flange_from_camera
+        results["cameras"][target.sensor_key] = wrist_result
 
     if scene_targets:
         reference_wrist_target = _select_reference_wrist_target(
             wrist_targets,
-            str(args.reference_wrist_role).strip() or None,
+            str(args.reference_wrist_camera).strip() or None,
         )
-        results["reference_wrist_role"] = reference_wrist_target.role
-        results["coordinate_frame"] = f"{reference_wrist_target.attached_to}_base"
+        results["reference_wrist_camera"] = reference_wrist_target.sensor_key
+        reference_camera_parts = camera_path_parts_for_sensor_key(reference_wrist_target.sensor_key)
+        if reference_camera_parts is None:
+            raise RuntimeError(
+                f"Reference wrist camera {reference_wrist_target.sensor_key} is not a valid camera sensor key."
+            )
+        results["coordinate_frame"] = f"{reference_camera_parts[0]}_base"
         for target in scene_targets:
-            results["cameras"][target.role] = _build_scene_camera_result(
+            results["cameras"][target.sensor_key] = _build_scene_camera_result(
                 target=target,
                 reference_wrist_target=reference_wrist_target,
-                reference_flange_from_camera=wrist_transforms.get(reference_wrist_target.role),
+                reference_flange_from_camera=wrist_transforms.get(reference_wrist_target.sensor_key),
             )
 
     output_path = Path(args.output_file).expanduser()

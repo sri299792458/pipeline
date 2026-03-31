@@ -18,7 +18,7 @@ if str(REPO_ROOT) not in sys.path:
 from data_pipeline.calibration import CalibrationArm, pose6d_to_transform, load_arm_connection_info
 from data_pipeline.pipeline_utils import (
     REPO_ROOT as PIPELINE_REPO_ROOT,
-    camera_path_parts_for_role,
+    camera_path_parts_for_sensor_key,
     load_optional_sensor_overrides,
 )
 
@@ -30,13 +30,13 @@ HOME_MOVE_SPEED_RAD_S = 0.6
 HOME_MOVE_ACCEL_RAD_S2 = 0.8
 
 
-def _load_transform_for_role(calibration_path: Path, role: str) -> dict:
+def _load_transform_for_sensor_key(calibration_path: Path, sensor_key: str) -> dict:
     with calibration_path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     cameras = data.get("cameras", {})
-    if role not in cameras:
-        raise KeyError(f"Calibration for role {role} not found in {calibration_path}")
-    return cameras[role]
+    if sensor_key not in cameras:
+        raise KeyError(f"Calibration for sensor {sensor_key} not found in {calibration_path}")
+    return cameras[sensor_key]
 
 
 def _depth_at(depth_m: np.ndarray, u: int, v: int) -> float | None:
@@ -82,13 +82,13 @@ def _offset_transform(offset_m: np.ndarray) -> np.ndarray:
 
 
 def _reference_from_camera_transform(
-    role: str,
+    sensor_key: str,
     calibration_entry: dict,
     arm_handle: CalibrationArm | None,
 ) -> tuple[np.ndarray, str]:
-    camera_parts = camera_path_parts_for_role(role)
+    camera_parts = camera_path_parts_for_sensor_key(sensor_key)
     if camera_parts is None:
-        raise ValueError(f"Role {role} is not a camera role.")
+        raise ValueError(f"Sensor {sensor_key} is not a camera sensor.")
     attachment, mount_site = camera_parts
     if mount_site.startswith("scene_"):
         extrinsics = calibration_entry.get("extrinsics", {})
@@ -98,7 +98,7 @@ def _reference_from_camera_transform(
         return transform, str(extrinsics.get("reference_frame", "reference"))
 
     if arm_handle is None:
-        raise RuntimeError(f"Wrist camera {role} requires a live robot connection.")
+        raise RuntimeError(f"Wrist camera {sensor_key} requires a live robot connection.")
     hand_eye = calibration_entry.get("hand_eye_calibration", {})
     flange_from_camera = np.eye(4, dtype=np.float64)
     flange_from_camera[:3, :3] = np.asarray(hand_eye["rotation_matrix"], dtype=np.float64)
@@ -107,10 +107,10 @@ def _reference_from_camera_transform(
     return base_from_flange @ flange_from_camera, f"{attachment}_base"
 
 
-def _validation_arm_for_role(role: str, calibration_entry: dict) -> str:
-    camera_parts = camera_path_parts_for_role(role)
+def _validation_arm_for_sensor_key(sensor_key: str, calibration_entry: dict) -> str:
+    camera_parts = camera_path_parts_for_sensor_key(sensor_key)
     if camera_parts is None:
-        raise ValueError(f"Role {role} is not a camera role.")
+        raise ValueError(f"Sensor {sensor_key} is not a camera sensor.")
     attachment, mount_site = camera_parts
     if mount_site.startswith("wrist_"):
         return attachment
@@ -120,7 +120,7 @@ def _validation_arm_for_role(role: str, calibration_entry: dict) -> str:
         arm = reference_frame[: -len("_base")]
         if arm:
             return arm
-    raise RuntimeError(f"Could not determine validation arm for role {role}.")
+    raise RuntimeError(f"Could not determine validation arm for sensor {sensor_key}.")
 
 
 def _current_tip_transform(tcp_pose: list[float], tip_offset_m: np.ndarray) -> np.ndarray:
@@ -145,7 +145,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Click a calibrated pixel, print its reference-frame point, and optionally move the tool tip there with confirmation."
     )
-    parser.add_argument("--camera-role", required=True)
+    parser.add_argument("--camera", required=True)
     parser.add_argument("--sensors-file", default=str(DEFAULT_SENSORS_FILE))
     parser.add_argument("--calibration-file", default=str(DEFAULT_RESULTS_FILE))
     parser.add_argument("--width", type=int, default=640)
@@ -167,15 +167,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_arg_parser().parse_args()
     sensor_overrides = load_optional_sensor_overrides(args.sensors_file)
-    sensor = sensor_overrides.get(args.camera_role)
+    sensor = sensor_overrides.get(args.camera)
     if not isinstance(sensor, dict):
-        raise KeyError(f"Camera role {args.camera_role} not found in {args.sensors_file}")
+        raise KeyError(f"Camera {args.camera} not found in {args.sensors_file}")
     serial_number = str(sensor.get("serial_number", "")).strip()
     if not serial_number:
-        raise RuntimeError(f"Camera role {args.camera_role} is missing serial_number in {args.sensors_file}")
+        raise RuntimeError(f"Camera {args.camera} is missing serial_number in {args.sensors_file}")
 
-    calibration_entry = _load_transform_for_role(Path(args.calibration_file).expanduser(), args.camera_role)
-    validation_arm = _validation_arm_for_role(args.camera_role, calibration_entry)
+    calibration_entry = _load_transform_for_sensor_key(Path(args.calibration_file).expanduser(), args.camera)
+    validation_arm = _validation_arm_for_sensor_key(args.camera, calibration_entry)
     arm_info = load_arm_connection_info([validation_arm])
     if validation_arm not in arm_info:
         raise RuntimeError(f"Missing runtime connection info for validation arm {validation_arm}.")
@@ -194,7 +194,7 @@ def main() -> int:
     color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
     intrinsics = color_profile.get_intrinsics()
 
-    window_name = f"click-{args.camera_role}"
+    window_name = f"click-{args.camera}"
     last_depth_m: np.ndarray | None = None
     should_exit = False
     def move_to_point(reference_point: np.ndarray) -> None:
@@ -240,7 +240,7 @@ def main() -> int:
 
         point_camera = _pixel_to_camera(x, y, depth_m, intrinsics)
         reference_from_camera, reference_frame = _reference_from_camera_transform(
-            args.camera_role,
+            args.camera,
             calibration_entry,
             arm_handle,
         )

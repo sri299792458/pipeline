@@ -28,11 +28,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.pipeline_utils import (
-    camera_path_parts_for_role,
+    camera_path_parts_for_sensor_key,
     get_git_commit,
     load_yaml,
     make_episode_id,
-    tactile_path_parts_for_role,
+    tactile_path_parts_for_sensor_key,
 )
 from data_pipeline.device_discovery import (
     discover_session_devices as discover_runtime_session_devices,
@@ -878,8 +878,8 @@ class OperatorConsoleBackend:
     def _realsense_required_topics(self, config: dict[str, Any]) -> list[str]:
         topics: list[str] = []
         for device in self._enabled_session_devices(config, "realsense"):
-            role = str(device.get("role", "")).strip()
-            parts = camera_path_parts_for_role(role)
+            sensor_key = str(device.get("sensor_key", "")).strip()
+            parts = camera_path_parts_for_sensor_key(sensor_key)
             if parts is None:
                 continue
             attachment, slot = parts
@@ -890,8 +890,8 @@ class OperatorConsoleBackend:
     def _gelsight_required_topics(self, config: dict[str, Any]) -> list[str]:
         topics: list[str] = []
         for device in self._enabled_session_devices(config, "gelsight"):
-            role = str(device.get("role", "")).strip()
-            parts = tactile_path_parts_for_role(role)
+            sensor_key = str(device.get("sensor_key", "")).strip()
+            parts = tactile_path_parts_for_sensor_key(sensor_key)
             if parts is None:
                 continue
             arm, finger = parts
@@ -1215,9 +1215,9 @@ class OperatorConsoleBackend:
     def _build_realsense_command(self, config: dict[str, Any]) -> str:
         camera_specs: list[str] = []
         for device in self._enabled_session_devices(config, "realsense"):
-            role = str(device.get("role", "")).strip()
-            serial = str(device.get("serial_number", "")).strip() or str(device.get("identifier", "")).strip()
-            parts = camera_path_parts_for_role(role)
+            sensor_key = str(device.get("sensor_key", "")).strip()
+            serial = str(device.get("serial_number", "")).strip()
+            parts = camera_path_parts_for_sensor_key(sensor_key)
             if parts is None or not serial:
                 continue
             attachment, slot = parts
@@ -1233,9 +1233,9 @@ class OperatorConsoleBackend:
     def _build_gelsight_command(self, config: dict[str, Any]) -> str:
         sensor_specs: list[str] = []
         for device in self._enabled_session_devices(config, "gelsight"):
-            role = str(device.get("role", "")).strip()
-            device_path = str(device.get("device_path", "")).strip() or str(device.get("identifier", "")).strip()
-            parts = tactile_path_parts_for_role(role)
+            sensor_key = str(device.get("sensor_key", "")).strip()
+            device_path = str(device.get("device_path", "")).strip()
+            parts = tactile_path_parts_for_sensor_key(sensor_key)
             if parts is None or not device_path:
                 continue
             arm, finger = parts

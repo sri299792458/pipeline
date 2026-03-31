@@ -2325,3 +2325,25 @@
 - Tightened the setup boundary again so the one-time bootstrap steps now live in [python-env-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/python-env-setup.md), not in the bring-up page itself.
 - Also made the robot note more explicit:
   - for the normal Teleop/recording workflow, UR remote control must be enabled before bring-up
+
+### Canonical sensor keys replaced the old role layer
+
+- Removed the separate role vocabulary such as `lightning_wrist_1`, `scene_1`, and `lightning_finger_left` from the active pipeline path.
+- The canonical sensor identity is now the topic-prefix sensor key itself, for example:
+  - `/spark/cameras/lightning/wrist_1`
+  - `/spark/cameras/world/scene_1`
+  - `/spark/tactile/lightning/finger_left`
+- Updated the active code paths to use `sensor_key` consistently in:
+  - session discovery
+  - session capture plans
+  - operator console UI/backend
+  - calibration tools
+  - raw manifest sensor metadata
+- Simplified the checked-in sensors files to use sensor keys as YAML keys and dropped the duplicate identity fields:
+  - `sensor_id`
+  - `attached_to`
+  - `mount_site`
+- Kept the distinction between:
+  - sensor identity via `sensor_key`
+  - physical connection identity via `serial_number` or `device_path`
+  because those are not the same thing and both still matter at runtime.

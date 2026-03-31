@@ -5,11 +5,11 @@ This is the V2 camera-calibration workflow for the pipeline.
 The calibration system has two parts:
 
 - `data_pipeline/configs/sensors.local.yaml`
-  - local rig identity and canonical role mapping
+  - local rig serial-to-sensor mapping
 - `data_pipeline/configs/calibration.local.json`
   - solved camera intrinsics and extrinsics / hand-eye results
 
-The sensors file tells the pipeline which physical device is which role.
+The sensors file tells the pipeline which physical device is which sensor key.
 The calibration results file tells the pipeline where that camera is.
 
 Current lab board default:
@@ -45,7 +45,7 @@ Start from:
 cp data_pipeline/configs/sensors.example.yaml data_pipeline/configs/sensors.local.yaml
 ```
 
-Fill in the real serial numbers and role metadata for the cameras you want to calibrate.
+Fill in the real serial numbers and calibration metadata for the cameras you want to calibrate.
 
 
 ## 2. Record Wrist Calibration Poses
@@ -79,7 +79,7 @@ This writes:
 
 ## 3. Run Calibration
 
-Calibrate all roles found in the sensors file:
+Calibrate all cameras found in the sensors file:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -90,22 +90,22 @@ python data_pipeline/calibrate_rig.py \
 
 The runner now defaults to the current lab board above, so you only need to pass board flags if you are calibrating against a different ChArUco target.
 
-To calibrate only selected camera roles:
+To calibrate only selected cameras:
 
 ```bash
 python data_pipeline/calibrate_rig.py \
   --sensors-file data_pipeline/configs/sensors.local.yaml \
-  --camera-role lightning_wrist_1 \
-  --camera-role scene_1
+  --camera /spark/cameras/lightning/wrist_1 \
+  --camera /spark/cameras/world/scene_1
 ```
 
 Notes:
 
-- if any selected role is a wrist camera, `calibrate_rig.py` requires `calibration_poses.local.json`
-- if any selected role is a static scene camera, the runner also needs a wrist camera reference:
-  - if a wrist role is already selected, it uses that
-  - otherwise it auto-picks a configured wrist role from the sensors file
-  - if both `lightning_wrist_1` and `thunder_wrist_1` are available and no explicit `--reference-wrist-role` is given, the default is `lightning_wrist_1`
+- if any selected camera is a wrist camera, `calibrate_rig.py` requires `calibration_poses.local.json`
+- if any selected camera is a static scene camera, the runner also needs a wrist camera reference:
+  - if a wrist camera is already selected, it uses that
+  - otherwise it auto-picks a configured wrist camera from the sensors file
+  - if both `/spark/cameras/lightning/wrist_1` and `/spark/cameras/thunder/wrist_1` are available and no explicit `--reference-wrist-camera` is given, the default is `/spark/cameras/lightning/wrist_1`
     - mnemonic: lightning travels before thunder
 - the runner reads factory intrinsics from the RealSense SDK and solves:
   - wrist cameras as hand-eye calibration
@@ -127,7 +127,7 @@ Static scene camera example:
 source /opt/ros/jazzy/setup.bash
 source .venv/bin/activate
 python data_pipeline/validate_calibration_click.py \
-  --camera-role scene_1
+  --camera /spark/cameras/world/scene_1
 ```
 
 Wrist camera example:
@@ -136,7 +136,7 @@ Wrist camera example:
 source /opt/ros/jazzy/setup.bash
 source .venv/bin/activate
 python data_pipeline/validate_calibration_click.py \
-  --camera-role lightning_wrist_1
+  --camera /spark/cameras/lightning/wrist_1
 ```
 
 Click a pixel in the RGB image window. The tool prints:

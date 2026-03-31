@@ -60,17 +60,16 @@ Then edit:
 
 Fill in the metadata you already know:
 
-- `sensor_id`
-- `attached_to`
-- `mount_site`
+- the sensor key itself as the YAML key
+- `serial_number`
+- `model`
 - `calibration_ref`
 
 Important:
 
 - device discovery can help with live identifiers
 - it does **not** replace the sensors file as the inventory record
-- this file is what makes raw episodes remappable later if published naming or
-  calibration references change
+- this file is the local hardware inventory and serial-to-sensor mapping
 
 If this is a new camera setup or the rig has changed, plan to run:
 
@@ -112,19 +111,19 @@ Use the table to decide which devices are part of this session:
 
 - check `Record` for devices you want
 - leave `Record` unchecked for devices you do not want
-- assign the correct `Role`
+- assign the correct sensor key
 
-Typical role choices are:
+Typical sensor keys are:
 
 - RealSense:
-  - `lightning_wrist_1`
-  - `scene_1`
-  - `scene_2`
+  - `/spark/cameras/lightning/wrist_1`
+  - `/spark/cameras/world/scene_1`
+  - `/spark/cameras/world/scene_2`
 - GelSight:
-  - `lightning_finger_left`
-  - `lightning_finger_right`
-  - `thunder_finger_left`
-  - `thunder_finger_right`
+  - `/spark/tactile/lightning/finger_left`
+  - `/spark/tactile/lightning/finger_right`
+  - `/spark/tactile/thunder/finger_left`
+  - `/spark/tactile/thunder/finger_right`
 
 The operator should not need to type raw serial numbers or V4L paths into the
 main workflow if discovery is working.
@@ -201,13 +200,10 @@ Use that GUI to:
 - enable the robot-side control mode you intend to record
 - verify the gripper path is alive
 
-One expected failure mode is:
-
-- `Please enable remote control on the robot!`
-
-That means the dashboard path succeeded but RTDE control was refused by the
-robot-side remote-control setting. For the normal teleop and recording workflow,
-remote control is not optional.
+If the Teleop GUI shows `Please enable remote control on the robot!`, the
+dashboard path succeeded but RTDE control was refused by the robot-side
+remote-control setting. Enable remote control on the robot, then retry the
+Teleop connection.
 
 
 ## 8. Check Health In The Operator Console
@@ -254,9 +250,9 @@ include:
 - `/spark/<arm>/robot/gripper_state`
 - `/spark/<arm>/teleop/cmd_joint_state`
 - `/spark/<arm>/teleop/cmd_gripper_state`
-- `/spark/cameras/<attachment>/<slot>/color/image_raw`
-- `/spark/cameras/<attachment>/<slot>/depth/image_rect_raw`
-- `/spark/tactile/<arm>/<finger>/color/image_raw` when tactile is enabled
+- `/spark/cameras/<attachment>/<camera_slot>/color/image_raw`
+- `/spark/cameras/<attachment>/<camera_slot>/depth/image_rect_raw`
+- `/spark/tactile/<arm>/<finger_slot>/color/image_raw` when tactile is enabled
 
 
 ## 10. Optional Manual Topic Checks

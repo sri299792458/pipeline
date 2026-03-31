@@ -24,8 +24,8 @@ If a device is not discovered, it is not part of the live session.
 
 The sensors file may tell the system:
 
-- which serial or device path usually maps to which canonical role
-- optional local metadata for that role
+- which serial or device path usually maps to which canonical sensor key
+- optional local metadata for that sensor
 - optional geometry or calibration references
 
 It does not create live devices.
@@ -36,7 +36,7 @@ At session start, the operator chooses:
 
 - session metadata
 - which discovered devices are recorded
-- which canonical role each recorded device uses
+- which canonical sensor key each recorded device uses
 
 All episodes in that session inherit the same setup.
 
@@ -45,11 +45,11 @@ All episodes in that session inherit the same setup.
 Operators may change:
 
 - whether a discovered device is recorded
-- which allowed canonical role a discovered device uses
+- which allowed canonical sensor key a discovered device uses
 
 Operators do not redefine:
 
-- canonical role names
+- canonical sensor keys
 - topic names
 - timestamp semantics
 
@@ -61,7 +61,7 @@ Operators do not redefine:
 The shared contract defines:
 
 - canonical V2 topic names
-- canonical role names
+- canonical sensor keys
 - timestamp meanings
 - dataset-facing semantics
 
@@ -73,13 +73,11 @@ The sensors file is the one local rig file.
 
 Its main job is:
 
-- serial or device-path to canonical-role mapping
+- serial or device-path to canonical-sensor-key mapping
 
 It may also carry optional metadata such as:
 
 - display labels
-- sensor ids
-- mount information
 - calibration references
 
 Solved camera geometry is a separate local file, not something the operator should type into the session profile.
@@ -107,30 +105,27 @@ Saved session profiles are:
 The built-in `init` profile is only the checked-in starting point.
 
 
-## Canonical Role Vocabulary
+## Canonical Sensor Vocabulary
 
 The first V2 vocabulary is:
 
-- arms
-  - `lightning`
-  - `thunder`
 - wrist cameras
-  - `lightning_wrist_1`
-  - `thunder_wrist_1`
+  - `/spark/cameras/lightning/wrist_1`
+  - `/spark/cameras/thunder/wrist_1`
 - scene cameras
-  - `scene_1`
-  - `scene_2`
-  - `scene_3`
+  - `/spark/cameras/world/scene_1`
+  - `/spark/cameras/world/scene_2`
+  - `/spark/cameras/world/scene_3`
 - tactile sensors
-  - `lightning_finger_left`
-  - `lightning_finger_right`
-  - `thunder_finger_left`
-  - `thunder_finger_right`
+  - `/spark/tactile/lightning/finger_left`
+  - `/spark/tactile/lightning/finger_right`
+  - `/spark/tactile/thunder/finger_left`
+  - `/spark/tactile/thunder/finger_right`
 
-Role choices are constrained by device kind:
+Sensor-key choices are constrained by device kind:
 
-- `realsense` may use only wrist or scene roles
-- `gelsight` may use only finger roles
+- `realsense` may use only camera sensor keys
+- `gelsight` may use only tactile sensor keys
 
 
 ## Session Profile Shape
@@ -147,18 +142,16 @@ Example:
   "devices": [
     {
       "kind": "realsense",
-      "identifier": "130322273305",
       "serial_number": "130322273305",
       "model": "Intel RealSense D405",
-      "role": "lightning_wrist_1",
+      "sensor_key": "/spark/cameras/lightning/wrist_1",
       "enabled": true
     },
     {
       "kind": "realsense",
-      "identifier": "213622251272",
       "serial_number": "213622251272",
       "model": "Intel RealSense D455",
-      "role": "scene_1",
+      "sensor_key": "/spark/cameras/world/scene_1",
       "enabled": true
     }
   ],
@@ -177,7 +170,7 @@ Example:
 1. fill session metadata
 2. choose the sensors file
 3. discover devices
-4. adjust `Record` and `Role` for discovered devices
+4. adjust `Record` and `Sensor` for discovered devices
 5. start the session
 6. validate once
 7. record multiple episodes under that same session profile
@@ -202,7 +195,14 @@ The main device table should show discovered devices only, with:
 - `Kind`
 - `Model`
 - `Identifier`
-- `Role`
+- `Sensor`
+
+`Identifier` is only the runtime display value for the discovered device:
+
+- RealSense: serial number
+- GelSight: device path
+
+It is not part of the canonical sensor identity model.
 
 It must not expose:
 

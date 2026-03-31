@@ -29,7 +29,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "This helps separate 'wrong dictionary family' from 'wrong board layout' problems."
         )
     )
-    parser.add_argument("--camera-role", required=True)
+    parser.add_argument("--camera", required=True)
     parser.add_argument("--sensors-file", default=str(DEFAULT_SENSORS_FILE))
     parser.add_argument("--dictionary", default="DICT_4X4_50")
     parser.add_argument("--squares-x", type=int, default=6)
@@ -47,14 +47,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_serial_number(sensors_file: str, camera_role: str) -> str:
+def _load_serial_number(sensors_file: str, camera: str) -> str:
     sensors = load_optional_sensor_overrides(sensors_file)
-    sensor = sensors.get(camera_role)
+    sensor = sensors.get(camera)
     if not isinstance(sensor, dict):
-        raise KeyError(f"Camera role {camera_role} not found in {sensors_file}")
+        raise KeyError(f"Camera {camera} not found in {sensors_file}")
     serial_number = str(sensor.get("serial_number", "")).strip()
     if not serial_number:
-        raise RuntimeError(f"Camera role {camera_role} is missing serial_number in {sensors_file}")
+        raise RuntimeError(f"Camera {camera} is missing serial_number in {sensors_file}")
     return serial_number
 
 
@@ -68,7 +68,7 @@ def _detect_markers(gray: np.ndarray, dictionary, parameters):
 def _overlay_status(
     image: np.ndarray,
     *,
-    camera_role: str,
+    camera: str,
     dictionary_name: str,
     squares_x: int,
     squares_y: int,
@@ -78,7 +78,7 @@ def _overlay_status(
 ) -> np.ndarray:
     overlay = image.copy()
     lines = [
-        f"{camera_role}",
+        f"{camera}",
         f"{dictionary_name} {squares_x}x{squares_y}",
         f"markers={marker_count} charuco={charuco_count}",
     ]
@@ -104,7 +104,7 @@ def _overlay_status(
 
 def main() -> int:
     args = build_arg_parser().parse_args()
-    serial_number = _load_serial_number(args.sensors_file, args.camera_role)
+    serial_number = _load_serial_number(args.sensors_file, args.camera)
 
     dictionary = _aruco_dictionary(args.dictionary)
     parameters = _make_detector_parameters()
@@ -134,13 +134,13 @@ def main() -> int:
         device_name = "Intel RealSense"
 
     print(
-        f"Debugging {args.camera_role} ({device_name} {serial_number}) "
+        f"Debugging {args.camera} ({device_name} {serial_number}) "
         f"at {args.width}x{args.height}@{args.fps}"
     )
     print(f"Board config: {args.dictionary} {args.squares_x}x{args.squares_y}")
     print("Press q or Esc to quit if a window is available, otherwise Ctrl-C.")
 
-    window_name = f"charuco-debug-{args.camera_role}"
+    window_name = f"charuco-debug-{args.camera}"
     show_window = True
     try:
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -198,7 +198,7 @@ def main() -> int:
 
             annotated = _overlay_status(
                 annotated,
-                camera_role=args.camera_role,
+                camera=args.camera,
                 dictionary_name=args.dictionary,
                 squares_x=args.squares_x,
                 squares_y=args.squares_y,
@@ -207,7 +207,7 @@ def main() -> int:
                 marker_ids=marker_ids,
             )
             if save_dir is not None and (now - last_save_time) >= 1.0:
-                output_path = save_dir / f"{args.camera_role}.latest.png"
+                output_path = save_dir / f"{args.camera}.latest.png"
                 cv2.imwrite(str(output_path), annotated)
                 last_save_time = now
             if show_window:

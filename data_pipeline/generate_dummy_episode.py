@@ -174,10 +174,8 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
 
     sensors = [
         {
-            "sensor_id": "cam_lightning_wrist_1",
+            "sensor_key": "/spark/cameras/lightning/wrist_1",
             "modality": "rgbd_camera",
-            "attached_to": "lightning",
-            "mount_site": "wrist_1",
             "topic_names": [
                 "/spark/cameras/lightning/wrist_1/color/image_raw",
                 "/spark/cameras/lightning/wrist_1/depth/image_rect_raw",
@@ -187,10 +185,8 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             "calibration_ref": "dummy://wrist",
         },
         {
-            "sensor_id": "cam_scene_1",
+            "sensor_key": "/spark/cameras/world/scene_1",
             "modality": "rgbd_camera",
-            "attached_to": "world",
-            "mount_site": "scene_1",
             "topic_names": [
                 "/spark/cameras/world/scene_1/color/image_raw",
                 "/spark/cameras/world/scene_1/depth/image_rect_raw",
@@ -204,20 +200,16 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
         sensors.extend(
             [
                 {
-                    "sensor_id": "tac_lightning_finger_left_0",
+                    "sensor_key": "/spark/tactile/lightning/finger_left",
                     "modality": "tactile_rgb",
-                    "attached_to": "lightning",
-                    "mount_site": "finger_left",
                     "topic_names": ["/spark/tactile/lightning/finger_left/color/image_raw"],
                     "serial_number": "DUMMY-GS-LEFT",
                     "model": "GelSight Mini",
                     "calibration_ref": "dummy://gelsight_left",
                 },
                 {
-                    "sensor_id": "tac_lightning_finger_right_0",
+                    "sensor_key": "/spark/tactile/lightning/finger_right",
                     "modality": "tactile_rgb",
-                    "attached_to": "lightning",
-                    "mount_site": "finger_right",
                     "topic_names": ["/spark/tactile/lightning/finger_right/color/image_raw"],
                     "serial_number": "DUMMY-GS-RIGHT",
                     "model": "GelSight Mini",

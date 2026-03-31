@@ -66,7 +66,7 @@ Use:
 The local split is:
 
 - `sensors.local.yaml`
-  - device identity and canonical roles
+  - device identity and canonical sensor keys
 - `calibration.local.json`
   - solved calibration results
 
@@ -283,9 +283,7 @@ The important rule is:
 
 So the override file should record not just serials, but also:
 
-- a stable `sensor_id`
-- `attached_to` (`lightning`, `thunder`, or `world`)
-- `mount_site`
+- the canonical sensor key as the YAML key
 - `calibration_ref`
 
-That keeps the raw episodes convertible even if the naming convention changes later.
+That keeps the raw episodes convertible without inventing a second naming layer on top of the topic contract.

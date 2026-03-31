@@ -23,20 +23,20 @@ DEFAULT_CALIBRATION_RESULTS_PATH = CONFIGS_DIR / "calibration.local.json"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = ""
 ARM_ORDER = ("lightning", "thunder")
-CAMERA_ROLE_CHOICES = (
-    "lightning_wrist_1",
-    "thunder_wrist_1",
-    "scene_1",
-    "scene_2",
-    "scene_3",
+CAMERA_SENSOR_KEY_CHOICES = (
+    "/spark/cameras/lightning/wrist_1",
+    "/spark/cameras/thunder/wrist_1",
+    "/spark/cameras/world/scene_1",
+    "/spark/cameras/world/scene_2",
+    "/spark/cameras/world/scene_3",
 )
-TACTILE_ROLE_CHOICES = (
-    "lightning_finger_left",
-    "lightning_finger_right",
-    "thunder_finger_left",
-    "thunder_finger_right",
+TACTILE_SENSOR_KEY_CHOICES = (
+    "/spark/tactile/lightning/finger_left",
+    "/spark/tactile/lightning/finger_right",
+    "/spark/tactile/thunder/finger_left",
+    "/spark/tactile/thunder/finger_right",
 )
-MANIFEST_SCHEMA_VERSION = 8
+MANIFEST_SCHEMA_VERSION = 9
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
     "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",
@@ -49,9 +49,8 @@ ACTIVE_ARMS_TO_PROFILE_NAME = {
 }
 
 _TOPIC_TYPE_PATTERN = re.compile(r"^(?P<topic>/\S+)\s+\[(?P<type>[^\]]+)\]\s*$")
-_CAMERA_ROLE_PATTERN = re.compile(r"^(?P<arm>lightning|thunder)_(?P<slot>wrist_\d+)$")
-_SCENE_ROLE_PATTERN = re.compile(r"^(?P<slot>scene_\d+)$")
-_TACTILE_ROLE_PATTERN = re.compile(r"^(?P<arm>lightning|thunder)_(?P<finger>finger_left|finger_right)$")
+_CAMERA_SENSOR_KEY_PATTERN = re.compile(r"^/spark/cameras/(?P<attachment>lightning|thunder|world)/(?P<slot>[a-z0-9_]+)$")
+_TACTILE_SENSOR_KEY_PATTERN = re.compile(r"^/spark/tactile/(?P<arm>lightning|thunder)/(?P<finger>finger_left|finger_right)$")
 _CAMERA_TOPIC_PATTERN = re.compile(
     r"^/spark/cameras/(?P<attachment>lightning|thunder|world)/(?P<slot>[a-z0-9_]+)/"
     r"(?P<suffix>color/image_raw|depth/image_rect_raw|color/metadata|depth/metadata)$"
@@ -72,65 +71,59 @@ _ACTION_SOURCE_COUNTS = (
 )
 
 
-def camera_path_parts_for_role(role: str) -> tuple[str, str] | None:
-    role_str = str(role).strip()
-    if not role_str:
+def camera_path_parts_for_sensor_key(sensor_key: str) -> tuple[str, str] | None:
+    match = _CAMERA_SENSOR_KEY_PATTERN.fullmatch(str(sensor_key).strip())
+    if not match:
         return None
-    scene_match = _SCENE_ROLE_PATTERN.fullmatch(role_str)
-    if scene_match:
-        return "world", scene_match.group("slot")
-    wrist_match = _CAMERA_ROLE_PATTERN.fullmatch(role_str)
-    if wrist_match:
-        return wrist_match.group("arm"), wrist_match.group("slot")
-    return None
+    return match.group("attachment"), match.group("slot")
 
 
-def tactile_path_parts_for_role(role: str) -> tuple[str, str] | None:
-    match = _TACTILE_ROLE_PATTERN.fullmatch(str(role).strip())
+def tactile_path_parts_for_sensor_key(sensor_key: str) -> tuple[str, str] | None:
+    match = _TACTILE_SENSOR_KEY_PATTERN.fullmatch(str(sensor_key).strip())
     if not match:
         return None
     return match.group("arm"), match.group("finger")
 
 
-def camera_topic_prefix_for_role(role: str) -> str | None:
-    parts = camera_path_parts_for_role(role)
+def canonical_sensor_key(value: str) -> str:
+    return str(value).strip()
+
+
+def camera_topic_prefix_for_sensor_key(sensor_key: str) -> str | None:
+    parts = camera_path_parts_for_sensor_key(sensor_key)
     if parts is None:
         return None
     attachment, slot = parts
     return f"/spark/cameras/{attachment}/{slot}"
 
 
-def tactile_topic_prefix_for_role(role: str) -> str | None:
-    parts = tactile_path_parts_for_role(role)
+def tactile_topic_prefix_for_sensor_key(sensor_key: str) -> str | None:
+    parts = tactile_path_parts_for_sensor_key(sensor_key)
     if parts is None:
         return None
     arm, finger = parts
     return f"/spark/tactile/{arm}/{finger}"
 
 
-def role_choices_for_kind(kind: str) -> list[str]:
+def sensor_key_choices_for_kind(kind: str) -> list[str]:
     if kind == "realsense":
-        return list(CAMERA_ROLE_CHOICES)
+        return list(CAMERA_SENSOR_KEY_CHOICES)
     if kind == "gelsight":
-        return list(TACTILE_ROLE_CHOICES)
+        return list(TACTILE_SENSOR_KEY_CHOICES)
     return []
 
-
-def sensor_role_for_topic(topic: str) -> str | None:
+def sensor_key_for_topic(topic: str) -> str | None:
     camera_match = _CAMERA_TOPIC_PATTERN.fullmatch(str(topic).strip())
     if camera_match:
         attachment = camera_match.group("attachment")
         slot = camera_match.group("slot")
-        if attachment == "world":
-            return slot
-        return f"{attachment}_{slot}"
+        return f"/spark/cameras/{attachment}/{slot}"
 
     tactile_match = _TACTILE_TOPIC_PATTERN.fullmatch(str(topic).strip())
     if tactile_match:
-        return f"{tactile_match.group('arm')}_{tactile_match.group('finger')}"
+        return f"/spark/tactile/{tactile_match.group('arm')}/{tactile_match.group('finger')}"
 
     return None
-
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
@@ -377,17 +370,24 @@ def load_optional_sensor_overrides(path: str | Path | None) -> dict[str, dict[st
         for entry in sensors:
             if not isinstance(entry, dict):
                 continue
-            sensor_name = entry.get("sensor_name")
-            if sensor_name:
-                out[sensor_name] = entry
+            sensor_key = canonical_sensor_key(str(entry.get("sensor_key", "")).strip())
+            if not sensor_key:
+                raise ValueError("Sensor list entries must define sensor_key.")
+            entry_copy = dict(entry)
+            entry_copy["sensor_key"] = sensor_key
+            out[sensor_key] = entry_copy
         return out
 
     if isinstance(sensors, dict):
-        return {
-            sensor_name: value
-            for sensor_name, value in sensors.items()
-            if isinstance(value, dict)
-        }
+        out: dict[str, dict[str, Any]] = {}
+        for sensor_key, value in sensors.items():
+            if not isinstance(value, dict):
+                continue
+            canonical_key = canonical_sensor_key(str(sensor_key).strip())
+            if not canonical_key:
+                raise ValueError("Sensor mapping keys must be non-empty sensor keys.")
+            out[canonical_key] = {**value, "sensor_key": canonical_key}
+        return out
 
     raise ValueError("Sensor override file must contain a 'sensors' mapping or list.")
 
@@ -428,20 +428,20 @@ def load_optional_calibration_results(path: str | Path | None) -> tuple[dict[str
     return data, resolved_path
 
 
-def _calibration_snapshot_for_role(
-    role: str,
+def _calibration_snapshot_for_sensor_key(
+    sensor_key: str,
     calibration_results: dict[str, Any],
     calibration_results_path: Path | None,
 ) -> dict[str, Any] | None:
     cameras = calibration_results.get("cameras", {})
     if not isinstance(cameras, dict):
         return None
-    entry = cameras.get(role)
+    entry = cameras.get(sensor_key)
     if not isinstance(entry, dict):
         return None
 
     snapshot: dict[str, Any] = {
-        "role": role,
+        "sensor_key": sensor_key,
         "source_file": _repo_relative_path(calibration_results_path),
     }
     for key in ("version", "timestamp", "tcp_frame_assumption", "charuco_config"):
@@ -451,8 +451,6 @@ def _calibration_snapshot_for_role(
         "type",
         "serial_number",
         "model",
-        "attached_to",
-        "mount_site",
         "intrinsics",
         "hand_eye_calibration",
         "extrinsics",
@@ -472,26 +470,22 @@ def infer_sensor_metadata(
     calibration_results = calibration_results or {}
     sensors: list[dict[str, Any]] = []
 
-    camera_roles = {
-        role
-        for role in (sensor_role_for_topic(topic) for topic in selected_topics)
-        if role and camera_topic_prefix_for_role(role) is not None
+    camera_sensor_keys = {
+        sensor_key
+        for sensor_key in (sensor_key_for_topic(topic) for topic in selected_topics)
+        if sensor_key and camera_topic_prefix_for_sensor_key(sensor_key) is not None
     }
-    for role in sorted(camera_roles):
-        topic_prefix = camera_topic_prefix_for_role(role)
+    for sensor_key in sorted(camera_sensor_keys):
+        topic_prefix = camera_topic_prefix_for_sensor_key(sensor_key)
         if topic_prefix is None:
             continue
-        attachment, mount_site = camera_path_parts_for_role(role) or ("world", role)
         sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
         if not sensor_topics:
             continue
 
         sensor = {
-            "role": role,
-            "sensor_id": f"cam_{role}",
+            "sensor_key": sensor_key,
             "modality": "rgbd_camera",
-            "attached_to": attachment,
-            "mount_site": mount_site,
             "topic_names": sensor_topics,
             "serial_number": None,
             "model": None,
@@ -509,32 +503,30 @@ def infer_sensor_metadata(
         if "device_type" in params and params["device_type"] not in {"", "''", '""'}:
             sensor["model"] = params["device_type"]
 
-        sensor.update(sensor_overrides.get(role, {}))
-        calibration_snapshot = _calibration_snapshot_for_role(role, calibration_results, calibration_results_path)
+        sensor.update(sensor_overrides.get(sensor_key, {}))
+        sensor["sensor_key"] = sensor_key
+        calibration_snapshot = _calibration_snapshot_for_sensor_key(sensor_key, calibration_results, calibration_results_path)
         if calibration_snapshot is not None:
             sensor["calibration_snapshot"] = calibration_snapshot
         sensors.append(sensor)
 
-    tactile_roles = {
-        role
-        for role in (sensor_role_for_topic(topic) for topic in selected_topics)
-        if role and tactile_topic_prefix_for_role(role) is not None
+    tactile_sensor_keys = {
+        sensor_key
+        for sensor_key in (sensor_key_for_topic(topic) for topic in selected_topics)
+        if sensor_key and tactile_topic_prefix_for_sensor_key(sensor_key) is not None
     }
-    for role in sorted(tactile_roles):
-        topic_prefix = tactile_topic_prefix_for_role(role)
+    for sensor_key in sorted(tactile_sensor_keys):
+        topic_prefix = tactile_topic_prefix_for_sensor_key(sensor_key)
         if topic_prefix is None:
             continue
-        arm, mount_site = tactile_path_parts_for_role(role) or ("lightning", "finger_left")
+        arm, mount_site = tactile_path_parts_for_sensor_key(sensor_key) or ("lightning", "finger_left")
         sensor_topics = [topic for topic in selected_topics if topic.startswith(topic_prefix + "/")]
         if not sensor_topics:
             continue
 
         sensor = {
-            "role": role,
-            "sensor_id": f"tac_{role}_0",
+            "sensor_key": sensor_key,
             "modality": "tactile_rgb",
-            "attached_to": arm,
-            "mount_site": mount_site,
             "topic_names": sensor_topics,
             "serial_number": None,
             "model": "GelSight Mini",
@@ -596,20 +588,21 @@ def infer_sensor_metadata(
         if preprocessing:
             sensor["preprocessing"] = preprocessing
 
-        sensor.update(sensor_overrides.get(role, {}))
+        sensor.update(sensor_overrides.get(sensor_key, {}))
+        sensor["sensor_key"] = sensor_key
         sensors.append(sensor)
 
     return sensors
 
 
-def _sensor_ids_by_topic(sensors: list[dict[str, Any]]) -> dict[str, str]:
+def _sensor_keys_by_topic(sensors: list[dict[str, Any]]) -> dict[str, str]:
     topic_to_sensor: dict[str, str] = {}
     for sensor in sensors:
-        sensor_id = str(sensor.get("sensor_id", "")).strip()
-        if not sensor_id:
+        sensor_key = str(sensor.get("sensor_key", "")).strip()
+        if not sensor_key:
             continue
         for topic in sensor.get("topic_names", []):
-            topic_to_sensor[str(topic)] = sensor_id
+            topic_to_sensor[str(topic)] = sensor_key
     return topic_to_sensor
 
 
@@ -882,7 +875,7 @@ def build_recorded_topics_snapshot(
     sensors: list[dict[str, Any]],
     extra_topics: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    sensor_ids_by_topic = _sensor_ids_by_topic(sensors)
+    sensor_keys_by_topic = _sensor_keys_by_topic(sensors)
     usage = _profile_topic_usage(profile)
     required_for_record = set(required_topics_from_profile(profile))
     extra_topic_set = {str(topic) for topic in (extra_topics or [])}
@@ -911,7 +904,7 @@ def build_recorded_topics_snapshot(
                 "semantics": descriptor["semantics"],
                 "timestamp": descriptor["timestamp"],
                 "expected_rate_hz": descriptor["expected_rate_hz"],
-                "sensor_id": sensor_ids_by_topic.get(topic),
+                "sensor_key": sensor_keys_by_topic.get(topic),
                 "usage": {
                     "required_for_record": topic in required_for_record,
                     "required_for_convert": bool(topic_usage["required_for_convert"]),

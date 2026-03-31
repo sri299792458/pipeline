@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from data_pipeline.pipeline_utils import (
-    camera_path_parts_for_role,
+    camera_path_parts_for_sensor_key,
+    canonical_sensor_key,
     load_optional_sensor_overrides,
     normalize_active_arms,
     parse_task_list,
-    role_choices_for_kind,
-    tactile_path_parts_for_role,
+    sensor_key_choices_for_kind,
+    tactile_path_parts_for_sensor_key,
 )
 
 try:
@@ -45,21 +46,9 @@ def _normalize_serial(value: str | None) -> str:
     return trimmed or normalized
 
 
-def _canonical_role_from_sensor(sensor_name: str, sensor: dict[str, Any]) -> str:
-    sensor_name = str(sensor_name).strip()
-    if camera_path_parts_for_role(sensor_name) is not None or tactile_path_parts_for_role(sensor_name) is not None:
-        return sensor_name
-
-    attached_to = str(sensor.get("attached_to", "")).strip()
-    mount_site = str(sensor.get("mount_site", "")).strip()
-
-    if mount_site.startswith("scene_"):
-        return mount_site
-    if mount_site.startswith("wrist_") and attached_to:
-        return f"{attached_to}_{mount_site}"
-    if mount_site.startswith("finger_") and attached_to:
-        return f"{attached_to}_{mount_site}"
-    return sensor_name
+def _canonical_sensor_key_from_sensor(sensor_name: str, sensor: dict[str, Any]) -> str:
+    sensor_key = str(sensor.get("sensor_key", "")).strip() or str(sensor_name).strip()
+    return canonical_sensor_key(sensor_key)
 
 
 def _device_key(kind: str, identifier: str) -> tuple[str, str]:
@@ -78,14 +67,13 @@ def _current_selection_map(config: dict[str, Any]) -> dict[tuple[str, str], dict
         identifier = (
             str(entry.get("serial_number", "")).strip()
             or str(entry.get("device_path", "")).strip()
-            or str(entry.get("identifier", "")).strip()
         )
-        role = str(entry.get("role", "")).strip()
+        sensor_key = canonical_sensor_key(str(entry.get("sensor_key", "")).strip())
         if not kind or not identifier:
             continue
         selections[_device_key(kind, identifier)] = {
             "enabled": bool(entry.get("enabled", False)),
-            "role": role,
+            "sensor_key": sensor_key,
         }
     return selections
 
@@ -96,7 +84,7 @@ def _matched_sensor_for_realsense(
 ) -> tuple[str, dict[str, Any]] | tuple[None, None]:
     normalized = _normalize_serial(serial_number)
     for sensor_name, sensor in sensor_overrides.items():
-        if camera_path_parts_for_role(sensor_name) is None:
+        if camera_path_parts_for_sensor_key(sensor_name) is None:
             continue
         if _normalize_serial(sensor.get("serial_number")) == normalized:
             return sensor_name, sensor
@@ -111,7 +99,7 @@ def _matched_sensor_for_gelsight(
     normalized_serial = _normalize_serial(serial_number)
     lowered_path = device_path.lower()
     for sensor_name, sensor in sensor_overrides.items():
-        if tactile_path_parts_for_role(sensor_name) is None:
+        if tactile_path_parts_for_sensor_key(sensor_name) is None:
             continue
         sensor_serial = _normalize_serial(sensor.get("serial_number"))
         if sensor_serial and sensor_serial == normalized_serial:
@@ -129,18 +117,18 @@ def _default_enabled(sensor: dict[str, Any] | None) -> bool:
     return True
 
 
-def _role_from_selection_or_sensor(
+def _sensor_key_from_selection_or_sensor(
     *,
     selection: dict[str, Any] | None,
     sensor_name: str | None,
     sensor: dict[str, Any] | None,
 ) -> str:
     if selection:
-        role = str(selection.get("role", "")).strip()
-        if role:
-            return role
+        sensor_key = canonical_sensor_key(str(selection.get("sensor_key", "")).strip())
+        if sensor_key:
+            return sensor_key
     if sensor_name and sensor:
-        return _canonical_role_from_sensor(sensor_name, sensor)
+        return _canonical_sensor_key_from_sensor(sensor_name, sensor)
     return ""
 
 
@@ -148,8 +136,7 @@ def _device_entry(
     *,
     kind: str,
     model: str,
-    identifier: str,
-    role: str,
+    sensor_key: str,
     enabled: bool,
     serial_number: str = "",
     device_path: str = "",
@@ -158,8 +145,7 @@ def _device_entry(
     entry: dict[str, Any] = {
         "kind": kind,
         "model": model,
-        "identifier": identifier,
-        "role": role,
+        "sensor_key": canonical_sensor_key(sensor_key),
         "enabled": enabled,
     }
     if serial_number:
@@ -167,7 +153,7 @@ def _device_entry(
     if device_path:
         entry["device_path"] = device_path
     if sensor:
-        for key in ("sensor_id", "attached_to", "mount_site", "calibration_ref"):
+        for key in ("calibration_ref",):
             value = sensor.get(key)
             if value not in {"", None}:
                 entry[key] = value
@@ -197,7 +183,6 @@ def _discover_realsense_v4l() -> list[dict[str, Any]]:
         discovered.append(
             {
                 "kind": "realsense",
-                "identifier": raw_serial,
                 "serial_number": raw_serial,
                 "model": model,
             }
@@ -230,7 +215,6 @@ def _discover_realsense_sdk() -> list[dict[str, Any]]:
         discovered.append(
             {
                 "kind": "realsense",
-                "identifier": serial_number,
                 "serial_number": serial_number,
                 "model": model,
             }
@@ -262,7 +246,6 @@ def _discover_gelsight_v4l(sensor_overrides: dict[str, dict[str, Any]]) -> list[
         discovered.append(
             {
                 "kind": "gelsight",
-                "identifier": path,
                 "device_path": path,
                 "serial_number": raw_serial or "",
                 "model": "GelSight Mini" if "gelsight" in name.lower() else "Tactile Camera",
@@ -271,23 +254,26 @@ def _discover_gelsight_v4l(sensor_overrides: dict[str, dict[str, Any]]) -> list[
     return discovered
 
 
-def _heuristic_camera_role(model: str, used_roles: set[str], active_arms: list[str]) -> str:
+def _heuristic_camera_sensor_key(model: str, used_sensor_keys: set[str], active_arms: list[str]) -> str:
     primary_arm = active_arms[0] if active_arms else "lightning"
-    wrist_role = f"{primary_arm}_wrist_1"
-    if "405" in model and wrist_role not in used_roles:
-        return wrist_role
-    for role in role_choices_for_kind("realsense"):
-        if role.startswith("scene_") and role not in used_roles:
-            return role
-    return "scene_1"
+    wrist_sensor_key = f"/spark/cameras/{primary_arm}/wrist_1"
+    if "405" in model and wrist_sensor_key not in used_sensor_keys:
+        return wrist_sensor_key
+    for sensor_key in sensor_key_choices_for_kind("realsense"):
+        if "/world/scene_" in sensor_key and sensor_key not in used_sensor_keys:
+            return sensor_key
+    return "/spark/cameras/world/scene_1"
 
 
-def _heuristic_tactile_role(used_roles: set[str], active_arms: list[str]) -> str:
+def _heuristic_tactile_sensor_key(used_sensor_keys: set[str], active_arms: list[str]) -> str:
     primary_arm = active_arms[0] if active_arms else "lightning"
-    for role in (f"{primary_arm}_finger_left", f"{primary_arm}_finger_right"):
-        if role not in used_roles:
-            return role
-    return f"{primary_arm}_finger_left"
+    for sensor_key in (
+        f"/spark/tactile/{primary_arm}/finger_left",
+        f"/spark/tactile/{primary_arm}/finger_right",
+    ):
+        if sensor_key not in used_sensor_keys:
+            return sensor_key
+    return f"/spark/tactile/{primary_arm}/finger_left"
 
 
 def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -297,25 +283,24 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
     current_selections = _current_selection_map(config)
 
     devices: list[dict[str, Any]] = []
-    used_roles: set[str] = set()
+    used_sensor_keys: set[str] = set()
 
     realsense_cameras = _discover_realsense_sdk() or _discover_realsense_v4l()
     for camera in realsense_cameras:
         serial_number = str(camera.get("serial_number", "")).strip()
         selection = current_selections.get(_device_key("realsense", serial_number))
         sensor_name, sensor = _matched_sensor_for_realsense(serial_number, sensor_overrides)
-        role = _role_from_selection_or_sensor(selection=selection, sensor_name=sensor_name, sensor=sensor)
-        if not role:
-            role = _heuristic_camera_role(str(camera.get("model", "")), used_roles, active_arms)
-        used_roles.add(role)
+        sensor_key = _sensor_key_from_selection_or_sensor(selection=selection, sensor_name=sensor_name, sensor=sensor)
+        if not sensor_key:
+            sensor_key = _heuristic_camera_sensor_key(str(camera.get("model", "")), used_sensor_keys, active_arms)
+        used_sensor_keys.add(sensor_key)
         enabled = selection["enabled"] if selection is not None else _default_enabled(sensor)
         devices.append(
             _device_entry(
                 kind="realsense",
                 model=str(camera.get("model", "")).strip() or "Intel RealSense",
-                identifier=serial_number,
                 serial_number=serial_number,
-                role=role,
+                sensor_key=sensor_key,
                 enabled=enabled,
                 sensor=sensor,
             )
@@ -326,19 +311,18 @@ def discover_session_devices(config: dict[str, Any]) -> list[dict[str, Any]]:
         serial_number = str(tactile.get("serial_number", "")).strip()
         selection = current_selections.get(_device_key("gelsight", device_path))
         sensor_name, sensor = _matched_sensor_for_gelsight(device_path, serial_number, sensor_overrides)
-        role = _role_from_selection_or_sensor(selection=selection, sensor_name=sensor_name, sensor=sensor)
-        if not role:
-            role = _heuristic_tactile_role(used_roles, active_arms)
-        used_roles.add(role)
+        sensor_key = _sensor_key_from_selection_or_sensor(selection=selection, sensor_name=sensor_name, sensor=sensor)
+        if not sensor_key:
+            sensor_key = _heuristic_tactile_sensor_key(used_sensor_keys, active_arms)
+        used_sensor_keys.add(sensor_key)
         enabled = selection["enabled"] if selection is not None else _default_enabled(sensor)
         devices.append(
             _device_entry(
                 kind="gelsight",
                 model=str(tactile.get("model", "")).strip() or "GelSight Mini",
-                identifier=device_path,
                 device_path=device_path,
                 serial_number=serial_number,
-                role=role,
+                sensor_key=sensor_key,
                 enabled=enabled,
                 sensor=sensor,
             )

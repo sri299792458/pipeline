@@ -369,9 +369,7 @@ The published profile only includes the sensors explicitly declared in the mappi
 
 The raw manifest should still preserve every recorded sensor as a sensor instance with:
 
-- `sensor_id`
-- `attached_to`
-- `mount_site`
+- `sensor_key`
 - `serial_number`
 
 ### Why

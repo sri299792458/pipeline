@@ -281,11 +281,10 @@ def main(argv: list[str] | None = None) -> int:
         for sensor in dry_run_manifest["sensors"]["devices"]:
             print(
                 "sensor="
-                f"id={sensor.get('sensor_id')} "
+                f"key={sensor.get('sensor_key')} "
                 f"serial={sensor.get('serial_number')} "
                 f"modality={sensor.get('modality')} "
-                f"attached_to={sensor.get('attached_to')} "
-                f"mount_site={sensor.get('mount_site')}"
+                f"topics={len(sensor.get('topic_names', []))}"
             )
         for topic in selected_topics:
             print(f"{topic} [{live_topics[topic]}]")

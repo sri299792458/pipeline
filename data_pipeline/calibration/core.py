@@ -275,7 +275,7 @@ def calibrate_scene_camera_from_reference(
     target_to_camera_transforms: list[np.ndarray],
     reprojection_errors_px: list[float] | None = None,
     reference_frame: str,
-    reference_camera_role: str,
+    reference_camera: str,
 ) -> dict[str, Any]:
     if len(base_to_target_transforms) != len(target_to_camera_transforms):
         raise ValueError("base_to_target_transforms and target_to_camera_transforms must have the same length.")
@@ -292,7 +292,7 @@ def calibrate_scene_camera_from_reference(
     result = {
         "success": True,
         "reference_frame": reference_frame,
-        "reference_camera_role": reference_camera_role,
+        "reference_camera": reference_camera,
         "num_samples": len(base_to_camera_estimates),
         "rotation_matrix": mean_base_to_camera[:3, :3].tolist(),
         "translation_vector": mean_base_to_camera[:3, 3].tolist(),

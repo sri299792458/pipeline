@@ -48,7 +48,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from data_pipeline.operator_console_backend import BUILTIN_SESSION_PROFILE_NAME, OperatorConsoleBackend
-from data_pipeline.pipeline_utils import role_choices_for_kind
+from data_pipeline.pipeline_utils import sensor_key_choices_for_kind
 
 
 STATUS_STYLES = {
@@ -63,7 +63,6 @@ def _device_identifier(device: dict[str, object]) -> str:
     return (
         str(device.get("serial_number", "")).strip()
         or str(device.get("device_path", "")).strip()
-        or str(device.get("identifier", "")).strip()
     )
 
 
@@ -295,7 +294,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         layout.addLayout(form)
 
         self.session_devices_table = QTableWidget(0, 5)
-        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Kind", "Model", "Identifier", "Role"])
+        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Kind", "Model", "Identifier", "Sensor"])
         self.session_devices_table.verticalHeader().setVisible(False)
         self.session_devices_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.session_devices_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -304,7 +303,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.session_devices_table.setColumnWidth(0, 64)
         self.session_devices_table.setColumnWidth(1, 92)
         self.session_devices_table.setColumnWidth(2, 118)
-        self.session_devices_table.setColumnWidth(3, 200)
+        self.session_devices_table.setColumnWidth(3, 240)
         layout.addWidget(self.session_devices_table)
 
         controls = QHBoxLayout()
@@ -347,9 +346,9 @@ class OperatorConsoleQtWindow(QMainWindow):
                 if existing is None:
                     continue
                 device["enabled"] = bool(existing.get("enabled", False))
-                existing_role = str(existing.get("role", "")).strip()
-                if existing_role:
-                    device["role"] = existing_role
+                existing_sensor_key = str(existing.get("sensor_key", "")).strip()
+                if existing_sensor_key:
+                    device["sensor_key"] = existing_sensor_key
         self._set_session_devices(discovered_devices)
 
     def _browse_session_profile(self) -> None:
@@ -453,27 +452,24 @@ class OperatorConsoleQtWindow(QMainWindow):
         identifier_item = QTableWidgetItem(identifier_value)
         self.session_devices_table.setItem(row, 3, identifier_item)
 
-        role_combo = QComboBox()
-        role_choices = role_choices_for_kind(kind_value)
-        role_combo.addItems(role_choices)
-        role_value = str(device.get("role", "")).strip()
-        if role_value and role_combo.findText(role_value) < 0:
-            role_combo.addItem(role_value)
-        role_combo.setCurrentText(role_value)
-        self.session_devices_table.setCellWidget(row, 4, role_combo)
+        sensor_combo = QComboBox()
+        sensor_choices = sensor_key_choices_for_kind(kind_value)
+        sensor_combo.addItems(sensor_choices)
+        sensor_key_value = str(device.get("sensor_key", "")).strip()
+        if sensor_key_value and sensor_combo.findText(sensor_key_value) < 0:
+            sensor_combo.addItem(sensor_key_value)
+        sensor_combo.setCurrentText(sensor_key_value)
+        self.session_devices_table.setCellWidget(row, 4, sensor_combo)
 
         identifier_item.setData(
             Qt.ItemDataRole.UserRole,
             {
                 "kind": kind_value,
-                "identifier": identifier_value,
                 "model": device.get("model"),
-                "sensor_id": device.get("sensor_id"),
-                "attached_to": device.get("attached_to"),
-                "mount_site": device.get("mount_site"),
                 "calibration_ref": device.get("calibration_ref"),
                 "serial_number": str(device.get("serial_number", "")).strip(),
                 "device_path": str(device.get("device_path", "")).strip(),
+                "sensor_key": sensor_key_value,
             },
         )
 
@@ -483,14 +479,14 @@ class OperatorConsoleQtWindow(QMainWindow):
             enabled_widget = self.session_devices_table.cellWidget(row, 0)
             kind_item = self.session_devices_table.item(row, 1)
             identifier_item = self.session_devices_table.item(row, 3)
-            role_widget = self.session_devices_table.cellWidget(row, 4)
+            sensor_widget = self.session_devices_table.cellWidget(row, 4)
             if not isinstance(enabled_widget, QCheckBox):
                 continue
             if not isinstance(kind_item, QTableWidgetItem):
                 continue
             if not isinstance(identifier_item, QTableWidgetItem):
                 continue
-            if not isinstance(role_widget, QComboBox):
+            if not isinstance(sensor_widget, QComboBox):
                 continue
             metadata = identifier_item.data(Qt.ItemDataRole.UserRole) if identifier_item is not None else {}
             if not isinstance(metadata, dict):
@@ -498,14 +494,13 @@ class OperatorConsoleQtWindow(QMainWindow):
 
             kind = kind_item.text().strip()
             identifier = identifier_item.text().strip()
-            role = role_widget.currentText().strip()
+            sensor_key = sensor_widget.currentText().strip()
             device: dict[str, object] = {
                 "kind": kind,
-                "identifier": identifier,
                 "enabled": enabled_widget.isChecked(),
-                "role": role,
+                "sensor_key": sensor_key,
             }
-            for key in ("model", "sensor_id", "attached_to", "mount_site", "calibration_ref"):
+            for key in ("model", "calibration_ref"):
                 value = metadata.get(key)
                 if value not in {"", None}:
                     device[key] = value

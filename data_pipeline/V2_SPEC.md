@@ -12,7 +12,7 @@ It keeps the same high-level pipeline shape:
 
 But it changes the sensor/topic model decisively:
 
-- V2 uses canonical role-based raw topic names
+- V2 uses canonical sensor-key-based raw topic names
 - session setup is separated from published-profile selection
 - no V1 topic aliases or compatibility shims are part of the target design
 
@@ -63,7 +63,7 @@ The shared contract defines:
 
 - canonical topic names
 - timestamp meanings
-- canonical role names
+- canonical sensor keys
 - dataset-facing field semantics
 
 It is lab-wide and must not vary by operator.
@@ -74,7 +74,7 @@ The sensors file is the one local rig file.
 
 Its main job is:
 
-- serial or device-path to canonical-role mapping
+- serial or device-path to canonical-sensor-key mapping
 
 It may also hold optional local metadata such as calibration references.
 
@@ -88,7 +88,7 @@ It defines:
 
 - session metadata
 - discovered devices chosen for recording
-- canonical roles confirmed for those devices
+- canonical sensor keys confirmed for those devices
 - resolved raw topics for that session
 
 All episodes recorded in that session inherit the same session profile.
@@ -99,7 +99,7 @@ These saved profiles are convenience artifacts, not shared-contract objects.
 
 ## Canonical Raw Topic Surface
 
-V2 raw recording uses only the canonical role-based surface.
+V2 raw recording uses only the canonical sensor-key-based surface.
 
 ### Robot and command topics
 
@@ -193,7 +193,7 @@ Its top-level sections stay:
 - `recorded_topics`
 - `provenance`
 
-The important V2 change is that `recorded_topics` and `sensors.devices` must reflect canonical V2 raw topics and canonical V2 roles.
+The important V2 change is that `recorded_topics` and `sensors.devices` must reflect canonical V2 raw topics and canonical V2 sensor keys.
 
 
 ## Published Profiles
@@ -202,7 +202,7 @@ Published profiles in V2 must refer directly to canonical V2 raw topics.
 
 That means:
 
-- they map from role-based raw topics
+- they map from sensor-key-based raw topics
 - they do not use V1 shorthand camera/tactile names
 - they do not define session bring-up
 
@@ -217,7 +217,7 @@ V2 keeps the existing timestamp meanings unless a later spec changes them explic
 - `control_tick_time_v1`
 - `command_issue_time_v1`
 
-The naming stays for now because the semantics are unchanged. V2 changes the topic/role model, not the clock meanings.
+The naming stays because the semantics are unchanged. V2 changes the topic/sensor-key model, not the clock meanings.
 
 
 ## Migration Rule
