@@ -2154,3 +2154,28 @@
   - `sensors.calibration_results_file`
   - per-sensor `calibration_snapshot` entries when available
 - Added [calibration.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/calibration.md) and linked calibration into the active README / hardware bring-up docs.
+
+### Capture bag vs archive bag
+
+- Settled the raw storage model around three distinct artifacts:
+  - capture bag
+  - archive bag
+  - published dataset
+- Capture bags are now the preserved source-of-truth ROS artifact:
+  - untrimmed
+  - plain `mcap`
+  - not rewritten in place after recording
+- Head/tail trim moved out of `record_episode.py` and into the offline archive workflow.
+- Raw capture manifests no longer carry `capture.raw_trim`.
+- Bumped the raw manifest schema to `8` for the capture-manifest shape change.
+- Published conversion still reads from the preserved capture bag.
+- Archive generation is now explicitly an offline storage-maintenance step:
+  - after conversion if needed
+  - per episode later, per session, or overnight
+- The archive design now requires a separate `archive_manifest.json` to record:
+  - source capture bag identity
+  - verification result
+  - trim policy and outcome
+  - lossless image transcode settings
+  - final MCAP zstd compression settings
+  - output artifact size/path

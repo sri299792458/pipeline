@@ -260,7 +260,6 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
                 ),
             },
             "record_exit_code": 0,
-            "raw_trim": None,
         },
         "sensors": {
             "inventory_version": 2,

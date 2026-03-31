@@ -184,17 +184,10 @@ If `data_pipeline/configs/calibration.local.json` exists, the recorder also snap
 Raw bag storage now defaults to:
 
 - `mcap`
-- `zstd_fast`
 
-This raw capture compression is lossless.
-
-After a successful recording, the saved raw bag is also trimmed automatically to the first and last teleop command activity, with a `1.0 s` pad before and after. This reduces head/tail idle storage without splitting mid-episode pauses. The applied result is recorded in `episode_manifest.json` under `capture.raw_trim`.
-
-If you need to keep the full untrimmed bag, pass:
-
-```bash
---disable-command-trim
-```
+Capture bags are now preserved as untrimmed plain MCAP artifacts. Head/tail
+trim and lossless visual compression belong to the later offline archive step,
+not to `record_episode.py`.
 
 `--active-arms` is now explicit for recording runs. The recorder uses that value to select:
 

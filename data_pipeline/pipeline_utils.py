@@ -21,7 +21,7 @@ DEFAULT_PROFILE_PATH = REPO_ROOT / "data_pipeline" / "configs" / "multisensor_20
 DEFAULT_RAW_EPISODES_DIR = REPO_ROOT / "raw_episodes"
 DEFAULT_CALIBRATION_RESULTS_PATH = CONFIGS_DIR / "calibration.local.json"
 DEFAULT_BAG_STORAGE_ID = "mcap"
-DEFAULT_BAG_STORAGE_PRESET_PROFILE = "zstd_fast"
+DEFAULT_BAG_STORAGE_PRESET_PROFILE = ""
 ARM_ORDER = ("lightning", "thunder")
 CAMERA_ROLE_CHOICES = (
     "lightning_wrist_1",
@@ -36,7 +36,7 @@ TACTILE_ROLE_CHOICES = (
     "thunder_finger_left",
     "thunder_finger_right",
 )
-MANIFEST_SCHEMA_VERSION = 7
+MANIFEST_SCHEMA_VERSION = 8
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
     "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",
