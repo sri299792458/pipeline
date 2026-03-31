@@ -14,6 +14,8 @@ For the expected multi-repo workspace layout on a fresh machine, use [docs/works
 
 For the required Ubuntu and ROS Jazzy packages on a fresh machine, use [docs/system-setup.md](./docs/system-setup.md).
 
+For the local dataset viewer toolchain and build step, use [docs/viewer-setup.md](./docs/viewer-setup.md).
+
 For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-bringup.md).
 
 For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).

@@ -109,6 +109,7 @@ If someone only needs to use the viewer, cloning the lab fork is enough. The `up
 Once this workspace layout exists, move on to:
 
 - [system-setup.md](./system-setup.md)
+- [viewer-setup.md](./viewer-setup.md) if the user needs local dataset viewing
 - Python environment setup
 - RealSense runtime setup
 - hardware bring-up

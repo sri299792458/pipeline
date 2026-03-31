@@ -2255,3 +2255,22 @@
   - [workspace-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/workspace-setup.md)
   - [README.md](/home/srinivas/Desktop/pipeline/data_pipeline/README.md)
   - [hardware-bringup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/hardware-bringup.md)
+
+### Viewer setup script
+
+- Added [setup_viewer_env.sh](/home/srinivas/Desktop/pipeline/data_pipeline/setup_viewer_env.sh) so viewer setup is no longer left as tribal knowledge.
+- The script targets the sibling workspace layout and prepares:
+  - `../lerobot-dataset-visualizer`
+  - `~/.bun/bin/bun`
+- Current behavior:
+  - fails early if the sibling viewer checkout is missing
+  - fails early if `node` / `npm` are missing
+  - installs `bun` automatically if it is missing
+  - runs `bun install --frozen-lockfile`
+  - runs `bun run build`
+  - verifies `.next/BUILD_ID`
+- Added [viewer-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/viewer-setup.md) to explain:
+  - the viewer is not required for raw recording
+  - but it is a real part of the local inspection workflow
+  - `Open Viewer` still owns runtime startup, while the setup script prepares the toolchain and production bundle
+- Tightened [system-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/system-setup.md) so it no longer implies `bun` is already handled elsewhere without a documented setup path.

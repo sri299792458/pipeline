@@ -86,19 +86,19 @@ So the important contract is:
 - the system provides ROS Jazzy
 - the repo builds its own pinned RealSense runtime
 
-## Optional Viewer Packages
+## Viewer Packages
 
-If the user also wants to run the dataset viewer locally, install:
+The viewer is not required for raw recording, but it is a real part of the
+normal local workflow. If the user wants local dataset inspection or `Open
+Viewer` from the operator console, install:
 
 ```bash
 sudo apt-get install -y nodejs npm
 ```
 
-The current viewer launch path also expects:
+The current viewer setup path will install `bun` separately. See:
 
-- `bun` at `~/.bun/bin/bun`
-
-That is part of the viewer workflow, not the core recording pipeline.
+- [viewer-setup.md](./viewer-setup.md)
 
 ## Practical Check
 
