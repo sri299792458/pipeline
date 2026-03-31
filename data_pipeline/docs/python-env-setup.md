@@ -81,6 +81,20 @@ That includes the Qt operator console dependency:
 
 - `PySide6`
 
+## Finish The One-Time Project Bootstrap
+
+The remaining one-time bootstrap step is the pinned RealSense runtime setup.
+
+From the main repo root:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+./data_pipeline/setup_realsense_contract_runtime.sh
+```
+
+This prepares the local pinned `librealsense v2.54.2` runtime used by the
+current RealSense capture path.
+
 ## Why ROS Still Needs To Be Sourced
 
 Even inside `.venv`, the ROS environment must still be sourced before running

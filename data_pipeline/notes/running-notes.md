@@ -2322,3 +2322,6 @@
   - `Validate`
 - Kept the low-level RealSense and GelSight identifier probes in the page, but moved them into a fallback section for when discovery looks wrong.
 - Deliberately stopped the page at “hardware is healthy and ready,” instead of mixing full recording, conversion, and viewer steps into the same document.
+- Tightened the setup boundary again so the one-time bootstrap steps now live in [python-env-setup.md](/home/srinivas/Desktop/pipeline/data_pipeline/docs/python-env-setup.md), not in the bring-up page itself.
+- Also made the robot note more explicit:
+  - for the normal Teleop/recording workflow, UR remote control must be enabled before bring-up

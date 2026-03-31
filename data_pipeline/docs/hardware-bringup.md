@@ -22,20 +22,11 @@ Finish these setup pages first:
 - [system-setup.md](./system-setup.md)
 - [python-env-setup.md](./python-env-setup.md)
 
-Run the one-time project setup from the repository root:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-./data_pipeline/setup_shared_venv.sh
-./data_pipeline/setup_realsense_contract_runtime.sh
-```
-
 Notes:
 
-- the Qt operator console now comes from the shared `.venv`
-- the RealSense capture path still depends on the pinned local
-  `librealsense v2.54.2` runtime prepared by
-  `setup_realsense_contract_runtime.sh`
+- this page assumes the shared `.venv` already exists
+- this page assumes the pinned local `librealsense v2.54.2` runtime has already
+  been prepared
 - the viewer is **not** required for hardware bring-up
 
 
@@ -44,7 +35,7 @@ Notes:
 Before launching anything, check the rig physically:
 
 - the UR arm or arms are powered and reachable on the network
-- remote control can be enabled on the robot if needed
+- remote control is enabled on the robot before Teleop bring-up
 - the SPARK input device is connected
 - the foot pedal is connected and unpressed
 - the RealSense cameras you want for this session are attached
@@ -215,7 +206,8 @@ One expected failure mode is:
 - `Please enable remote control on the robot!`
 
 That means the dashboard path succeeded but RTDE control was refused by the
-robot-side remote-control setting.
+robot-side remote-control setting. For the normal teleop and recording workflow,
+remote control is not optional.
 
 
 ## 8. Check Health In The Operator Console
