@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import subprocess
@@ -23,29 +24,9 @@ DEFAULT_CALIBRATION_RESULTS_PATH = CONFIGS_DIR / "calibration.local.json"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = ""
 ARM_ORDER = ("lightning", "thunder")
-CAMERA_SENSOR_KEY_CHOICES = (
-    "/spark/cameras/lightning/wrist_1",
-    "/spark/cameras/thunder/wrist_1",
-    "/spark/cameras/world/scene_1",
-    "/spark/cameras/world/scene_2",
-    "/spark/cameras/world/scene_3",
-)
-TACTILE_SENSOR_KEY_CHOICES = (
-    "/spark/tactile/lightning/finger_left",
-    "/spark/tactile/lightning/finger_right",
-    "/spark/tactile/thunder/finger_left",
-    "/spark/tactile/thunder/finger_right",
-)
 MANIFEST_SCHEMA_VERSION = 9
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
-    "multisensor_20hz_lightning": CONFIGS_DIR / "multisensor_20hz_lightning.yaml",
-    "multisensor_20hz_thunder": CONFIGS_DIR / "multisensor_20hz_thunder.yaml",
-}
-ACTIVE_ARMS_TO_PROFILE_NAME = {
-    ("lightning", "thunder"): "multisensor_20hz",
-    ("lightning",): "multisensor_20hz_lightning",
-    ("thunder",): "multisensor_20hz_thunder",
 }
 
 _TOPIC_TYPE_PATTERN = re.compile(r"^(?P<topic>/\S+)\s+\[(?P<type>[^\]]+)\]\s*$")
@@ -69,6 +50,16 @@ _ACTION_SOURCE_COUNTS = (
     ("cmd_joint_state", 6),
     ("cmd_gripper_state", 1),
 )
+_STATE_FIELD_TEMPLATES = {
+    "joint_state": [f"joint_pos_{index}" for index in range(1, 7)],
+    "eef_pose": ["eef_x", "eef_y", "eef_z", "eef_rx", "eef_ry", "eef_rz"],
+    "gripper_state": ["gripper_position"],
+    "tcp_wrench": ["ft_fx", "ft_fy", "ft_fz", "ft_tx", "ft_ty", "ft_tz"],
+}
+_ACTION_FIELD_TEMPLATES = {
+    "cmd_joint_state": [f"cmd_joint_{index}" for index in range(1, 7)],
+    "cmd_gripper_state": ["cmd_gripper"],
+}
 
 
 def camera_path_parts_for_sensor_key(sensor_key: str) -> tuple[str, str] | None:
@@ -105,13 +96,6 @@ def tactile_topic_prefix_for_sensor_key(sensor_key: str) -> str | None:
     return f"/spark/tactile/{arm}/{finger}"
 
 
-def sensor_key_choices_for_kind(kind: str) -> list[str]:
-    if kind == "realsense":
-        return list(CAMERA_SENSOR_KEY_CHOICES)
-    if kind == "gelsight":
-        return list(TACTILE_SENSOR_KEY_CHOICES)
-    return []
-
 def sensor_key_for_topic(topic: str) -> str | None:
     camera_match = _CAMERA_TOPIC_PATTERN.fullmatch(str(topic).strip())
     if camera_match:
@@ -124,6 +108,185 @@ def sensor_key_for_topic(topic: str) -> str | None:
         return f"/spark/tactile/{tactile_match.group('arm')}/{tactile_match.group('finger')}"
 
     return None
+
+
+def sensor_kind_for_sensor_key(sensor_key: str) -> str | None:
+    if camera_path_parts_for_sensor_key(sensor_key) is not None:
+        return "realsense"
+    if tactile_path_parts_for_sensor_key(sensor_key) is not None:
+        return "gelsight"
+    return None
+
+
+def sensor_topic_for_stream(sensor_key: str, stream: str) -> str | None:
+    sensor_key = canonical_sensor_key(sensor_key)
+    stream_name = str(stream).strip().lower()
+    camera_prefix = camera_topic_prefix_for_sensor_key(sensor_key)
+    if camera_prefix is not None:
+        suffix = {
+            "color": "color/image_raw",
+            "depth": "depth/image_rect_raw",
+            "color_metadata": "color/metadata",
+            "depth_metadata": "depth/metadata",
+        }.get(stream_name)
+        return f"{camera_prefix}/{suffix}" if suffix else None
+
+    tactile_prefix = tactile_topic_prefix_for_sensor_key(sensor_key)
+    if tactile_prefix is not None:
+        suffix = {
+            "color": "color/image_raw",
+            "depth": "depth/image_raw",
+            "marker_offset": "marker_offset",
+        }.get(stream_name)
+        return f"{tactile_prefix}/{suffix}" if suffix else None
+
+    return None
+
+
+def default_topics_for_sensor_key(sensor_key: str) -> list[str]:
+    sensor_key = canonical_sensor_key(sensor_key)
+    if camera_path_parts_for_sensor_key(sensor_key) is not None:
+        return [
+            topic
+            for topic in (
+                sensor_topic_for_stream(sensor_key, "color"),
+                sensor_topic_for_stream(sensor_key, "depth"),
+                sensor_topic_for_stream(sensor_key, "color_metadata"),
+                sensor_topic_for_stream(sensor_key, "depth_metadata"),
+            )
+            if topic
+        ]
+    if tactile_path_parts_for_sensor_key(sensor_key) is not None:
+        return [
+            topic
+            for topic in (
+                sensor_topic_for_stream(sensor_key, "color"),
+                sensor_topic_for_stream(sensor_key, "depth"),
+                sensor_topic_for_stream(sensor_key, "marker_offset"),
+            )
+            if topic
+        ]
+    return []
+
+def _arm_topic(arm: str, suffix: str) -> str:
+    return f"/spark/{arm}/{suffix}"
+
+
+def _sensor_field_suffix(sensor_key: str) -> str:
+    camera_parts = camera_path_parts_for_sensor_key(sensor_key)
+    if camera_parts is not None:
+        attachment, slot = camera_parts
+        return f"{attachment}.{slot}"
+    tactile_parts = tactile_path_parts_for_sensor_key(sensor_key)
+    if tactile_parts is not None:
+        arm, finger = tactile_parts
+        return f"tactile.{arm}.{finger}"
+    raise ValueError(f"Unsupported sensor key: {sensor_key}")
+
+
+def image_field_for_sensor_key(sensor_key: str) -> str:
+    return f"observation.images.{_sensor_field_suffix(sensor_key)}"
+
+
+def depth_field_for_sensor_key(sensor_key: str) -> str:
+    return f"observation.depth.{_sensor_field_suffix(sensor_key)}"
+
+
+def effective_profile_for_session(
+    profile: dict[str, Any],
+    active_arms: list[str] | tuple[str, ...] | set[str],
+    sensor_keys: list[str] | tuple[str, ...] | set[str],
+) -> dict[str, Any]:
+    normalized_arms = normalize_active_arms(active_arms)
+    normalized_sensor_keys = [
+        canonical_sensor_key(sensor_key)
+        for sensor_key in sensor_keys
+        if canonical_sensor_key(sensor_key)
+    ]
+
+    effective = copy.deepcopy(profile)
+    notes = effective.setdefault("notes", {})
+    notes["arm_order"] = list(normalized_arms)
+    notes["required_arms"] = list(normalized_arms)
+
+    published = effective.setdefault("published", {})
+    observation_state = published.setdefault("observation_state", {})
+    action = published.setdefault("action", {})
+
+    state_names: list[str] = []
+    state_sources: dict[str, dict[str, str]] = {}
+    for arm in normalized_arms:
+        state_sources[arm] = {
+            "joint_state": _arm_topic(arm, "robot/joint_state"),
+            "eef_pose": _arm_topic(arm, "robot/eef_pose"),
+            "gripper_state": _arm_topic(arm, "robot/gripper_state"),
+            "tcp_wrench": _arm_topic(arm, "robot/tcp_wrench"),
+        }
+        for source_key, _count in _STATE_SOURCE_COUNTS:
+            state_names.extend(f"{arm}_{name}" for name in _STATE_FIELD_TEMPLATES[source_key])
+    observation_state["names"] = state_names
+    observation_state["sources"] = state_sources
+
+    action_names: list[str] = []
+    action_sources: dict[str, dict[str, str]] = {}
+    for arm in normalized_arms:
+        action_sources[arm] = {
+            "cmd_joint_state": _arm_topic(arm, "teleop/cmd_joint_state"),
+            "cmd_gripper_state": _arm_topic(arm, "teleop/cmd_gripper_state"),
+        }
+        for source_key, _count in _ACTION_SOURCE_COUNTS:
+            action_names.extend(f"{arm}_{name}" for name in _ACTION_FIELD_TEMPLATES[source_key])
+    action["names"] = action_names
+    action["sources"] = action_sources
+
+    image_defaults = published.get("images", {})
+    if not isinstance(image_defaults, dict):
+        image_defaults = {}
+    color_specs: list[dict[str, Any]] = []
+    depth_defaults = effective.get("published_depth", {})
+    if not isinstance(depth_defaults, dict):
+        depth_defaults = {}
+    depth_specs: list[dict[str, Any]] = []
+
+    for sensor_key in sorted(dict.fromkeys(normalized_sensor_keys)):
+        color_topic = sensor_topic_for_stream(sensor_key, "color")
+        if color_topic:
+            color_specs.append(
+                {
+                    "field": image_field_for_sensor_key(sensor_key),
+                    "topic": color_topic,
+                    "align": str(image_defaults.get("align", "nearest")),
+                    "max_skew_ms": float(image_defaults.get("max_skew_ms", 25)),
+                    "required": bool(image_defaults.get("required", False)),
+                    "sensor_key": sensor_key,
+                }
+            )
+
+        depth_topic = sensor_topic_for_stream(sensor_key, "depth")
+        if depth_topic:
+            depth_specs.append(
+                {
+                    "field": depth_field_for_sensor_key(sensor_key),
+                    "topic": depth_topic,
+                    "align": str(depth_defaults.get("align", "nearest")),
+                    "max_skew_ms": float(depth_defaults.get("max_skew_ms", 25)),
+                    "required": bool(depth_defaults.get("required", False)),
+                    "unit": str(depth_defaults.get("unit", "millimeters")),
+                    "sensor_key": sensor_key,
+                }
+            )
+
+    published["images"] = color_specs
+    effective["published_depth"] = depth_specs
+
+    raw_only_topics: list[str] = []
+    for sensor_key in sorted(dict.fromkeys(normalized_sensor_keys)):
+        for stream in ("color_metadata", "depth_metadata", "marker_offset"):
+            topic = sensor_topic_for_stream(sensor_key, stream)
+            if topic:
+                raw_only_topics.append(topic)
+    effective["raw_only_topics"] = sorted(dict.fromkeys(raw_only_topics))
+    return effective
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
@@ -201,12 +364,8 @@ def resolve_profile_for_active_arms(
     if not normalized_arms:
         raise RuntimeError("No active arms detected. Cannot resolve a published profile.")
 
-    resolved_profile_name = ACTIVE_ARMS_TO_PROFILE_NAME.get(tuple(normalized_arms))
-    if resolved_profile_name is None:
-        raise RuntimeError(f"Unsupported active-arm combination: {normalized_arms}")
-
     if profile_ref in {None, "", "auto"}:
-        resolved_path = profile_path_for_name(resolved_profile_name)
+        resolved_path = DEFAULT_PROFILE_PATH
         return load_profile(resolved_path), resolved_path
 
     requested_profile = load_profile(profile_ref)
@@ -220,9 +379,8 @@ def resolve_profile_for_active_arms(
     if requested_arms == normalized_arms:
         return requested_profile, requested_path
 
-    if requested_profile.get("profile_name") == DEFAULT_PROFILE_PATH.stem:
-        resolved_path = profile_path_for_name(resolved_profile_name)
-        return load_profile(resolved_path), resolved_path
+    if not requested_arms:
+        return requested_profile, requested_path
 
     raise RuntimeError(
         f"Requested profile {requested_profile.get('profile_name')} expects arms {requested_arms}, "
@@ -450,7 +608,6 @@ def _calibration_snapshot_for_sensor_key(
     for key in (
         "type",
         "serial_number",
-        "model",
         "intrinsics",
         "hand_eye_calibration",
         "extrinsics",
@@ -488,8 +645,6 @@ def infer_sensor_metadata(
             "modality": "rgbd_camera",
             "topic_names": sensor_topics,
             "serial_number": None,
-            "model": None,
-            "calibration_ref": None,
         }
 
         try:
@@ -500,11 +655,12 @@ def infer_sensor_metadata(
         serial = str(params.get("serial_no", "")).strip()
         if serial and serial not in {"''", '""'}:
             sensor["serial_number"] = serial.lstrip("_")
-        if "device_type" in params and params["device_type"] not in {"", "''", '""'}:
-            sensor["model"] = params["device_type"]
-
         sensor.update(sensor_overrides.get(sensor_key, {}))
         sensor["sensor_key"] = sensor_key
+        sensor.pop("model", None)
+        sensor.pop("calibration_ref", None)
+        sensor.pop("enabled_by_default", None)
+        sensor.pop("display_label", None)
         calibration_snapshot = _calibration_snapshot_for_sensor_key(sensor_key, calibration_results, calibration_results_path)
         if calibration_snapshot is not None:
             sensor["calibration_snapshot"] = calibration_snapshot
@@ -529,8 +685,6 @@ def infer_sensor_metadata(
             "modality": "tactile_rgb",
             "topic_names": sensor_topics,
             "serial_number": None,
-            "model": "GelSight Mini",
-            "calibration_ref": None,
         }
 
         node_name = f"/gelsight_{arm}_{mount_site}_bridge"
@@ -590,6 +744,10 @@ def infer_sensor_metadata(
 
         sensor.update(sensor_overrides.get(sensor_key, {}))
         sensor["sensor_key"] = sensor_key
+        sensor.pop("model", None)
+        sensor.pop("calibration_ref", None)
+        sensor.pop("enabled_by_default", None)
+        sensor.pop("display_label", None)
         sensors.append(sensor)
 
     return sensors
@@ -1020,7 +1178,7 @@ def build_notes_template(manifest: dict[str, Any]) -> str:
         [
             f"- active_arms: {', '.join(episode.get('active_arms', [])) or 'unknown'}",
             f"- operator: {episode['operator']}",
-            f"- mapping_profile: {profile['name']}",
+            f"- profile_name: {profile['name']}",
             f"- clock_policy: {profile['clock_policy']}",
             "",
             "## Notes",

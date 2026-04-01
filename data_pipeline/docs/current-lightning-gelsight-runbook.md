@@ -27,7 +27,7 @@ It is intentionally concrete, not general.
 Current published dataset identifiers for this embodiment:
 
 - `dataset_id=spark_multisensor_lightning_tactile_v1`
-- `profile=multisensor_20hz_lightning`
+- `profile=multisensor_20hz`
 - `active_arms=lightning`
 
 
@@ -137,7 +137,7 @@ spark
 Expected:
 
 - `active_arms=lightning`
-- `mapping_profile=multisensor_20hz_lightning`
+- `profile_name=multisensor_20hz`
 - no `Missing required topics` error
 
 

@@ -19,7 +19,7 @@ without turning the UI into:
 
 ## Governing Model
 
-The operator console follows the V2 session-profile model.
+The operator console follows the V2 session-state model.
 
 See:
 
@@ -31,11 +31,11 @@ See:
 ## Workflow
 
 1. fill session metadata
-2. optionally load a saved session profile
+2. optionally load a presets file
 3. choose the sensors file
 4. click `Discover Devices`
 5. set `Record` and `Sensor` for discovered devices
-6. optionally save the current session profile for later reuse
+6. optionally save the current presets file or sensors file for later reuse
 7. click `Start Session`
 8. click `Validate`
 9. record one or more episodes
@@ -51,7 +51,7 @@ The operator should not need to rebuild the rig model every episode.
 
 Includes:
 
-- session profile
+- presets file
 - task name
 - language instruction
 - operator
@@ -60,20 +60,24 @@ Includes:
 
 This is session-level metadata, not device identity.
 
-The session profile control may:
+The presets-file control may:
 
-- load the built-in `init` profile
-- browse to a user-local session profile YAML file and apply it immediately
+- browse to a presets YAML file and apply it immediately
 - save the current session metadata and device choices with `Save As`
+- remember the currently selected file as the default for the next launch
 
 The operator should be able to choose both:
 
-- the session profile file
+- the presets file
 - the sensors file
 
 through file dialogs instead of pasting paths manually.
 
-For the sensors file, choosing the file should be enough. There should not be a separate `Load` step.
+For the sensors file:
+
+- browsing to a file should be enough
+- `Save As` should write the currently assigned sensor mappings
+- the currently selected file should become the default for the next launch
 
 ### 2. Discovered devices
 
@@ -85,13 +89,12 @@ Columns:
 
 - `Record`
 - `Kind`
-- `Model`
 - `Identifier`
 - `Sensor`
 
 Rules:
 
-- `Kind`, `Model`, and `Identifier` are read-only
+- `Kind` and `Identifier` are read-only
 - `Record` is editable
 - `Sensor` is editable
 - sensor-key choices are filtered by device kind
@@ -159,7 +162,7 @@ It must:
 
 ## Hidden Mechanics
 
-The console may use the sensors file to suggest default roles and metadata.
+The console may use the selected sensors file to suggest default sensor-key matches.
 
 It must not expose internal categories such as:
 

@@ -53,7 +53,6 @@ class CameraObservation:
 class CameraTarget:
     sensor_key: str
     serial_number: str
-    model: str
     camera: RealSenseCalibrationCamera
     observations: list[CameraObservation] = field(default_factory=list)
 
@@ -99,7 +98,6 @@ def _sensor_targets(
             CameraTarget(
                 sensor_key=sensor_key,
                 serial_number=serial_number,
-                model=str(sensor.get("model", "")).strip() or "Intel RealSense",
                 camera=RealSenseCalibrationCamera(
                     name=sensor_key,
                     serial_number=serial_number,
@@ -193,7 +191,7 @@ def _capture_pose_driven_observations(
         for target in targets:
             try:
                 print(
-                    f"Opening {target.sensor_key} ({target.model or 'Intel RealSense'} {target.serial_number}) "
+                    f"Opening {target.sensor_key} ({target.serial_number}) "
                     f"at {target.camera.width}x{target.camera.height}@{target.camera.fps}..."
                 )
                 target.camera.open()
@@ -268,7 +266,6 @@ def _build_wrist_camera_result(target: CameraTarget) -> tuple[dict[str, Any], np
     result = {
         "sensor_key": target.sensor_key,
         "serial_number": target.serial_number,
-        "model": target.model,
         "intrinsics": intrinsics,
     }
 
@@ -299,7 +296,6 @@ def _build_scene_camera_result(
     result = {
         "sensor_key": target.sensor_key,
         "serial_number": target.serial_number,
-        "model": target.model,
         "intrinsics": intrinsics,
         "type": "scene",
     }

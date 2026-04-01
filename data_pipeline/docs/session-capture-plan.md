@@ -1,4 +1,4 @@
-# Session Profile V2
+# Session State V2
 
 ## Purpose
 
@@ -8,10 +8,10 @@ V2 keeps only three concepts here:
 
 - the shared topic contract
 - the local sensors file
-- one resolved session profile
+- one resolved session state
 
-Everything else that had grown around this, such as overlay labels, expected-device lists,
-and profile-compatibility matrices, is intentionally out of the main workflow.
+Everything else that had grown around this, such as expected-device lists and
+profile-compatibility matrices, is intentionally out of the main workflow.
 
 
 ## Ground Rules
@@ -25,8 +25,6 @@ If a device is not discovered, it is not part of the live session.
 The sensors file may tell the system:
 
 - which serial or device path usually maps to which canonical sensor key
-- optional local metadata for that sensor
-- optional geometry or calibration references
 
 It does not create live devices.
 
@@ -75,16 +73,27 @@ Its main job is:
 
 - serial or device-path to canonical-sensor-key mapping
 
-It may also carry optional metadata such as:
+Solved camera geometry is a separate local file, not something the operator should type into the console state.
 
-- display labels
-- calibration references
+### Presets file
 
-Solved camera geometry is a separate local file, not something the operator should type into the session profile.
+The operator console may load or save a presets file for later reuse.
 
-### Session profile
+That file stores session-level defaults such as:
 
-The session profile is the resolved session truth.
+- task metadata
+- active arms
+- remembered device selections
+
+It does not replace the sensors file.
+
+The checked-in starting point is:
+
+- `data_pipeline/configs/operator_console_presets.example.yaml`
+
+### Session state
+
+The resolved session state is the session truth.
 
 It contains:
 
@@ -94,33 +103,29 @@ It contains:
 - resolved `devices`
 - resolved `selected_topics`
 
-The operator may save a resolved session profile for later reuse.
+The operator may save presets for later reuse, but the active session state is
+still derived from:
 
-Saved session profiles are:
-
-- user-local
-- convenience defaults
-- not part of the shared contract
-
-The built-in `init` profile is only the checked-in starting point.
+- the chosen presets file
+- the chosen sensors file
+- live device discovery
 
 
-## Canonical Sensor Vocabulary
+## Canonical Sensor Keys
 
-The first V2 vocabulary is:
+Sensor keys are the canonical topic-prefix identities for sensors.
 
-- wrist cameras
-  - `/spark/cameras/lightning/wrist_1`
-  - `/spark/cameras/thunder/wrist_1`
-- scene cameras
-  - `/spark/cameras/world/scene_1`
-  - `/spark/cameras/world/scene_2`
-  - `/spark/cameras/world/scene_3`
-- tactile sensors
-  - `/spark/tactile/lightning/finger_left`
-  - `/spark/tactile/lightning/finger_right`
-  - `/spark/tactile/thunder/finger_left`
-  - `/spark/tactile/thunder/finger_right`
+Examples:
+
+- `/spark/cameras/lightning/wrist_1`
+- `/spark/cameras/thunder/wrist_1`
+- `/spark/cameras/world/scene_1`
+- `/spark/cameras/world/scene_2`
+- `/spark/tactile/lightning/finger_left`
+- `/spark/tactile/thunder/finger_right`
+
+The naming scheme is extensible. New keys should follow the shared topic grammar
+in [topic-contract.md](./topic-contract.md), not add a second alias layer.
 
 Sensor-key choices are constrained by device kind:
 
@@ -128,7 +133,7 @@ Sensor-key choices are constrained by device kind:
 - `gelsight` may use only tactile sensor keys
 
 
-## Session Profile Shape
+## Session State Shape
 
 Example:
 
@@ -143,14 +148,12 @@ Example:
     {
       "kind": "realsense",
       "serial_number": "130322273305",
-      "model": "Intel RealSense D405",
       "sensor_key": "/spark/cameras/lightning/wrist_1",
       "enabled": true
     },
     {
       "kind": "realsense",
       "serial_number": "213622251272",
-      "model": "Intel RealSense D455",
       "sensor_key": "/spark/cameras/world/scene_1",
       "enabled": true
     }
@@ -173,7 +176,7 @@ Example:
 4. adjust `Record` and `Sensor` for discovered devices
 5. start the session
 6. validate once
-7. record multiple episodes under that same session profile
+7. record multiple episodes under that same session state
 8. choose the published dataset target only when converting
 
 If the rig setup changes materially, start a new session.
@@ -193,7 +196,6 @@ The main device table should show discovered devices only, with:
 
 - `Record`
 - `Kind`
-- `Model`
 - `Identifier`
 - `Sensor`
 
@@ -207,7 +209,6 @@ It is not part of the canonical sensor identity model.
 It must not expose:
 
 - fake devices from presets
-- overlay labels
 - expected-vs-missing device panes
 - publishable/blocked profile matrices
 - raw topic checkboxes in the main workflow
@@ -215,6 +216,6 @@ It must not expose:
 
 ## Important Boundary
 
-The session profile decides what one session records.
+The session state decides what one session records.
 
 It does not redefine the shared contract, it does not change the canonical V2 topic surface, and it does not choose the published dataset folder up front.

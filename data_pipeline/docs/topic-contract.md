@@ -58,6 +58,9 @@ The following are not canonical dataset-alignment times:
 - `scene_2`
 - `scene_3`
 
+The slot naming scheme is extensible. New slots should extend this grammar
+mechanically, for example `scene_4`, rather than introducing an alias layer.
+
 Camera slots are 1-based. This is intentional for user-facing consistency with joint numbering such as `joint_1 ... joint_6`.
 
 ### Finger slot
@@ -136,7 +139,7 @@ Topic names define semantic identity, not physical geometry.
 
 Examples:
 
-- `scene_1` identifies the canonical scene-camera slot
+- `scene_1` identifies one scene-camera slot in the world attachment
 - `lightning/wrist_1` identifies the wrist-camera slot attached to Lightning
 
 Actual intrinsics and extrinsics, when available, belong in the local calibration results file and manifest snapshots, not in the topic name itself.

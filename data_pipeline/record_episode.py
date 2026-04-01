@@ -23,6 +23,7 @@ from data_pipeline.pipeline_utils import (
     build_notes_template,
     build_recorded_topics_snapshot,
     collect_candidate_topics,
+    effective_profile_for_session,
     get_git_commit,
     infer_sensor_metadata,
     list_live_topics,
@@ -101,6 +102,7 @@ def select_topics_from_session_plan(
 def build_manifest(
     args: argparse.Namespace,
     profile: dict,
+    effective_profile: dict,
     profile_path: Path,
     active_arms: list[str],
     selected_topics: list[str],
@@ -121,7 +123,7 @@ def build_manifest(
         calibration_results_path=calibration_results_path,
     )
     recorded_topics = build_recorded_topics_snapshot(
-        profile=profile,
+        profile=effective_profile,
         selected_topics=selected_topics,
         live_topics=live_topics,
         sensors=sensors,
@@ -239,8 +241,14 @@ def main(argv: list[str] | None = None) -> int:
     profile, resolved_profile_path = resolve_profile_for_active_arms(args.profile, active_arms)
     if session_capture_plan is not None:
         selected_topics, _, extra_topics = select_topics_from_session_plan(session_capture_plan, live_topics)
+        enabled_sensor_keys = [
+            str(device.get("sensor_key", "")).strip()
+            for device in session_capture_plan.get("devices", [])
+            if isinstance(device, dict) and bool(device.get("enabled", False))
+        ]
+        effective_profile = effective_profile_for_session(profile, active_arms, enabled_sensor_keys)
         compatibility = profile_compatibility_entry(
-            profile=profile,
+            profile=effective_profile,
             profile_path=resolved_profile_path,
             active_arms=active_arms,
             selected_topics=selected_topics,
@@ -250,12 +258,14 @@ def main(argv: list[str] | None = None) -> int:
                 f"Session plan is not compatible with profile {compatibility['name']}: {compatibility['reasons']}"
             )
     else:
-        selected_topics, _ = select_topics(profile, live_topics, extra_topics)
+        effective_profile = effective_profile_for_session(profile, active_arms, [])
+        selected_topics, _ = select_topics(effective_profile, live_topics, extra_topics)
 
     if args.dry_run:
         dry_run_manifest = build_manifest(
             args=args,
             profile=profile,
+            effective_profile=effective_profile,
             profile_path=resolved_profile_path,
             active_arms=active_arms,
             selected_topics=selected_topics,
@@ -271,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"episode_id={args.episode_id}")
         print(f"active_arms={','.join(active_arms)}")
-        print(f"mapping_profile={profile['profile_name']}")
+        print(f"profile_name={profile['profile_name']}")
         print(f"profile_path={resolved_profile_path}")
         print(f"bag_storage_id={args.storage_id}")
         if args.storage_id == "mcap" and args.storage_preset_profile:
@@ -299,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest = build_manifest(
         args=args,
         profile=profile,
+        effective_profile=effective_profile,
         profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
@@ -340,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
     final_manifest = build_manifest(
         args=args,
         profile=profile,
+        effective_profile=effective_profile,
         profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,

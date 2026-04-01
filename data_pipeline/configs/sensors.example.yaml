@@ -1,27 +1,27 @@
 sensors:
   /spark/cameras/lightning/wrist_1:
     serial_number: "WRIST-REALSENSE-SERIAL"
-    model: "Intel RealSense D405"
-    calibration_ref: "calib://realsense/wrist/v1"
+
+  /spark/cameras/thunder/wrist_1:
+    serial_number: "THUNDER-WRIST-REALSENSE-SERIAL"
 
   /spark/cameras/world/scene_1:
-    serial_number: "SCENE-REALSENSE-SERIAL"
-    model: "Intel RealSense D435"
-    calibration_ref: "calib://realsense/scene/v1"
+    serial_number: "SCENE-1-REALSENSE-SERIAL"
 
   /spark/cameras/world/scene_2:
-    serial_number: "SCENE-1-REALSENSE-SERIAL"
-    model: "Intel RealSense L515"
-    calibration_ref: "calib://realsense/scene_2/v1"
+    serial_number: "SCENE-2-REALSENSE-SERIAL"
+
+  /spark/cameras/world/scene_3:
+    serial_number: "SCENE-3-REALSENSE-SERIAL"
 
   /spark/tactile/lightning/finger_left:
-    serial_number: "GELSIGHT-LEFT-SERIAL"
-    model: "GelSight Mini"
-    calibration_ref: "calib://gelsight/left/v1"
-    gel_type: "marker"  # or "plain"
+    serial_number: "LIGHTNING-GELSIGHT-LEFT-SERIAL"
 
   /spark/tactile/lightning/finger_right:
-    serial_number: "GELSIGHT-RIGHT-SERIAL"
-    model: "GelSight Mini"
-    calibration_ref: "calib://gelsight/right/v1"
-    gel_type: "marker"  # or "plain"
+    serial_number: "LIGHTNING-GELSIGHT-RIGHT-SERIAL"
+
+  /spark/tactile/thunder/finger_left:
+    serial_number: "THUNDER-GELSIGHT-LEFT-SERIAL"
+
+  /spark/tactile/thunder/finger_right:
+    serial_number: "THUNDER-GELSIGHT-RIGHT-SERIAL"

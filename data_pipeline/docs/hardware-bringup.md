@@ -45,31 +45,29 @@ If you are using multiple RealSense cameras, keep them on the intended USB
 controller layout. Do not assume that any two convenient ports are equivalent.
 
 
-## 2. Prepare `sensors.local.yaml`
+## 2. Start From The Example Files
 
-If you do not already have a local sensors file, create it:
+The operator console now falls back to the checked-in example files on first launch:
 
-```bash
-cp data_pipeline/configs/sensors.example.yaml \
-  data_pipeline/configs/sensors.local.yaml
-```
+- [operator_console_presets.example.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/operator_console_presets.example.yaml)
+- [sensors.example.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/sensors.example.yaml)
 
-Then edit:
+You do **not** need to create `sensors.local.yaml` before the GUI is usable.
 
-- [sensors.local.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/sensors.local.yaml)
+For new users, the intended flow is:
 
-Fill in the metadata you already know:
+1. launch the console
+2. discover devices
+3. assign sensor keys in the table
+4. use `Save As...` on `Sensors File` to create your own local inventory file
 
-- the sensor key itself as the YAML key
-- `serial_number`
-- `model`
-- `calibration_ref`
+That saved file becomes the default sensors file on the next launch.
 
 Important:
 
-- device discovery can help with live identifiers
-- it does **not** replace the sensors file as the inventory record
-- this file is the local hardware inventory and serial-to-sensor mapping
+- device discovery helps you find live identifiers
+- the saved sensors file is still the inventory record for stable serial-to-sensor mapping
+- the file name is user-chosen; `sensors.local.yaml` is only a common convention
 
 If this is a new camera setup or the rig has changed, plan to run:
 
@@ -96,9 +94,10 @@ launch commands unless you are debugging.
 
 In the operator console:
 
-1. confirm `Sensors File` points at `data_pipeline/configs/sensors.local.yaml`
-2. set `Active Arms` for this session
-3. click `Discover Devices`
+1. check `Presets File`
+2. check `Sensors File`
+3. set `Active Arms` for this session
+4. click `Discover Devices`
 
 The `Session Devices` table should populate with discovered hardware only.
 
@@ -112,6 +111,7 @@ Use the table to decide which devices are part of this session:
 - check `Record` for devices you want
 - leave `Record` unchecked for devices you do not want
 - assign the correct sensor key
+- if needed, save the current sensor mapping with `Save As...` on `Sensors File`
 
 Typical sensor keys are:
 

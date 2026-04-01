@@ -221,7 +221,7 @@ If depth fails alignment:
 
 ## Follow-On Work
 
-1. Add depth field declarations to the published profile config.
+1. Keep depth field generation aligned with the generic conversion profile and effective per-episode schema.
 2. Extend `convert_episode_bag_to_lerobot.py` to emit the depth sidecar.
 3. Add per-episode conversion artifacts for depth:
    - row counts

@@ -44,15 +44,14 @@ ROS_SETUP = "/opt/ros/jazzy/setup.bash"
 TELEOP_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 CONVERTER_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 SYSTEM_PYTHON = "/usr/bin/python3"
-PRESETS_PATH = REPO_ROOT / "data_pipeline" / "configs" / "operator_console_presets.yaml"
+PRESETS_EXAMPLE_PATH = REPO_ROOT / "data_pipeline" / "configs" / "operator_console_presets.example.yaml"
+SENSORS_EXAMPLE_PATH = REPO_ROOT / "data_pipeline" / "configs" / "sensors.example.yaml"
 STATE_DIR = REPO_ROOT / ".operator_console"
 CAPTURE_PLAN_DIR = STATE_DIR / "capture_plans"
-SESSION_PROFILES_DIR = STATE_DIR / "session_profiles"
 SETTINGS_PATH = STATE_DIR / "settings.yaml"
 TOPIC_PROBE_SCRIPT = REPO_ROOT / "data_pipeline" / "ros_topic_probe.py"
 VIEWER_REPO = WORKSPACE_ROOT / "lerobot-dataset-visualizer"
 VIEWER_BUN = Path.home() / ".bun" / "bin" / "bun"
-BUILTIN_SESSION_PROFILE_NAME = "init"
 DEFAULT_VIEWER_BASE_URL = os.environ.get("PIPELINE_VIEWER_BASE_URL", "http://localhost:3000").strip().rstrip("/")
 
 
@@ -78,9 +77,9 @@ class ManagedProcess:
 
 
 class OperatorConsoleBackend:
-    def __init__(self, presets_path: Path = PRESETS_PATH):
-        self.presets_path = Path(presets_path)
-        self.default_config = self._load_default_config()
+    def __init__(self, presets_example_path: Path = PRESETS_EXAMPLE_PATH):
+        self.presets_example_path = Path(presets_example_path)
+        self.example_form_config = self._load_preset_form_config(self.presets_example_path)
         self.local_settings = self._load_local_settings()
         self.processes = {
             "spark_devices": ManagedProcess("spark_devices", "SPARK Devices"),
@@ -128,17 +127,49 @@ class OperatorConsoleBackend:
     }
     STOP_GRACE_S = 5.0
 
-    def _load_default_config(self) -> dict[str, Any]:
-        data = load_yaml(self.presets_path)
+    def _stored_path(self, path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(REPO_ROOT))
+        except ValueError:
+            return str(path.resolve())
+
+    def _resolve_user_path(self, path_ref: str | Path) -> Path:
+        candidate = Path(str(path_ref).strip()).expanduser()
+        if not candidate.is_absolute():
+            candidate = (REPO_ROOT / candidate).resolve()
+        return candidate
+
+    def _load_preset_spec(self, path: str | Path) -> dict[str, Any]:
+        data = load_yaml(path)
         presets = data.get("presets", {})
         if not isinstance(presets, dict) or not presets:
-            raise ValueError("operator_console_presets.yaml must contain a 'presets' mapping")
+            raise ValueError("Operator preset file must contain a 'presets' mapping")
         if "default" in presets and isinstance(presets["default"], dict):
             spec = presets["default"]
         else:
             first_key = next(iter(presets))
             spec = presets[first_key]
         return json.loads(json.dumps(spec))
+
+    def _merge_with_form_defaults(self, config_like: dict[str, Any]) -> dict[str, Any]:
+        base = getattr(self, "example_form_config", {})
+        config = json.loads(json.dumps(base))
+        for key in (
+            "task_name",
+            "language_instruction",
+            "operator",
+            "active_arms",
+        ):
+            if key in config_like:
+                config[key] = config_like[key]
+        session_devices = config_like.get("session_devices", [])
+        if isinstance(session_devices, list):
+            config["session_devices"] = json.loads(json.dumps(session_devices))
+        return config
+
+    def _load_preset_form_config(self, path: str | Path) -> dict[str, Any]:
+        spec = self._load_preset_spec(path)
+        return self._merge_with_form_defaults(spec)
 
     def _load_local_settings(self) -> dict[str, Any]:
         if not SETTINGS_PATH.exists():
@@ -151,53 +182,103 @@ class OperatorConsoleBackend:
         with SETTINGS_PATH.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(self.local_settings, handle, sort_keys=True)
 
-    def default_form_config(self) -> dict[str, Any]:
-        return json.loads(json.dumps(self.default_config))
+    def default_presets_file_path(self) -> Path:
+        stored = str(self.local_settings.get("default_presets_file", "")).strip()
+        if stored:
+            candidate = self._resolve_user_path(stored)
+            if candidate.exists():
+                return candidate
+        return self.presets_example_path
 
-    @staticmethod
-    def _normalize_profile_name(profile_name: str) -> str:
-        name = str(profile_name).strip()
-        if not name:
-            raise ValueError("Session profile name is empty.")
-        return name
+    def default_sensors_file_path(self) -> Path:
+        stored = str(self.local_settings.get("default_sensors_file", "")).strip()
+        if stored:
+            candidate = self._resolve_user_path(stored)
+            if candidate.exists():
+                return candidate
+        return SENSORS_EXAMPLE_PATH
 
-    def session_profiles_dir(self) -> Path:
-        SESSION_PROFILES_DIR.mkdir(parents=True, exist_ok=True)
-        return SESSION_PROFILES_DIR
+    def get_default_presets_file(self) -> str:
+        return self._stored_path(self.default_presets_file_path())
 
-    def _profile_path_from_ref(self, profile_ref: str) -> Path:
-        ref = self._normalize_profile_name(profile_ref)
-        candidate = Path(ref).expanduser()
-        looks_like_path = candidate.suffix.lower() in {".yaml", ".yml"} or "/" in ref or candidate.is_absolute()
-        if looks_like_path:
-            if not candidate.is_absolute():
-                candidate = (REPO_ROOT / candidate).resolve()
-            return candidate
-        return self.session_profiles_dir() / f"{ref}.yaml"
+    def get_default_sensors_file(self) -> str:
+        return self._stored_path(self.default_sensors_file_path())
 
-    def _session_profile_to_form_config(self, profile: dict[str, Any]) -> dict[str, Any]:
-        config = self.default_form_config()
-        for key in (
-            "task_name",
-            "language_instruction",
-            "operator",
-            "active_arms",
-            "sensors_file",
-        ):
-            if key in profile:
-                config[key] = profile[key]
-        session_devices = profile.get("session_devices", [])
-        if isinstance(session_devices, list):
-            config["session_devices"] = json.loads(json.dumps(session_devices))
+    def set_default_presets_file(self, path_ref: str | Path) -> str:
+        path = self._resolve_user_path(path_ref)
+        if not path.exists():
+            raise FileNotFoundError(f"Preset file not found: {path}")
+        stored = self._stored_path(path)
+        self.local_settings["default_presets_file"] = stored
+        self._save_local_settings()
+        return stored
+
+    def set_default_sensors_file(self, path_ref: str | Path) -> str:
+        path = self._resolve_user_path(path_ref)
+        if not path.exists():
+            raise FileNotFoundError(f"Sensors file not found: {path}")
+        stored = self._stored_path(path)
+        self.local_settings["default_sensors_file"] = stored
+        self._save_local_settings()
+        return stored
+
+    def load_preset_file(self, path_ref: str | Path) -> dict[str, Any]:
+        path = self._resolve_user_path(path_ref)
+        if not path.exists():
+            raise FileNotFoundError(f"Preset file not found: {path}")
+        config = self._load_preset_form_config(path)
+        self.set_default_presets_file(path)
         return config
 
-    def _form_config_to_session_profile(self, config: dict[str, Any]) -> dict[str, Any]:
+    def save_preset_file(self, path_ref: str | Path, config: dict[str, Any]) -> Path:
+        path = self._resolve_user_path(path_ref)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"presets": {"default": self._form_config_to_preset(config)}}
+        with path.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(payload, handle, sort_keys=True)
+        self.set_default_presets_file(path)
+        return path
+
+    def save_sensors_file(self, path_ref: str | Path, session_devices: list[dict[str, Any]]) -> Path:
+        path = self._resolve_user_path(path_ref)
+        sensors: dict[str, dict[str, Any]] = {}
+        for device in session_devices:
+            if not isinstance(device, dict):
+                continue
+            sensor_key = str(device.get("sensor_key", "")).strip()
+            if not sensor_key:
+                continue
+            if sensor_key in sensors:
+                raise ValueError(f"Duplicate sensor assignment for {sensor_key}")
+            serial_number = str(device.get("serial_number", "")).strip()
+            device_path = str(device.get("device_path", "")).strip()
+            entry: dict[str, Any] = {}
+            if serial_number:
+                entry["serial_number"] = serial_number
+            if device_path:
+                entry["device_path"] = device_path
+            if not entry:
+                continue
+            sensors[sensor_key] = entry
+        if not sensors:
+            raise ValueError("No sensor mappings are assigned. Discover devices and assign sensor keys first.")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump({"sensors": sensors}, handle, sort_keys=True)
+        self.set_default_sensors_file(path)
+        return path
+
+    def default_form_config(self, presets_path: str | Path | None = None) -> dict[str, Any]:
+        if presets_path is None:
+            return self._load_preset_form_config(self.default_presets_file_path())
+        return self._load_preset_form_config(presets_path)
+
+    def _form_config_to_preset(self, config: dict[str, Any]) -> dict[str, Any]:
         return {
             "task_name": str(config.get("task_name", "")).strip(),
             "language_instruction": str(config.get("language_instruction", "")).strip(),
             "operator": str(config.get("operator", "")).strip(),
             "active_arms": str(config.get("active_arms", "")).strip(),
-            "sensors_file": str(config.get("sensors_file", "")).strip(),
             "session_devices": json.loads(json.dumps(config.get("session_devices", []))),
         }
 
@@ -243,26 +324,6 @@ class OperatorConsoleBackend:
         if not ref:
             return None
         return self._normalize_published_dataset_target(ref)
-
-    def get_session_profile(self, profile_ref: str) -> dict[str, Any]:
-        ref = self._normalize_profile_name(profile_ref)
-        if ref == BUILTIN_SESSION_PROFILE_NAME:
-            return self.default_form_config()
-        path = self._profile_path_from_ref(ref)
-        if not path.exists():
-            raise FileNotFoundError(f"Session profile not found: {path}")
-        profile = load_yaml(path)
-        return self._session_profile_to_form_config(profile)
-
-    def save_session_profile(self, profile_ref: str, config: dict[str, Any]) -> Path:
-        ref = self._normalize_profile_name(profile_ref)
-        if ref == BUILTIN_SESSION_PROFILE_NAME:
-            raise ValueError(f"Cannot overwrite the built-in {BUILTIN_SESSION_PROFILE_NAME} session profile.")
-        path = self._profile_path_from_ref(ref)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as handle:
-            yaml.safe_dump(self._form_config_to_session_profile(config), handle, sort_keys=True)
-        return path
 
     def session_state(self, config: dict[str, Any]) -> str:
         recorder = self.processes["recorder"]

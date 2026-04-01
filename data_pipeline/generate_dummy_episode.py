@@ -28,11 +28,13 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
     build_notes_template,
     build_recorded_topics_snapshot,
     collect_candidate_topics,
+    effective_profile_for_session,
     load_profile,
     MANIFEST_SCHEMA_VERSION,
     make_episode_id,
+    normalize_active_arms,
     now_ns,
-    profile_required_arms,
+    parse_task_list,
     write_json,
 )
 
@@ -41,10 +43,14 @@ TOPIC_TYPES = {
     "/spark/session/teleop_active": "std_msgs/msg/Bool",
     "/spark/cameras/lightning/wrist_1/color/image_raw": "sensor_msgs/msg/Image",
     "/spark/cameras/lightning/wrist_1/depth/image_rect_raw": "sensor_msgs/msg/Image",
+    "/spark/cameras/thunder/wrist_1/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/cameras/thunder/wrist_1/depth/image_rect_raw": "sensor_msgs/msg/Image",
     "/spark/cameras/world/scene_1/color/image_raw": "sensor_msgs/msg/Image",
     "/spark/cameras/world/scene_1/depth/image_rect_raw": "sensor_msgs/msg/Image",
     "/spark/tactile/lightning/finger_left/color/image_raw": "sensor_msgs/msg/Image",
     "/spark/tactile/lightning/finger_right/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/tactile/thunder/finger_left/color/image_raw": "sensor_msgs/msg/Image",
+    "/spark/tactile/thunder/finger_right/color/image_raw": "sensor_msgs/msg/Image",
     "/spark/lightning/robot/joint_state": "sensor_msgs/msg/JointState",
     "/spark/lightning/robot/eef_pose": "geometry_msgs/msg/PoseStamped",
     "/spark/lightning/robot/tcp_wrench": "geometry_msgs/msg/WrenchStamped",
@@ -68,6 +74,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", default=str(DEFAULT_PROFILE_PATH))
     parser.add_argument("--raw-root", default=str(DEFAULT_RAW_EPISODES_DIR))
     parser.add_argument("--episode-id", default="")
+    parser.add_argument("--active-arms", default="lightning")
     parser.add_argument("--duration-s", type=float, default=5.0)
     parser.add_argument("--include-tactile", action="store_true")
     parser.add_argument("--storage-id", default=DEFAULT_BAG_STORAGE_ID)
@@ -166,24 +173,8 @@ def create_topic(writer: rosbag2_py.SequentialWriter, topic_id: int, name: str, 
     )
 
 
-def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, start_ns: int, end_ns: int) -> dict:
-    active_arms = profile_required_arms(profile)
-    topics = [topic for topic in collect_candidate_topics(profile) if topic in TOPIC_TYPES]
-    if not args.include_tactile:
-        topics = [topic for topic in topics if "/spark/tactile/" not in topic]
-
-    sensors = [
-        {
-            "sensor_key": "/spark/cameras/lightning/wrist_1",
-            "modality": "rgbd_camera",
-            "topic_names": [
-                "/spark/cameras/lightning/wrist_1/color/image_raw",
-                "/spark/cameras/lightning/wrist_1/depth/image_rect_raw",
-            ],
-            "serial_number": "DUMMY-WRIST-001",
-            "model": "Intel RealSense D405",
-            "calibration_ref": "dummy://wrist",
-        },
+def build_dummy_sensors(active_arms: list[str], include_tactile: bool) -> list[dict[str, object]]:
+    sensors: list[dict[str, object]] = [
         {
             "sensor_key": "/spark/cameras/world/scene_1",
             "modality": "rgbd_camera",
@@ -192,31 +183,50 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
                 "/spark/cameras/world/scene_1/depth/image_rect_raw",
             ],
             "serial_number": "DUMMY-SCENE-001",
-            "model": "Intel RealSense D435",
-            "calibration_ref": "dummy://scene",
-        },
+        }
     ]
-    if args.include_tactile:
-        sensors.extend(
-            [
-                {
-                    "sensor_key": "/spark/tactile/lightning/finger_left",
-                    "modality": "tactile_rgb",
-                    "topic_names": ["/spark/tactile/lightning/finger_left/color/image_raw"],
-                    "serial_number": "DUMMY-GS-LEFT",
-                    "model": "GelSight Mini",
-                    "calibration_ref": "dummy://gelsight_left",
-                },
-                {
-                    "sensor_key": "/spark/tactile/lightning/finger_right",
-                    "modality": "tactile_rgb",
-                    "topic_names": ["/spark/tactile/lightning/finger_right/color/image_raw"],
-                    "serial_number": "DUMMY-GS-RIGHT",
-                    "model": "GelSight Mini",
-                    "calibration_ref": "dummy://gelsight_right",
-                },
-            ]
+
+    for arm in active_arms:
+        wrist_sensor_key = f"/spark/cameras/{arm}/wrist_1"
+        sensors.append(
+            {
+                "sensor_key": wrist_sensor_key,
+                "modality": "rgbd_camera",
+                "topic_names": [
+                    f"{wrist_sensor_key}/color/image_raw",
+                    f"{wrist_sensor_key}/depth/image_rect_raw",
+                ],
+                "serial_number": f"DUMMY-{arm.upper()}-WRIST-001",
+            }
         )
+        if include_tactile:
+            for finger, serial in (
+                ("finger_left", f"DUMMY-{arm.upper()}-GS-LEFT"),
+                ("finger_right", f"DUMMY-{arm.upper()}-GS-RIGHT"),
+            ):
+                tactile_sensor_key = f"/spark/tactile/{arm}/{finger}"
+                sensors.append(
+                    {
+                        "sensor_key": tactile_sensor_key,
+                        "modality": "tactile_rgb",
+                        "topic_names": [f"{tactile_sensor_key}/color/image_raw"],
+                        "serial_number": serial,
+                    }
+                )
+    return sensors
+
+
+def build_manifest(
+    args: argparse.Namespace,
+    profile: dict,
+    effective_profile: dict,
+    episode_id: str,
+    start_ns: int,
+    end_ns: int,
+    active_arms: list[str],
+    sensors: list[dict[str, object]],
+) -> dict:
+    topics = [topic for topic in collect_candidate_topics(effective_profile) if topic in TOPIC_TYPES]
 
     return {
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
@@ -258,7 +268,7 @@ def build_manifest(args: argparse.Namespace, profile: dict, episode_id: str, sta
             "devices": sensors,
         },
         "recorded_topics": build_recorded_topics_snapshot(
-            profile=profile,
+            profile=effective_profile,
             selected_topics=topics,
             live_topics=TOPIC_TYPES,
             sensors=sensors,
@@ -275,7 +285,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     profile = load_profile(args.profile)
-    active_arms = profile_required_arms(profile)
+    active_arms = normalize_active_arms(parse_task_list(args.active_arms))
+    if not active_arms:
+        raise RuntimeError("Dummy episode generation requires at least one active arm.")
+    sensors = build_dummy_sensors(active_arms, args.include_tactile)
+    sensor_keys = [
+        str(sensor.get("sensor_key", "")).strip()
+        for sensor in sensors
+        if isinstance(sensor, dict) and str(sensor.get("sensor_key", "")).strip()
+    ]
+    effective_profile = effective_profile_for_session(profile, active_arms, sensor_keys)
     raw_root = Path(args.raw_root)
     episode_id = args.episode_id or make_episode_id()
     episode_dir = raw_root / episode_id
@@ -291,9 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     writer = rosbag2_py.SequentialWriter()
     writer.open(storage_options, converter_options)
 
-    topics = [topic for topic in collect_candidate_topics(profile) if topic in TOPIC_TYPES]
-    if not args.include_tactile:
-        topics = [topic for topic in topics if "/spark/tactile/" not in topic]
+    topics = [topic for topic in collect_candidate_topics(effective_profile) if topic in TOPIC_TYPES]
     for topic_id, topic in enumerate(topics):
         create_topic(writer, topic_id, topic, TOPIC_TYPES[topic])
 
@@ -315,16 +332,6 @@ def main(argv: list[str] | None = None) -> int:
             stamp_ns,
         )
         writer.write(
-            "/spark/cameras/lightning/wrist_1/color/image_raw",
-            serialize_message(make_color_image(stamp_ns, 640, 480, phase)),
-            stamp_ns,
-        )
-        writer.write(
-            "/spark/cameras/lightning/wrist_1/depth/image_rect_raw",
-            serialize_message(make_depth_image(stamp_ns, 640, 480, phase)),
-            stamp_ns,
-        )
-        writer.write(
             "/spark/cameras/world/scene_1/color/image_raw",
             serialize_message(make_color_image(stamp_ns, 640, 480, phase + 0.2)),
             stamp_ns,
@@ -335,17 +342,29 @@ def main(argv: list[str] | None = None) -> int:
             stamp_ns,
         )
 
-        if args.include_tactile:
+        for arm_index, arm in enumerate(active_arms):
+            arm_phase = phase + arm_index * 0.3
             writer.write(
-                "/spark/tactile/lightning/finger_left/color/image_raw",
-                serialize_message(make_color_image(stamp_ns, 320, 240, phase + 0.4)),
+                f"/spark/cameras/{arm}/wrist_1/color/image_raw",
+                serialize_message(make_color_image(stamp_ns, 640, 480, arm_phase)),
                 stamp_ns,
             )
             writer.write(
-                "/spark/tactile/lightning/finger_right/color/image_raw",
-                serialize_message(make_color_image(stamp_ns, 320, 240, phase + 0.6)),
+                f"/spark/cameras/{arm}/wrist_1/depth/image_rect_raw",
+                serialize_message(make_depth_image(stamp_ns, 640, 480, arm_phase)),
                 stamp_ns,
             )
+            if args.include_tactile:
+                writer.write(
+                    f"/spark/tactile/{arm}/finger_left/color/image_raw",
+                    serialize_message(make_color_image(stamp_ns, 320, 240, arm_phase + 0.4)),
+                    stamp_ns,
+                )
+                writer.write(
+                    f"/spark/tactile/{arm}/finger_right/color/image_raw",
+                    serialize_message(make_color_image(stamp_ns, 320, 240, arm_phase + 0.6)),
+                    stamp_ns,
+                )
 
     for stamp_ns in range(start_ns, end_ns, state_period_ns):
         phase = (stamp_ns - start_ns) / 1_000_000_000
@@ -424,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
 
     writer.close()
 
-    manifest = build_manifest(args, profile, episode_id, start_ns, end_ns)
+    manifest = build_manifest(args, profile, effective_profile, episode_id, start_ns, end_ns, active_arms, sensors)
     write_json(episode_dir / "episode_manifest.json", manifest)
     (episode_dir / "notes.md").write_text(build_notes_template(manifest), encoding="utf-8")
 

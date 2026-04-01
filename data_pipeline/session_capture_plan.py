@@ -10,11 +10,12 @@ from typing import Any
 from data_pipeline.pipeline_utils import (
     camera_path_parts_for_sensor_key,
     canonical_sensor_key,
+    collect_candidate_topics,
+    effective_profile_for_session,
     load_optional_sensor_overrides,
     normalize_active_arms,
     parse_task_list,
     resolve_profile_for_active_arms,
-    sensor_key_for_topic,
     tactile_path_parts_for_sensor_key,
 )
 
@@ -39,10 +40,6 @@ def _sensor_for_sensor_key(
 
 def _device_metadata(entry: dict[str, Any], sensor: dict[str, Any]) -> dict[str, Any]:
     merged = dict(sensor)
-    for key in ("model", "calibration_ref"):
-        value = entry.get(key)
-        if value not in {"", None}:
-            merged[key] = value
     return merged
 
 
@@ -68,12 +65,6 @@ def _device_from_session_config(
         device["serial_number"] = serial_number
     if device_path:
         device["device_path"] = device_path
-    if metadata.get("model") not in {"", None}:
-        device["model"] = metadata["model"]
-    for key in ("calibration_ref",):
-        value = metadata.get(key)
-        if value not in {"", None}:
-            device[key] = value
     return device
 
 
@@ -88,52 +79,9 @@ def _runtime_sensor_key_for_device(device: dict[str, Any]) -> str | None:
 
 def _selected_topics_for_session(
     *,
-    profile: dict[str, Any],
-    devices: list[dict[str, Any]],
+    effective_profile: dict[str, Any],
 ) -> list[str]:
-    topics: set[str] = set()
-    published = profile.get("published", {})
-    enabled_sensor_keys = {
-        sensor_key
-        for sensor_key in (_runtime_sensor_key_for_device(device) for device in devices)
-        if sensor_key
-    }
-
-    for arm_sources in published.get("observation_state", {}).get("sources", {}).values():
-        topics.update(arm_sources.values())
-
-    for arm_sources in published.get("action", {}).get("sources", {}).values():
-        topics.update(arm_sources.values())
-
-    teleop_activity_topic = str(profile.get("teleop_activity", {}).get("topic", "")).strip()
-    if teleop_activity_topic:
-        topics.add(teleop_activity_topic)
-
-    for image_spec in published.get("images", []):
-        topic = str(image_spec.get("topic", "")).strip()
-        if not topic:
-            continue
-        sensor_key = sensor_key_for_topic(topic)
-        if sensor_key is None or sensor_key in enabled_sensor_keys:
-            topics.add(topic)
-
-    for depth_spec in profile.get("published_depth", []):
-        topic = str(depth_spec.get("topic", "")).strip()
-        if not topic:
-            continue
-        sensor_key = sensor_key_for_topic(topic)
-        if sensor_key is None or sensor_key in enabled_sensor_keys:
-            topics.add(topic)
-
-    for topic in profile.get("raw_only_topics", []):
-        topic_str = str(topic).strip()
-        if not topic_str:
-            continue
-        sensor_key = sensor_key_for_topic(topic_str)
-        if sensor_key is None or sensor_key in enabled_sensor_keys:
-            topics.add(topic_str)
-
-    return sorted(topics)
+    return collect_candidate_topics(effective_profile)
 
 
 def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[str, Any]:
@@ -155,6 +103,13 @@ def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[
             )
         )
 
+    enabled_sensor_keys = [
+        sensor_key
+        for sensor_key in (_runtime_sensor_key_for_device(device) for device in devices)
+        if sensor_key
+    ]
+    effective_profile = effective_profile_for_session(profile, active_arms, enabled_sensor_keys)
+
     return {
         "schema_version": 4,
         "contract_version": "v2",
@@ -162,5 +117,5 @@ def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[
         "active_arms": active_arms,
         "sensors_file": sensors_file or None,
         "devices": devices,
-        "selected_topics": _selected_topics_for_session(profile=profile, devices=devices),
+        "selected_topics": _selected_topics_for_session(effective_profile=effective_profile),
     }

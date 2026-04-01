@@ -39,6 +39,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from data_pipeline.pipeline_utils import (  # noqa: E402
     detect_bag_storage_id,
+    effective_profile_for_session,
     load_profile,
     manifest_active_arms,
     manifest_clock_policy,
@@ -47,6 +48,7 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
     manifest_language_instruction,
     manifest_profile_name,
     manifest_robot_id,
+    manifest_sensors,
     manifest_task_name,
     manifest_topic_types,
     normalize_active_arms,
@@ -1184,29 +1186,36 @@ def main(argv: list[str] | None = None) -> int:
     profile = load_profile(profile_ref)
     if manifest_profile_name(manifest) != profile["profile_name"]:
         raise RuntimeError(
-            f"Manifest mapping_profile={manifest_profile_name(manifest)} does not match profile {profile['profile_name']}"
+            f"Manifest profile={manifest_profile_name(manifest)} does not match profile {profile['profile_name']}"
         )
     manifest_arms = manifest_active_arms(manifest)
+    normalized_manifest_arms = normalize_active_arms(manifest_arms) if manifest_arms else []
     if manifest_arms:
-        normalized_manifest_arms = normalize_active_arms(manifest_arms)
         normalized_profile_arms = profile_required_arms(profile)
-        if normalized_manifest_arms != normalized_profile_arms:
+        if normalized_profile_arms and normalized_manifest_arms != normalized_profile_arms:
             raise RuntimeError(
                 f"Manifest active_arms {normalized_manifest_arms} do not match profile arms {normalized_profile_arms}"
             )
 
+    recorded_sensor_keys = [
+        str(sensor.get("sensor_key", "")).strip()
+        for sensor in manifest_sensors(manifest)
+        if isinstance(sensor, dict)
+    ]
+    effective_profile = effective_profile_for_session(profile, normalized_manifest_arms, recorded_sensor_keys)
+
     topic_types = manifest_topic_types(manifest)
     all_topics_to_read = set(topic_types)
-    value_topics = build_value_topics(profile) & all_topics_to_read
-    parse_topics = build_parse_topics(profile, all_topics_to_read, topic_types, value_topics)
+    value_topics = build_value_topics(effective_profile) & all_topics_to_read
+    parse_topics = build_parse_topics(effective_profile, all_topics_to_read, topic_types, value_topics)
     bag_storage_id = detect_bag_storage_id(bag_dir)
     series = read_topic_series(bag_dir, all_topics_to_read, parse_topics, storage_id=bag_storage_id)
     apply_realsense_metadata_timestamps(series)
     topics_with_data = {topic for topic, values in series.items() if values.timestamps_ns}
 
-    selected_image_specs = build_selected_image_specs(profile, topics_with_data)
-    selected_depth_specs = build_selected_depth_specs(profile, topics_with_data)
-    effective_profile = build_effective_profile(profile, selected_image_specs, selected_depth_specs)
+    selected_image_specs = build_selected_image_specs(effective_profile, topics_with_data)
+    selected_depth_specs = build_selected_depth_specs(effective_profile, topics_with_data)
+    effective_profile = build_effective_profile(effective_profile, selected_image_specs, selected_depth_specs)
 
     frames, depth_selections, alignment_diagnostics, summary_status = align_episode(
         series=series,
@@ -1233,7 +1242,7 @@ def main(argv: list[str] | None = None) -> int:
         dataset_root=dataset_root,
         dataset_id=dataset_id,
         robot_type=manifest_robot_id(manifest),
-        fps=int(profile["dataset"]["fps"]),
+        fps=int(effective_profile["dataset"]["fps"]),
         features=features,
         vcodec=args.vcodec,
     )
@@ -1266,7 +1275,7 @@ def main(argv: list[str] | None = None) -> int:
         depth_preview_summary = write_depth_preview_videos(
             dataset_root=dataset_root,
             dataset_episode_index=dataset_episode_index,
-            fps=int(profile["dataset"]["fps"]),
+            fps=int(effective_profile["dataset"]["fps"]),
             depth_specs=selected_depth_specs,
             depth_arrays=depth_arrays,
         )
@@ -1274,7 +1283,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset_root=dataset_root,
             dataset_id=dataset_id,
             dataset_episode_index=dataset_episode_index,
-            fps=int(profile["dataset"]["fps"]),
+            fps=int(effective_profile["dataset"]["fps"]),
             depth_specs=selected_depth_specs,
             depth_selections=depth_selections,
             depth_arrays=depth_arrays,

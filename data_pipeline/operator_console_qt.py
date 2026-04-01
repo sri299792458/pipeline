@@ -47,8 +47,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from data_pipeline.operator_console_backend import BUILTIN_SESSION_PROFILE_NAME, OperatorConsoleBackend
-from data_pipeline.pipeline_utils import sensor_key_choices_for_kind
+from data_pipeline.operator_console_backend import OperatorConsoleBackend
+from data_pipeline.pipeline_utils import (
+    camera_path_parts_for_sensor_key,
+    canonical_sensor_key,
+    load_optional_sensor_overrides,
+    tactile_path_parts_for_sensor_key,
+)
 
 
 STATUS_STYLES = {
@@ -64,7 +69,6 @@ def _device_identifier(device: dict[str, object]) -> str:
         str(device.get("serial_number", "")).strip()
         or str(device.get("device_path", "")).strip()
     )
-
 
 def apply_chip_style(label: QLabel, tone: str) -> None:
     label.setStyleSheet(
@@ -235,21 +239,21 @@ class OperatorConsoleQtWindow(QMainWindow):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
-        profile_row = QWidget()
-        profile_layout = QHBoxLayout(profile_row)
-        profile_layout.setContentsMargins(0, 0, 0, 0)
-        profile_layout.setSpacing(8)
-        self.session_profile_edit = QLineEdit(BUILTIN_SESSION_PROFILE_NAME)
-        self.session_profile_edit.setPlaceholderText("init or session profile YAML")
-        self.session_profile_edit.returnPressed.connect(self._load_selected_session_profile)
+        presets_row = QWidget()
+        presets_layout = QHBoxLayout(presets_row)
+        presets_layout.setContentsMargins(0, 0, 0, 0)
+        presets_layout.setSpacing(8)
+        self.presets_file_edit = QLineEdit(self.backend.get_default_presets_file())
+        self.presets_file_edit.setPlaceholderText("operator console presets YAML")
+        self.presets_file_edit.returnPressed.connect(self._load_selected_preset_file)
         self.browse_profile_button = QPushButton("Browse")
-        self.browse_profile_button.clicked.connect(self._browse_session_profile)
+        self.browse_profile_button.clicked.connect(self._browse_preset_file)
         self.save_profile_button = QPushButton("Save As")
-        self.save_profile_button.clicked.connect(self._save_selected_session_profile)
-        profile_layout.addWidget(self.session_profile_edit, 1)
-        profile_layout.addWidget(self.browse_profile_button)
-        profile_layout.addWidget(self.save_profile_button)
-        form.addRow("Session Profile", profile_row)
+        self.save_profile_button.clicked.connect(self._save_selected_preset_file)
+        presets_layout.addWidget(self.presets_file_edit, 1)
+        presets_layout.addWidget(self.browse_profile_button)
+        presets_layout.addWidget(self.save_profile_button)
+        form.addRow("Presets File", presets_row)
 
         self.form_widgets["task_name"] = QLineEdit()
         self.form_widgets["language_instruction"] = QLineEdit()
@@ -266,9 +270,9 @@ class OperatorConsoleQtWindow(QMainWindow):
         ]:
             form.addRow(label, self.form_widgets[key])
 
-        self.session_profile_status = QLabel("")
-        self.session_profile_status.setWordWrap(True)
-        form.addRow("", self.session_profile_status)
+        self.config_file_status = QLabel("")
+        self.config_file_status.setWordWrap(True)
+        form.addRow("", self.config_file_status)
         return box
 
     def _build_sensor_box(self) -> QWidget:
@@ -285,16 +289,20 @@ class OperatorConsoleQtWindow(QMainWindow):
         sensors_file_layout = QHBoxLayout(sensors_file_row)
         sensors_file_layout.setContentsMargins(0, 0, 0, 0)
         sensors_file_layout.setSpacing(8)
-        self.form_widgets["sensors_file"] = QLineEdit("data_pipeline/configs/sensors.local.yaml")
+        self.form_widgets["sensors_file"] = QLineEdit(self.backend.get_default_sensors_file())
         self.browse_sensors_button = QPushButton("Browse")
         self.browse_sensors_button.clicked.connect(self._browse_sensors_file)
+        self.save_sensors_button = QPushButton("Save As")
+        self.save_sensors_button.clicked.connect(self._save_selected_sensors_file)
+        self.form_widgets["sensors_file"].editingFinished.connect(self._load_selected_sensors_file)
         sensors_file_layout.addWidget(self.form_widgets["sensors_file"], 1)
         sensors_file_layout.addWidget(self.browse_sensors_button)
+        sensors_file_layout.addWidget(self.save_sensors_button)
         form.addRow("Sensors File", sensors_file_row)
         layout.addLayout(form)
 
-        self.session_devices_table = QTableWidget(0, 5)
-        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Kind", "Model", "Identifier", "Sensor"])
+        self.session_devices_table = QTableWidget(0, 4)
+        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Kind", "Identifier", "Sensor"])
         self.session_devices_table.verticalHeader().setVisible(False)
         self.session_devices_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.session_devices_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -302,8 +310,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         self.session_devices_table.horizontalHeader().setStretchLastSection(True)
         self.session_devices_table.setColumnWidth(0, 64)
         self.session_devices_table.setColumnWidth(1, 92)
-        self.session_devices_table.setColumnWidth(2, 118)
-        self.session_devices_table.setColumnWidth(3, 240)
+        self.session_devices_table.setColumnWidth(2, 240)
         layout.addWidget(self.session_devices_table)
 
         controls = QHBoxLayout()
@@ -315,6 +322,29 @@ class OperatorConsoleQtWindow(QMainWindow):
         controls.addStretch(1)
         layout.addLayout(controls)
         return box
+
+    def _sensor_inventory(self) -> dict[str, dict[str, object]]:
+        sensors_file = str(self._get_field("sensors_file")).strip()
+        if not sensors_file:
+            return {}
+        candidate = Path(sensors_file).expanduser()
+        if not candidate.is_absolute():
+            candidate = (REPO_ROOT / candidate).resolve()
+        if not candidate.exists():
+            return {}
+        try:
+            return load_optional_sensor_overrides(candidate)
+        except Exception:
+            return {}
+
+    def _sensor_key_choices_for_kind(self, kind: str) -> list[str]:
+        choices: list[str] = []
+        for sensor_key in self._sensor_inventory():
+            if kind == "realsense" and camera_path_parts_for_sensor_key(sensor_key) is not None:
+                choices.append(sensor_key)
+            elif kind == "gelsight" and tactile_path_parts_for_sensor_key(sensor_key) is not None:
+                choices.append(sensor_key)
+        return sorted(dict.fromkeys(choices))
 
     def _current_device_selection_map(self) -> dict[tuple[str, str], dict[str, object]]:
         selections: dict[tuple[str, str], dict[str, object]] = {}
@@ -351,17 +381,18 @@ class OperatorConsoleQtWindow(QMainWindow):
                     device["sensor_key"] = existing_sensor_key
         self._set_session_devices(discovered_devices)
 
-    def _browse_session_profile(self) -> None:
-        start_dir = str(self.backend.session_profiles_dir())
+    def _browse_preset_file(self) -> None:
+        current = self.presets_file_edit.text().strip()
+        start_dir = str((REPO_ROOT / current).resolve().parent) if current else str(REPO_ROOT / "data_pipeline" / "configs")
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Choose Session Profile",
+            "Choose Presets File",
             start_dir,
             "YAML Files (*.yaml *.yml)",
         )
         if path:
-            self.session_profile_edit.setText(path)
-            self._load_selected_session_profile()
+            self.presets_file_edit.setText(path)
+            self._load_selected_preset_file()
 
     def _browse_sensors_file(self) -> None:
         current = str(self._get_field("sensors_file")).strip()
@@ -375,11 +406,52 @@ class OperatorConsoleQtWindow(QMainWindow):
         if not path:
             return
         try:
-            rel = str(Path(path).resolve().relative_to(REPO_ROOT))
-        except ValueError:
-            rel = path
-        self._set_field("sensors_file", rel)
+            stored = self.backend.set_default_sensors_file(path)
+        except Exception as exc:
+            self.config_file_status.setText(str(exc))
+            return
+        self._set_field("sensors_file", stored)
         self._discover_session_devices()
+        self.config_file_status.setText(f"Loaded sensors file: {stored}")
+
+    def _save_selected_sensors_file(self) -> None:
+        current_ref = str(self._get_field("sensors_file")).strip()
+        suggested = (
+            current_ref
+            if current_ref and not current_ref.endswith("sensors.example.yaml")
+            else str(REPO_ROOT / "data_pipeline" / "configs" / "sensors.local.yaml")
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Sensors File",
+            suggested,
+            "YAML Files (*.yaml *.yml)",
+        )
+        if not path:
+            self.config_file_status.setText("Save canceled.")
+            return
+        try:
+            saved_path = self.backend.save_sensors_file(path, self._session_devices())
+            stored = self.backend.get_default_sensors_file()
+        except Exception as exc:
+            self.config_file_status.setText(str(exc))
+            return
+        self._set_field("sensors_file", stored)
+        self._discover_session_devices()
+        self.config_file_status.setText(f"Saved sensors file: {saved_path}")
+
+    def _load_selected_sensors_file(self) -> None:
+        sensors_file = str(self._get_field("sensors_file")).strip()
+        if not sensors_file:
+            return
+        try:
+            stored = self.backend.set_default_sensors_file(sensors_file)
+        except Exception as exc:
+            self.config_file_status.setText(str(exc))
+            return
+        self._set_field("sensors_file", stored)
+        self._discover_session_devices()
+        self.config_file_status.setText(f"Loaded sensors file: {stored}")
 
     def _apply_form_config(self, config: dict[str, object]) -> None:
         self._set_field("task_name", str(config.get("task_name", "")))
@@ -387,50 +459,50 @@ class OperatorConsoleQtWindow(QMainWindow):
         if "operator" in config:
             self._set_field("operator", str(config.get("operator", "")))
         self._set_field("active_arms", str(config.get("active_arms", "lightning")))
-        self._set_field("sensors_file", str(config.get("sensors_file", "data_pipeline/configs/sensors.local.yaml")))
         discovery_config = {
             "active_arms": str(config.get("active_arms", "lightning")),
-            "sensors_file": str(config.get("sensors_file", "")),
+            "sensors_file": str(self._get_field("sensors_file")).strip(),
             "session_devices": list(config.get("session_devices", [])) if isinstance(config.get("session_devices", []), list) else [],
         }
         devices = self.backend.discover_session_devices(discovery_config)
         self._set_discovered_devices(devices, preserve_existing=False)
 
-    def _load_selected_session_profile(self) -> None:
-        profile_name = self.session_profile_edit.text().strip()
+    def _load_selected_preset_file(self) -> None:
+        preset_path = self.presets_file_edit.text().strip()
         try:
-            config = self.backend.get_session_profile(profile_name)
+            config = self.backend.load_preset_file(preset_path)
         except Exception as exc:
-            self.session_profile_status.setText(str(exc))
+            self.config_file_status.setText(str(exc))
             return
         self._apply_form_config(config)
-        self.session_profile_status.setText(
-            f"Loaded session profile: {profile_name or BUILTIN_SESSION_PROFILE_NAME}"
-        )
+        stored = self.backend.get_default_presets_file()
+        self.presets_file_edit.setText(stored)
+        self.config_file_status.setText(f"Loaded presets file: {stored}")
 
-    def _save_selected_session_profile(self) -> None:
-        current_ref = self.session_profile_edit.text().strip()
+    def _save_selected_preset_file(self) -> None:
+        current_ref = self.presets_file_edit.text().strip()
         suggested = (
             current_ref
-            if current_ref and current_ref != BUILTIN_SESSION_PROFILE_NAME
-            else str(self.backend.session_profiles_dir() / "new_session_profile.yaml")
+            if current_ref and not current_ref.endswith("operator_console_presets.example.yaml")
+            else str(REPO_ROOT / "data_pipeline" / "configs" / "operator_console_presets.yaml")
         )
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Session Profile",
+            "Save Presets File",
             suggested,
             "YAML Files (*.yaml *.yml)",
         )
         if not path:
-            self.session_profile_status.setText("Save canceled.")
+            self.config_file_status.setText("Save canceled.")
             return
         try:
-            saved_path = self.backend.save_session_profile(path, self._config())
+            saved_path = self.backend.save_preset_file(path, self._config())
         except Exception as exc:
-            self.session_profile_status.setText(str(exc))
+            self.config_file_status.setText(str(exc))
             return
-        self.session_profile_edit.setText(str(saved_path))
-        self.session_profile_status.setText(f"Saved session profile: {saved_path}")
+        stored = self.backend.get_default_presets_file()
+        self.presets_file_edit.setText(stored)
+        self.config_file_status.setText(f"Saved presets file: {saved_path}")
 
     def _append_session_device_row(self, device: dict[str, object]) -> None:
         row = self.session_devices_table.rowCount()
@@ -445,28 +517,27 @@ class OperatorConsoleQtWindow(QMainWindow):
         kind_item = QTableWidgetItem(kind_value)
         self.session_devices_table.setItem(row, 1, kind_item)
 
-        model_item = QTableWidgetItem(str(device.get("model", "")).strip())
-        self.session_devices_table.setItem(row, 2, model_item)
-
         identifier_value = _device_identifier(device)
         identifier_item = QTableWidgetItem(identifier_value)
-        self.session_devices_table.setItem(row, 3, identifier_item)
+        self.session_devices_table.setItem(row, 2, identifier_item)
 
         sensor_combo = QComboBox()
-        sensor_choices = sensor_key_choices_for_kind(kind_value)
+        sensor_combo.addItem("")
+        sensor_choices = self._sensor_key_choices_for_kind(kind_value)
         sensor_combo.addItems(sensor_choices)
         sensor_key_value = str(device.get("sensor_key", "")).strip()
         if sensor_key_value and sensor_combo.findText(sensor_key_value) < 0:
             sensor_combo.addItem(sensor_key_value)
-        sensor_combo.setCurrentText(sensor_key_value)
-        self.session_devices_table.setCellWidget(row, 4, sensor_combo)
+        if sensor_key_value:
+            sensor_combo.setCurrentText(sensor_key_value)
+        else:
+            sensor_combo.setCurrentIndex(0)
+        self.session_devices_table.setCellWidget(row, 3, sensor_combo)
 
         identifier_item.setData(
             Qt.ItemDataRole.UserRole,
             {
                 "kind": kind_value,
-                "model": device.get("model"),
-                "calibration_ref": device.get("calibration_ref"),
                 "serial_number": str(device.get("serial_number", "")).strip(),
                 "device_path": str(device.get("device_path", "")).strip(),
                 "sensor_key": sensor_key_value,
@@ -478,8 +549,8 @@ class OperatorConsoleQtWindow(QMainWindow):
         for row in range(self.session_devices_table.rowCount()):
             enabled_widget = self.session_devices_table.cellWidget(row, 0)
             kind_item = self.session_devices_table.item(row, 1)
-            identifier_item = self.session_devices_table.item(row, 3)
-            sensor_widget = self.session_devices_table.cellWidget(row, 4)
+            identifier_item = self.session_devices_table.item(row, 2)
+            sensor_widget = self.session_devices_table.cellWidget(row, 3)
             if not isinstance(enabled_widget, QCheckBox):
                 continue
             if not isinstance(kind_item, QTableWidgetItem):
@@ -500,10 +571,6 @@ class OperatorConsoleQtWindow(QMainWindow):
                 "enabled": enabled_widget.isChecked(),
                 "sensor_key": sensor_key,
             }
-            for key in ("model", "calibration_ref"):
-                value = metadata.get(key)
-                if value not in {"", None}:
-                    device[key] = value
             if kind == "realsense":
                 device["serial_number"] = str(metadata.get("serial_number", "")).strip() or identifier
             elif kind == "gelsight":
@@ -604,7 +671,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         try:
             stored = self.backend.set_published_dataset_target(path)
         except Exception as exc:
-            self.session_profile_status.setText(str(exc))
+            self.config_file_status.setText(str(exc))
             return
         self.published_target_last_saved = stored
         self.published_target_edit.setText(stored)
@@ -616,7 +683,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         try:
             stored = self.backend.set_published_dataset_target(text)
         except Exception as exc:
-            self.session_profile_status.setText(str(exc))
+            self.config_file_status.setText(str(exc))
             self.published_target_edit.blockSignals(True)
             self.published_target_edit.setText(self.published_target_last_saved)
             self.published_target_edit.blockSignals(False)
@@ -754,13 +821,14 @@ class OperatorConsoleQtWindow(QMainWindow):
         )
 
     def _load_defaults(self) -> None:
-        self.session_profile_edit.setText(BUILTIN_SESSION_PROFILE_NAME)
-        self._apply_form_config(self.backend.default_form_config())
+        presets_file = self.backend.get_default_presets_file()
+        sensors_file = self.backend.get_default_sensors_file()
+        self.presets_file_edit.setText(presets_file)
+        self._set_field("sensors_file", sensors_file)
+        self._apply_form_config(self.backend.default_form_config(presets_file))
         self.published_target_last_saved = self.backend.get_published_dataset_target()
         self.published_target_edit.setText(self.published_target_last_saved)
-        self.session_profile_status.setText(
-            f"Loaded built-in {BUILTIN_SESSION_PROFILE_NAME} session profile."
-        )
+        self.config_file_status.setText(f"Loaded presets file: {presets_file}")
 
     def _set_field(self, key: str, value: str | bool) -> None:
         widget = self.form_widgets[key]

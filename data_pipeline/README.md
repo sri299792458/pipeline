@@ -65,7 +65,8 @@ Use:
 
 The local split is:
 
-- `sensors.local.yaml`
+- a user-selected sensors file
+  - usually created from [sensors.example.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/sensors.example.yaml)
   - device identity and canonical sensor keys
 - `calibration.local.json`
   - solved calibration results
@@ -77,22 +78,24 @@ The accepted direction is:
 
 - raw recording should work with `lightning` only, `thunder` only, or both arms
 - published LeRobot datasets should stay embodiment-specific
-- do not zero-fill a missing arm into the bimanual schema by default
+- do not zero-fill a missing arm into a bimanual schema by default
+- do not mix different active-arm or sensor layouts into the same `dataset_id`
 
-So the intended published split is:
+The pipeline now uses one checked-in conversion policy:
 
 - `multisensor_20hz`
-  - bimanual
-- `multisensor_20hz_lightning`
-  - Lightning-only
-- `multisensor_20hz_thunder`
-  - Thunder-only
+  - generic 20 Hz conversion policy
 
 Current implementation note:
 
-- the shipped default config file remains the bimanual `multisensor_20hz.yaml`
-- raw recording now requires explicit `--active-arms` and stamps the matching published profile into the manifest
-- conversion defaults to the manifest-selected profile when `--profile` is omitted
+- raw recording requires explicit `--active-arms`
+- the recorder uses the generic `multisensor_20hz.yaml` policy and derives the effective topic set from:
+  - the requested active arms
+  - the enabled session sensors
+- conversion uses the same generic policy and derives the effective published schema from:
+  - the manifest active-arm set
+  - the recorded sensor keys
+- `dataset_id` remains the place where you keep embodiment-specific or rig-specific published datasets separate
 
 
 ## Runtime Split
@@ -203,11 +206,12 @@ not to `record_episode.py`.
 `--active-arms` is now explicit for recording runs. The recorder uses that value to select:
 
 - `multisensor_20hz`
-  - if both arms are active
-- `multisensor_20hz_lightning`
-  - if only Lightning is active
-- `multisensor_20hz_thunder`
-  - if only Thunder is active
+  - as the generic conversion policy
+
+The actual recorded topic set is derived from:
+
+- the requested active arms
+- the enabled session sensors
 
 
 ## Offline Conversion
@@ -284,6 +288,5 @@ The important rule is:
 So the override file should record not just serials, but also:
 
 - the canonical sensor key as the YAML key
-- `calibration_ref`
 
 That keeps the raw episodes convertible without inventing a second naming layer on top of the topic contract.

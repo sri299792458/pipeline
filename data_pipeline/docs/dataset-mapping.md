@@ -8,22 +8,26 @@ The raw bag preserves asynchronous truth.
 The published dataset is a fixed-rate aligned view of that raw data.
 
 
-## Published Profiles
+## Conversion Profile
 
-V2 publishes three profile shapes at `20 Hz`:
+V2 now uses one checked-in conversion profile at `20 Hz`:
 
 - `multisensor_20hz`
-  - current bimanual profile
-- `multisensor_20hz_lightning`
-  - Lightning-only profile
-- `multisensor_20hz_thunder`
-  - Thunder-only profile
+
+That file defines:
+
+- published frame rate
+- timestamp and alignment policy
+- missing-data policy
+- diagnostics policy
+
+It does not hardcode one fixed embodiment or one fixed sensor set.
 
 Current implementation note:
 
-- the shipped default config file is still the bimanual `multisensor_20hz.yaml`
-- raw recording now resolves the matching profile from the detected active-arm set
-- conversion now defaults to the manifest-selected profile when `--profile` is omitted
+- raw recording uses `multisensor_20hz.yaml` plus the session's active-arm set and enabled sensor keys
+- conversion uses `multisensor_20hz.yaml` plus the manifest's active-arm set and recorded sensor keys
+- `--profile` is now overriding the generic conversion policy, not choosing between arm-specific profile files
 
 ### Why
 
@@ -39,31 +43,30 @@ That does not mean all raw episodes should be coerced into one published schema.
 Rules:
 
 - raw recording should preserve whichever `/spark/...` robot topics are actually present
-- published conversion must choose a profile that matches the active embodiment
-- do not zero-fill the inactive arm into the bimanual profile by default
-- do not append episodes from different published profiles into the same `dataset_id`
+- published conversion should derive its effective schema from the recorded embodiment and sensors
+- do not zero-fill an inactive arm into a bimanual schema by default
+- do not append episodes from different active-arm or sensor layouts into the same `dataset_id`
 
 ### Why
 
 The storage cost of zero-filling an inactive arm is small, but the semantic cost is not. It mixes single-arm and bimanual behavior into one schema and makes downstream training depend on implicit padding conventions instead of explicit embodiment choice.
 
 
-## Profile Selection
+## Effective Schema Resolution
 
 For each raw episode:
 
-1. Inspect which arm-specific state and command topic sets are actually present and usable.
-2. Choose exactly one published profile:
-   - if both `lightning` and `thunder` have valid state and action streams, use `multisensor_20hz`
-   - if only `lightning` has a valid state and action stream, use `multisensor_20hz_lightning`
-   - if only `thunder` has a valid state and action stream, use `multisensor_20hz_thunder`
-3. Fail conversion if the arm presence is ambiguous or inconsistent.
+1. Read the generic conversion profile.
+2. Read the manifest active-arm set.
+3. Read the recorded sensor keys from the manifest.
+4. Derive the effective published schema from those two pieces of episode truth.
+5. Fail conversion if the arm presence is ambiguous or inconsistent.
 
 Examples of inconsistent episodes that should fail:
 
 - `lightning` state exists but `lightning` action does not
 - `thunder` action exists but `thunder` state does not
-- an arm comes and goes in a way that makes the published profile ambiguous for the episode
+- an arm comes and goes in a way that makes the effective published schema ambiguous for the episode
 
 
 ## Canonical Published Time Grid
@@ -89,37 +92,32 @@ V2 publishes:
 
 - `observation.state`
 - `action`
-- `observation.images.wrist`
-- `observation.images.scene`
-- `observation.images.gelsight_left` when present
-- `observation.images.gelsight_right` when present
+- one image field for each recorded sensor with a color stream
+- one depth field for each recorded sensor with a depth stream that the effective schema includes
 
 ### Why
 
-This is the smallest multimodal schema that still captures the key training signal:
+This keeps the published schema honest to what was actually recorded while still using one stable conversion policy.
 
-- robot state
-- commanded action
-- scene RGB
-- wrist RGB
-- tactile RGB
+Field names are derived mechanically from sensor keys. Examples:
 
-For the bimanual setup, `multisensor_20hz` uses a fixed arm order:
+- `/spark/cameras/lightning/wrist_1`
+  - `observation.images.lightning.wrist_1`
+  - `observation.depth.lightning.wrist_1`
+- `/spark/cameras/world/scene_1`
+  - `observation.images.world.scene_1`
+  - `observation.depth.world.scene_1`
+- `/spark/tactile/lightning/finger_left`
+  - `observation.images.tactile.lightning.finger_left`
+
+For arm-dependent low-dimensional features, the effective schema uses a fixed arm order:
 
 1. `lightning`
 2. `thunder`
 
 That ordering must not change across episodes.
-This profile is explicitly bimanual.
 
-Depth and other derived products remain available in the raw layer without burdening the first public dataset contract.
-
-For the single-arm profiles:
-
-- `multisensor_20hz_lightning` publishes only the Lightning low-dimensional state/action slice
-- `multisensor_20hz_thunder` publishes only the Thunder low-dimensional state/action slice
-- both keep the same image-field rules as the bimanual profile
-- both keep the real arm-specific field names instead of renaming to generic placeholders
+If only one arm is active, only that arm's low-dimensional slice appears in the effective schema.
 
 
 ## Observation State Definition
@@ -215,7 +213,7 @@ For both arms:
 - `0.0 = fully open`
 - `1.0 = fully closed`
 
-For the single-arm profiles, use the corresponding per-arm slice only.
+For single-arm episodes, use only the corresponding arm slice.
 
 
 ## Per-Topic Alignment Rules
@@ -224,14 +222,10 @@ For the single-arm profiles, use the corresponding per-arm slice only.
 
 Sources:
 
-- `/spark/lightning/robot/joint_state`
-- `/spark/lightning/robot/eef_pose`
-- `/spark/lightning/robot/tcp_wrench`
-- `/spark/lightning/robot/gripper_state`
-- `/spark/thunder/robot/joint_state`
-- `/spark/thunder/robot/eef_pose`
-- `/spark/thunder/robot/tcp_wrench`
-- `/spark/thunder/robot/gripper_state`
+- `/spark/{arm}/robot/joint_state` for each active arm
+- `/spark/{arm}/robot/eef_pose` for each active arm
+- `/spark/{arm}/robot/tcp_wrench` for each active arm
+- `/spark/{arm}/robot/gripper_state` for each active arm
 
 Alignment rule:
 
@@ -250,10 +244,8 @@ Robot state is causal and should not look into the future relative to the publis
 
 Sources:
 
-- `/spark/lightning/teleop/cmd_joint_state`
-- `/spark/lightning/teleop/cmd_gripper_state`
-- `/spark/thunder/teleop/cmd_joint_state`
-- `/spark/thunder/teleop/cmd_gripper_state`
+- `/spark/{arm}/teleop/cmd_joint_state` for each active arm
+- `/spark/{arm}/teleop/cmd_gripper_state` for each active arm
 
 Alignment rule:
 
@@ -283,12 +275,12 @@ Alignment rule:
 The action topics encode what command was issued, not whether the operator intended teleoperation to be active continuously. When the foot pedal is intentionally released in the middle of a raw episode, those pedal-off spans should be removed from the published demonstration rather than counted as stale-action failures.
 
 
-### Wrist and scene RGB
+### Camera RGB
 
 Sources:
 
-- `/spark/cameras/lightning/wrist_1/color/image_raw`
-- `/spark/cameras/world/scene_1/color/image_raw`
+- every recorded camera color topic
+- `/spark/cameras/{attachment}/{camera_slot}/color/image_raw`
 
 Alignment rule:
 
@@ -303,12 +295,12 @@ Validity threshold:
 Image streams are observations, not control signals. Nearest is the correct rule for selecting the frame that best represents the scene around the target time.
 
 
-### GelSight RGB
+### Tactile RGB
 
 Sources:
 
-- `/spark/tactile/lightning/finger_left/color/image_raw`
-- `/spark/tactile/lightning/finger_right/color/image_raw`
+- every recorded tactile color topic
+- `/spark/tactile/{arm}/{finger_slot}/color/image_raw`
 
 Alignment rule:
 
@@ -342,16 +334,16 @@ Silent filling of large gaps hides real collection problems and makes the datase
 
 ## Raw-Only Modalities
 
-The following topics remain raw-only in V2:
+The following topics remain raw-only in V2 unless the effective schema explicitly publishes them:
 
-- `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
-- `/spark/cameras/world/scene_1/depth/image_rect_raw`
-- `/spark/tactile/lightning/finger_left/depth/image_raw`
-- `/spark/tactile/lightning/finger_right/depth/image_raw`
-- `/spark/tactile/lightning/finger_left/marker_offset`
-- `/spark/tactile/lightning/finger_right/marker_offset`
+- camera metadata topics
+- tactile marker-offset topics
 - `/spark/session/teleop_active`
 - optional point cloud or debugging topics
+
+Depth is not automatically discarded. If a recorded sensor has a publishable
+depth stream under the effective schema, it becomes a published depth field
+derived mechanically from that sensor key.
 
 ### Why
 
@@ -365,7 +357,7 @@ V2 supports:
 - multiple RealSense sensors
 - multiple GelSight sensors
 
-The published profile only includes the sensors explicitly declared in the mapping config.
+The effective published schema includes every recorded sensor that resolves to a publishable stream under the shared topic contract.
 
 The raw manifest should still preserve every recorded sensor as a sensor instance with:
 
@@ -374,7 +366,7 @@ The raw manifest should still preserve every recorded sensor as a sensor instanc
 
 ### Why
 
-Support for multiple sensors comes from the raw-first design, not from trying to cram every modality into one live fused message. The mapping profile keeps the published contract small while still allowing the raw bag to preserve richer sessions.
+Support for multiple sensors comes from the raw-first design, not from trying to cram every modality into one live fused message. The generic conversion policy keeps alignment rules stable while still allowing each session to publish the sensors it actually recorded.
 
 
 ## Conversion Outputs

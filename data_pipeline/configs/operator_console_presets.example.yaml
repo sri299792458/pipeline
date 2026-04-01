@@ -1,8 +1,7 @@
 presets:
   default:
-    label: "Default"
     active_arms: "lightning"
     task_name: "pick_place"
     language_instruction: ""
     operator: "spark"
-    sensors_file: "data_pipeline/configs/sensors.local.yaml"
+    session_devices: []

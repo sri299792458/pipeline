@@ -5,19 +5,6 @@ dataset:
   fps: 20
   clock_policy: host_capture_time_v1
 
-notes:
-  rationale:
-    - "Use one fixed-rate published timeline while preserving asynchronous raw capture."
-    - "Choose 20 Hz because GelSight is a first-class published modality in V1."
-    - "Keep the published schema small: state, action, and RGB images."
-    - "This config is the current bimanual published profile; single-arm published profiles should be separate rather than zero-filled into this schema."
-  arm_order:
-    - lightning
-    - thunder
-  required_arms:
-    - lightning
-    - thunder
-
 teleop_activity:
   topic: /spark/session/teleop_active
   active_value: true
@@ -27,134 +14,23 @@ teleop_activity:
 
 published:
   observation_state:
-    field: observation.state
     align: latest_before
     max_age_ms: 50
-    names:
-      - lightning_joint_pos_1
-      - lightning_joint_pos_2
-      - lightning_joint_pos_3
-      - lightning_joint_pos_4
-      - lightning_joint_pos_5
-      - lightning_joint_pos_6
-      - lightning_eef_x
-      - lightning_eef_y
-      - lightning_eef_z
-      - lightning_eef_rx
-      - lightning_eef_ry
-      - lightning_eef_rz
-      - lightning_gripper_position
-      - lightning_ft_fx
-      - lightning_ft_fy
-      - lightning_ft_fz
-      - lightning_ft_tx
-      - lightning_ft_ty
-      - lightning_ft_tz
-      - thunder_joint_pos_1
-      - thunder_joint_pos_2
-      - thunder_joint_pos_3
-      - thunder_joint_pos_4
-      - thunder_joint_pos_5
-      - thunder_joint_pos_6
-      - thunder_eef_x
-      - thunder_eef_y
-      - thunder_eef_z
-      - thunder_eef_rx
-      - thunder_eef_ry
-      - thunder_eef_rz
-      - thunder_gripper_position
-      - thunder_ft_fx
-      - thunder_ft_fy
-      - thunder_ft_fz
-      - thunder_ft_tx
-      - thunder_ft_ty
-      - thunder_ft_tz
-    sources:
-      lightning:
-        joint_state: /spark/lightning/robot/joint_state
-        eef_pose: /spark/lightning/robot/eef_pose
-        tcp_wrench: /spark/lightning/robot/tcp_wrench
-        gripper_state: /spark/lightning/robot/gripper_state
-      thunder:
-        joint_state: /spark/thunder/robot/joint_state
-        eef_pose: /spark/thunder/robot/eef_pose
-        tcp_wrench: /spark/thunder/robot/tcp_wrench
-        gripper_state: /spark/thunder/robot/gripper_state
 
   action:
-    field: action
     align: latest_before
     max_age_ms: 50
-    names:
-      - lightning_cmd_joint_1
-      - lightning_cmd_joint_2
-      - lightning_cmd_joint_3
-      - lightning_cmd_joint_4
-      - lightning_cmd_joint_5
-      - lightning_cmd_joint_6
-      - lightning_cmd_gripper
-      - thunder_cmd_joint_1
-      - thunder_cmd_joint_2
-      - thunder_cmd_joint_3
-      - thunder_cmd_joint_4
-      - thunder_cmd_joint_5
-      - thunder_cmd_joint_6
-      - thunder_cmd_gripper
-    sources:
-      lightning:
-        cmd_joint_state: /spark/lightning/teleop/cmd_joint_state
-        cmd_gripper_state: /spark/lightning/teleop/cmd_gripper_state
-      thunder:
-        cmd_joint_state: /spark/thunder/teleop/cmd_joint_state
-        cmd_gripper_state: /spark/thunder/teleop/cmd_gripper_state
 
   images:
-    - field: observation.images.wrist
-      topic: /spark/cameras/lightning/wrist_1/color/image_raw
-      align: nearest
-      max_skew_ms: 25
-      required: true
-
-    - field: observation.images.scene
-      topic: /spark/cameras/world/scene_1/color/image_raw
-      align: nearest
-      max_skew_ms: 25
-      required: true
-
-    - field: observation.images.gelsight_left
-      topic: /spark/tactile/lightning/finger_left/color/image_raw
-      align: nearest
-      max_skew_ms: 25
-      required: false
-
-    - field: observation.images.gelsight_right
-      topic: /spark/tactile/lightning/finger_right/color/image_raw
-      align: nearest
-      max_skew_ms: 25
-      required: false
-
-raw_only_topics:
-  - /spark/cameras/lightning/wrist_1/depth/image_rect_raw
-  - /spark/cameras/world/scene_1/depth/image_rect_raw
-  - /spark/tactile/lightning/finger_left/depth/image_raw
-  - /spark/tactile/lightning/finger_right/depth/image_raw
-  - /spark/tactile/lightning/finger_left/marker_offset
-  - /spark/tactile/lightning/finger_right/marker_offset
+    align: nearest
+    max_skew_ms: 25
+    required: true
 
 published_depth:
-  - field: observation.depth.wrist
-    topic: /spark/cameras/lightning/wrist_1/depth/image_rect_raw
-    align: nearest
-    max_skew_ms: 25
-    required: true
-    unit: millimeters
-
-  - field: observation.depth.scene
-    topic: /spark/cameras/world/scene_1/depth/image_rect_raw
-    align: nearest
-    max_skew_ms: 25
-    required: true
-    unit: millimeters
+  align: nearest
+  max_skew_ms: 25
+  required: false
+  unit: millimeters
 
 conversion:
   frame_grid:
@@ -170,24 +46,3 @@ conversion:
     - published_frame_count
     - per_modality_alignment_error
     - invalid_frame_count
-
-legacy_bridge_notes:
-  current_main_topics:
-    lightning:
-      joint_state: /lightning_q
-      eef_pose: /lightning_cartesian_eef
-      tcp_wrench: /lightning_ft
-      gripper_state: /lightning_gripper
-    thunder:
-      joint_state: /thunder_q
-      eef_pose: /thunder_cartesian_eef
-      tcp_wrench: /thunder_ft
-      gripper_state: /thunder_gripper
-  current_data_collection_only_topics:
-    lightning:
-      cmd_joint_state: /lightning_spark_command_angles
-      cmd_gripper_state: /lightning_spark_command_gripper
-    thunder:
-      cmd_joint_state: /thunder_spark_command_angles
-      cmd_gripper_state: /thunder_spark_command_gripper
-  warning: "The pipeline should consume the stable /spark/... topics after a stamped bridge is added. The legacy topics listed here are only implementation references."

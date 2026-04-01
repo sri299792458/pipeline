@@ -2347,3 +2347,42 @@
   - sensor identity via `sensor_key`
   - physical connection identity via `serial_number` or `device_path`
   because those are not the same thing and both still matter at runtime.
+
+### Generic conversion profile replaced the per-arm profile split
+
+- Removed the old arm-specific published profile files:
+  - `multisensor_20hz_lightning.yaml`
+  - `multisensor_20hz_thunder.yaml`
+- Kept one checked-in conversion policy:
+  - `multisensor_20hz.yaml`
+- The generic profile now owns only shared conversion policy:
+  - published FPS
+  - alignment rules
+  - missing-data policy
+  - diagnostics policy
+- It no longer hardcodes one fixed embodiment or one fixed set of sensor topics.
+- Raw recording now derives the effective topic set from:
+  - `--active-arms`
+  - the enabled session sensors
+- Conversion now derives the effective published schema from:
+  - the manifest active-arm set
+  - the manifest recorded sensor keys
+- This intentionally removes the extra naming layer where the profile chose one fixed scene or wrist slot.
+- It also means there is no longer a need to maintain near-copy profile YAMLs just to swap `lightning` vs `thunder`.
+
+### Operator console now treats presets and sensors as normal files
+
+- Removed the old special-case `init` session-profile concept from the operator console path.
+- The console now treats both:
+  - the presets file
+  - the sensors file
+  as normal user-selectable files.
+- The checked-in fallbacks are now:
+  - `operator_console_presets.example.yaml`
+  - `sensors.example.yaml`
+- If the user browses to a file or saves to a new file, that selected path becomes the default for the next launch.
+- There is no extra `Make Default` button and no hidden priority for `*.local.yaml`.
+- `Sensors File -> Save As...` now writes the current GUI-assigned sensor mappings back into a real inventory YAML file.
+- This keeps the mental model simple:
+  - example files are templates
+  - chosen files are the working defaults
