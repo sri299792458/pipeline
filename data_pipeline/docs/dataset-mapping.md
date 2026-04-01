@@ -253,11 +253,13 @@ Alignment rule:
 
 Validity threshold:
 
-- max age 50 ms
+- max age 150 ms
 
 ### Why
 
 Action is also causal. A nearest-future command would make the published sample look as though the system already knew a command that had not yet been issued.
+
+The action threshold is intentionally looser than the state threshold because the current Spark command path can exhibit isolated command gaps even when the demonstration is still semantically valid. The published action still uses bounded latest-before hold, but the bound is wide enough to tolerate short runtime hiccups without silently allowing large stale spans.
 
 ### Teleop activity mask
 
@@ -273,6 +275,8 @@ Alignment rule:
 ### Why
 
 The action topics encode what command was issued, not whether the operator intended teleoperation to be active continuously. When the foot pedal is intentionally released in the middle of a raw episode, those pedal-off spans should be removed from the published demonstration rather than counted as stale-action failures.
+
+The teleop-activity topic is part of the required raw contract for supported episodes. Conversion does not fall back to a command-only interpretation when that signal is missing.
 
 
 ### Camera RGB
@@ -363,6 +367,8 @@ The raw manifest should still preserve every recorded sensor as a sensor instanc
 
 - `sensor_key`
 - `serial_number`
+- sensor-specific metadata captured at record time when available
+  - for RealSense: stream profiles, intrinsics, firmware version, and `depth_scale_meters_per_unit`
 
 ### Why
 
@@ -375,6 +381,11 @@ For each raw episode, conversion produces:
 
 - one published episode in the shared LeRobot dataset
 - episode-level diagnostics
+- a source snapshot under:
+  - `meta/spark_source/<episode_id>/episode_manifest.json`
+  - `meta/spark_source/<episode_id>/notes.md`
+
+The copied source manifest is the canonical per-episode provenance record inside the published dataset. Dataset-level sidecars like `meta/depth_info.json` are only indexes for the published layout, not replacements for the raw manifest.
 
 Diagnostics should include:
 

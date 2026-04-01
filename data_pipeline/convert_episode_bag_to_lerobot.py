@@ -9,6 +9,7 @@ import copy
 import io
 import json
 import math
+import shutil
 import sys
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
@@ -671,10 +672,8 @@ def align_episode(
     published = profile["published"]
     state_age_ns = int(round(float(published["observation_state"].get("max_age_ms", 50)) * 1_000_000.0))
     action_age_ns = int(round(float(published["action"].get("max_age_ms", 50)) * 1_000_000.0))
-    activity_spec = profile.get("teleop_activity", {})
     activity_topic = teleop_activity_topic(profile)
-    activity_required = bool(activity_spec.get("required_for_convert", False))
-    activity_active_value = bool(activity_spec.get("active_value", True))
+    activity_active_value = bool(profile.get("teleop_activity", {}).get("active_value", True))
 
     state_sources = published["observation_state"]["sources"]
     action_sources = published["action"]["sources"]
@@ -687,7 +686,7 @@ def align_episode(
         required_topics.extend(action_sources[arm].values())
     required_topics.extend(spec["topic"] for spec in selected_image_specs)
     required_topics.extend(spec["topic"] for spec in selected_depth_specs)
-    if activity_required and activity_topic:
+    if activity_topic:
         required_topics.append(activity_topic)
 
     ensure_series_present(series, required_topics)
@@ -707,12 +706,10 @@ def align_episode(
         activity_mode = "filtered_by_enable"
         grid = filter_grid_to_intervals(full_grid, activity_intervals)
     else:
-        grid = full_grid
-        if activity_topic:
-            activity_mode = "fallback_missing_activity_topic"
+        raise RuntimeError("Teleop activity topic is required for conversion but was missing or empty.")
     if not grid:
         raise RuntimeError(
-            f"No valid 20Hz frame grid can be formed for interval [{t_start_ns}, {t_end_ns}] "
+            f"No valid {fps}Hz frame grid can be formed for interval [{t_start_ns}, {t_end_ns}] "
             f"after teleop-activity filtering."
         )
 
@@ -1018,7 +1015,6 @@ def write_depth_sidecar(
                     "png16_bytes": png_bytes,
                     "height": int(depth_array.shape[0]),
                     "width": int(depth_array.shape[1]),
-                    "unit": str(depth_spec.get("unit", "millimeters")),
                     "source_topic": selection.topic,
                 }
             )
@@ -1028,7 +1024,7 @@ def write_depth_sidecar(
         episode_indices_present.add(dataset_episode_index)
         field_info[field] = {
             "source_topic": depth_spec["topic"],
-            "unit": str(depth_spec.get("unit", "millimeters")),
+            "unit": str(depth_spec.get("unit", "raw_uint16")),
             "max_skew_ms": float(depth_spec.get("max_skew_ms", 25)),
             "path": str(file_path.relative_to(dataset_root)),
             "row_count": len(rows),
@@ -1042,7 +1038,7 @@ def write_depth_sidecar(
         depth_info = {
             "dataset_id": dataset_id,
             "encoding": "png16_gray",
-            "unit": "millimeters",
+            "unit": "raw_uint16",
             "chunking": {
                 "mode": "per_episode_file",
                 "chunk": "chunk-000",
@@ -1156,6 +1152,32 @@ def write_conversion_artifacts(
     write_json(artifact_dir / "conversion_summary.json", summary)
     with (artifact_dir / "effective_profile.yaml").open("w", encoding="utf-8") as handle:
         yaml.safe_dump(effective_profile, handle, sort_keys=False)
+
+
+def copy_source_snapshot(
+    dataset_root: Path,
+    episode_dir: Path,
+    episode_id: str,
+) -> dict[str, str | None]:
+    source_root = dataset_root / "meta" / "spark_source" / episode_id
+    source_root.mkdir(parents=True, exist_ok=True)
+
+    manifest_src = episode_dir / "episode_manifest.json"
+    manifest_dst = source_root / "episode_manifest.json"
+    shutil.copy2(manifest_src, manifest_dst)
+
+    notes_src = episode_dir / "notes.md"
+    notes_dst = source_root / "notes.md"
+    notes_path: str | None = None
+    if notes_src.is_file():
+        shutil.copy2(notes_src, notes_dst)
+        notes_path = str(notes_dst.relative_to(dataset_root))
+
+    return {
+        "root": str(source_root.relative_to(dataset_root)),
+        "episode_manifest_path": str(manifest_dst.relative_to(dataset_root)),
+        "notes_path": notes_path,
+    }
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -1290,6 +1312,12 @@ def main(argv: list[str] | None = None) -> int:
             depth_preview_summary=depth_preview_summary,
         )
 
+    source_snapshot = copy_source_snapshot(
+        dataset_root=dataset_root,
+        episode_dir=episode_dir,
+        episode_id=manifest_episode_id(manifest),
+    )
+
     diagnostics = {
         "episode_id": manifest_episode_id(manifest),
         "manifest_dataset_id": manifest_dataset_id(manifest),
@@ -1302,6 +1330,7 @@ def main(argv: list[str] | None = None) -> int:
         "topic_diagnostics": {topic: series[topic].diagnostics() for topic in sorted(series)},
         "depth_sidecar": depth_sidecar_summary,
         "depth_preview": depth_preview_summary,
+        "source_snapshot": source_snapshot,
         **alignment_diagnostics,
     }
     summary = {
@@ -1317,6 +1346,7 @@ def main(argv: list[str] | None = None) -> int:
         "selected_depth_fields": [spec["field"] for spec in selected_depth_specs],
         "depth_sidecar_root": depth_sidecar_summary["root"] if depth_sidecar_summary else None,
         "depth_preview_root": depth_preview_summary["root"] if depth_preview_summary else None,
+        "source_snapshot": source_snapshot,
     }
     write_conversion_artifacts(artifact_dir, diagnostics, effective_profile, summary)
 

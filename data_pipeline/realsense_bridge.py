@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import threading
 import time
 from dataclasses import dataclass
@@ -94,6 +95,21 @@ def canonical_serial(value: str) -> str:
     return aliases[0]
 
 
+def intrinsics_payload(video_profile: rs.video_stream_profile, *, source: str) -> dict[str, object]:
+    intr = video_profile.get_intrinsics()
+    return {
+        "camera_matrix": [
+            [float(intr.fx), 0.0, float(intr.ppx)],
+            [0.0, float(intr.fy), float(intr.ppy)],
+            [0.0, 0.0, 1.0],
+        ],
+        "distortion_coeffs": [float(value) for value in intr.coeffs],
+        "image_size": [int(intr.width), int(intr.height)],
+        "distortion_model": str(intr.model),
+        "source": source,
+    }
+
+
 def resolve_camera_specs(camera_specs: list[CameraSpec]) -> list[CameraSpec]:
     resolved_specs: list[CameraSpec] = []
     resolved_serials: set[str] = set()
@@ -172,12 +188,41 @@ class RealSenseContractBridge(Node):
 
         self._pipeline_profile = self._start_pipeline_with_retry(config)
         device = self._pipeline_profile.get_device()
+        color_video_profile = self._pipeline_profile.get_stream(rs.stream.color).as_video_stream_profile()
+        depth_video_profile = self._pipeline_profile.get_stream(rs.stream.depth).as_video_stream_profile()
+        depth_scale_meters_per_unit = None
+        try:
+            depth_scale_meters_per_unit = float(device.first_depth_sensor().get_depth_scale())
+        except Exception:
+            depth_scale_meters_per_unit = None
 
         self.declare_parameter("serial_no", self.serial_no)
         self.declare_parameter("device_type", get_camera_info(device, rs.camera_info.name))
         self.declare_parameter("firmware_version", get_camera_info(device, rs.camera_info.firmware_version))
         self.declare_parameter("color_profile", self._format_profile(color_profile))
         self.declare_parameter("depth_profile", self._format_profile(depth_profile))
+        self.declare_parameter(
+            "color_intrinsics_json",
+            json.dumps(
+                intrinsics_payload(
+                    color_video_profile,
+                    source="realsense_sdk_factory_calibration",
+                ),
+                sort_keys=True,
+            ),
+        )
+        self.declare_parameter(
+            "depth_intrinsics_json",
+            json.dumps(
+                intrinsics_payload(
+                    depth_video_profile,
+                    source="realsense_sdk_factory_calibration",
+                ),
+                sort_keys=True,
+            ),
+        )
+        if depth_scale_meters_per_unit is not None and depth_scale_meters_per_unit > 0.0:
+            self.declare_parameter("depth_scale_meters_per_unit", depth_scale_meters_per_unit)
         self.declare_parameter("enable_depth", enable_depth)
         self.declare_parameter("wait_for_frames_timeout_ms", wait_for_frames_timeout_ms)
 

@@ -24,7 +24,7 @@ DEFAULT_CALIBRATION_RESULTS_PATH = CONFIGS_DIR / "calibration.local.json"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = ""
 ARM_ORDER = ("lightning", "thunder")
-MANIFEST_SCHEMA_VERSION = 9
+MANIFEST_SCHEMA_VERSION = 10
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
 }
@@ -271,7 +271,7 @@ def effective_profile_for_session(
                     "align": str(depth_defaults.get("align", "nearest")),
                     "max_skew_ms": float(depth_defaults.get("max_skew_ms", 25)),
                     "required": bool(depth_defaults.get("required", False)),
-                    "unit": str(depth_defaults.get("unit", "millimeters")),
+                    "unit": str(depth_defaults.get("unit", "raw_uint16")),
                     "sensor_key": sensor_key,
                 }
             )
@@ -412,6 +412,11 @@ def collect_candidate_topics(profile: dict[str, Any]) -> list[str]:
         if topic:
             topics.add(topic)
 
+    for depth_spec in profile.get("published_depth", []):
+        topic = depth_spec.get("topic")
+        if topic:
+            topics.add(topic)
+
     teleop_activity_topic = str(profile.get("teleop_activity", {}).get("topic", "")).strip()
     if teleop_activity_topic:
         topics.add(teleop_activity_topic)
@@ -434,9 +439,13 @@ def required_topics_from_profile(profile: dict[str, Any]) -> list[str]:
         if image_spec.get("required", False):
             required.add(image_spec["topic"])
 
+    for depth_spec in profile.get("published_depth", []):
+        if depth_spec.get("required", False):
+            required.add(depth_spec["topic"])
+
     teleop_activity = profile.get("teleop_activity", {})
     teleop_activity_topic = str(teleop_activity.get("topic", "")).strip()
-    if teleop_activity_topic and bool(teleop_activity.get("required_for_record", False)):
+    if teleop_activity_topic:
         required.add(teleop_activity_topic)
 
     return sorted(required)
@@ -655,6 +664,39 @@ def infer_sensor_metadata(
         serial = str(params.get("serial_no", "")).strip()
         if serial and serial not in {"''", '""'}:
             sensor["serial_number"] = serial.lstrip("_")
+        device_type = str(params.get("device_type", "")).strip()
+        if device_type and device_type not in {"''", '""'}:
+            sensor["device_type"] = device_type
+        firmware_version = str(params.get("firmware_version", "")).strip()
+        if firmware_version and firmware_version not in {"''", '""'}:
+            sensor["firmware_version"] = firmware_version
+        color_profile = str(params.get("color_profile", "")).strip()
+        depth_profile = str(params.get("depth_profile", "")).strip()
+        stream_profiles: dict[str, Any] = {}
+        if color_profile and color_profile not in {"''", '""'}:
+            stream_profiles["color"] = color_profile
+        if depth_profile and depth_profile not in {"''", '""'}:
+            stream_profiles["depth"] = depth_profile
+        if stream_profiles:
+            sensor["stream_profiles"] = stream_profiles
+        stream_intrinsics: dict[str, Any] = {}
+        color_intrinsics_json = str(params.get("color_intrinsics_json", "")).strip()
+        if color_intrinsics_json and color_intrinsics_json not in {"''", '""'}:
+            try:
+                stream_intrinsics["color"] = json.loads(color_intrinsics_json)
+            except json.JSONDecodeError:
+                pass
+        depth_intrinsics_json = str(params.get("depth_intrinsics_json", "")).strip()
+        if depth_intrinsics_json and depth_intrinsics_json not in {"''", '""'}:
+            try:
+                stream_intrinsics["depth"] = json.loads(depth_intrinsics_json)
+            except json.JSONDecodeError:
+                pass
+        if stream_intrinsics:
+            sensor["stream_intrinsics"] = stream_intrinsics
+        depth_scale = params.get("depth_scale_meters_per_unit")
+        if isinstance(depth_scale, (int, float)) and float(depth_scale) > 0.0:
+            sensor["depth_scale_meters_per_unit"] = float(depth_scale)
         sensor.update(sensor_overrides.get(sensor_key, {}))
         sensor["sensor_key"] = sensor_key
         sensor.pop("model", None)
@@ -800,8 +842,9 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
         slot = camera_match.group("slot")
         suffix = camera_match.group("suffix")
         kind = "raw_sensor"
-        value_meaning = "RGB image observation" if suffix == "color/image_raw" else "Depth image"
-        units = None if suffix == "color/image_raw" else "millimeters"
+        value_meaning = "RGB image observation" if suffix == "color/image_raw" else "Raw uint16 depth image"
+        units = None
+        convention = None if suffix == "color/image_raw" else "multiply by per-sensor depth_scale_meters_per_unit to obtain meters"
         return {
             "producer": {
                 "process": "data_pipeline/realsense_bridge.py",
@@ -812,7 +855,7 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
                 "kind": kind,
                 "value_meaning": value_meaning,
                 "units": units,
-                "convention": None,
+                "convention": convention,
             },
             "timestamp": {
                 "carrier": "header.stamp",
@@ -932,128 +975,17 @@ def _static_topic_descriptor(topic: str) -> dict[str, Any]:
     }
 
 
-def _profile_topic_usage(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    usage: dict[str, dict[str, Any]] = {}
-
-    def entry(topic: str) -> dict[str, Any]:
-        return usage.setdefault(
-            topic,
-            {
-                "roles": [],
-                "published_fields": [],
-                "required_for_convert": False,
-                "published": False,
-                "raw_only": False,
-            },
-        )
-
-    observation_state = profile.get("published", {}).get("observation_state", {})
-    state_names = list(observation_state.get("names", []))
-    state_index = 0
-    for arm, arm_sources in observation_state.get("sources", {}).items():
-        for source_key, count in _STATE_SOURCE_COUNTS:
-            topic = str(arm_sources.get(source_key, "")).strip()
-            if not topic:
-                continue
-            topic_entry = entry(topic)
-            topic_entry["roles"].append("published_observation_state_source")
-            topic_entry["published_fields"].extend(state_names[state_index : state_index + count])
-            topic_entry["required_for_convert"] = True
-            topic_entry["published"] = True
-            state_index += count
-
-    action = profile.get("published", {}).get("action", {})
-    action_names = list(action.get("names", []))
-    action_index = 0
-    for arm, arm_sources in action.get("sources", {}).items():
-        for source_key, count in _ACTION_SOURCE_COUNTS:
-            topic = str(arm_sources.get(source_key, "")).strip()
-            if not topic:
-                continue
-            topic_entry = entry(topic)
-            topic_entry["roles"].append("published_action_source")
-            topic_entry["published_fields"].extend(action_names[action_index : action_index + count])
-            topic_entry["required_for_convert"] = True
-            topic_entry["published"] = True
-            action_index += count
-
-    for image_spec in profile.get("published", {}).get("images", []):
-        topic = str(image_spec.get("topic", "")).strip()
-        if not topic:
-            continue
-        topic_entry = entry(topic)
-        topic_entry["roles"].append("published_image_source")
-        field = str(image_spec.get("field", "")).strip()
-        if field:
-            topic_entry["published_fields"].append(field)
-        if bool(image_spec.get("required", False)):
-            topic_entry["required_for_convert"] = True
-        topic_entry["published"] = True
-
-    for depth_spec in profile.get("published_depth", []):
-        topic = str(depth_spec.get("topic", "")).strip()
-        if not topic:
-            continue
-        topic_entry = entry(topic)
-        topic_entry["roles"].append("published_depth_source")
-        field = str(depth_spec.get("field", "")).strip()
-        if field:
-            topic_entry["published_fields"].append(field)
-        if bool(depth_spec.get("required", False)):
-            topic_entry["required_for_convert"] = True
-        topic_entry["published"] = True
-
-    for topic in profile.get("raw_only_topics", []):
-        topic_entry = entry(str(topic))
-        topic_entry["roles"].append("raw_only")
-        topic_entry["raw_only"] = True
-
-    teleop_activity = profile.get("teleop_activity", {})
-    teleop_activity_topic = str(teleop_activity.get("topic", "")).strip()
-    if teleop_activity_topic:
-        topic_entry = entry(teleop_activity_topic)
-        topic_entry["roles"].append("teleop_activity")
-        topic_entry["roles"].append("raw_only_conversion_aid")
-        topic_entry["raw_only"] = True
-        if bool(teleop_activity.get("required_for_convert", False)):
-            topic_entry["required_for_convert"] = True
-
-    for topic_entry in usage.values():
-        topic_entry["roles"] = sorted(set(topic_entry["roles"]))
-        topic_entry["published_fields"] = list(dict.fromkeys(topic_entry["published_fields"]))
-
-    return usage
-
-
 def build_recorded_topics_snapshot(
     *,
-    profile: dict[str, Any],
     selected_topics: list[str],
     live_topics: dict[str, str],
     sensors: list[dict[str, Any]],
-    extra_topics: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     sensor_keys_by_topic = _sensor_keys_by_topic(sensors)
-    usage = _profile_topic_usage(profile)
-    required_for_record = set(required_topics_from_profile(profile))
-    extra_topic_set = {str(topic) for topic in (extra_topics or [])}
 
     entries: list[dict[str, Any]] = []
     for topic in selected_topics:
         descriptor = _static_topic_descriptor(topic)
-        topic_usage = usage.get(
-            topic,
-            {
-                "roles": [],
-                "published_fields": [],
-                "required_for_convert": False,
-                "published": False,
-                "raw_only": True,
-            },
-        )
-        roles = list(topic_usage["roles"])
-        if topic in extra_topic_set:
-            roles.append("extra_topic")
         entries.append(
             {
                 "topic": topic,
@@ -1063,14 +995,6 @@ def build_recorded_topics_snapshot(
                 "timestamp": descriptor["timestamp"],
                 "expected_rate_hz": descriptor["expected_rate_hz"],
                 "sensor_key": sensor_keys_by_topic.get(topic),
-                "usage": {
-                    "required_for_record": topic in required_for_record,
-                    "required_for_convert": bool(topic_usage["required_for_convert"]),
-                    "published": bool(topic_usage["published"]),
-                    "raw_only": bool(topic_usage["raw_only"]),
-                    "roles": sorted(set(roles)),
-                    "published_fields": list(topic_usage["published_fields"]),
-                },
             }
         )
     return entries
@@ -1089,10 +1013,13 @@ def manifest_capture(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def manifest_sensors(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    sensors = manifest.get("sensors", {})
-    if isinstance(sensors, dict):
-        return list(sensors.get("devices", []))
-    return list(sensors)
+    sensors = manifest["sensors"]
+    if not isinstance(sensors, dict):
+        raise TypeError("Manifest sensors section must be an object with a devices list.")
+    devices = sensors.get("devices", [])
+    if not isinstance(devices, list):
+        raise TypeError("Manifest sensors.devices must be a list.")
+    return list(devices)
 
 
 def manifest_dataset_id(manifest: dict[str, Any]) -> str | None:

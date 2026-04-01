@@ -1,5 +1,5 @@
 profile_name: multisensor_20hz
-profile_version: 3
+profile_version: 6
 
 dataset:
   fps: 20
@@ -8,8 +8,6 @@ dataset:
 teleop_activity:
   topic: /spark/session/teleop_active
   active_value: true
-  required_for_record: true
-  required_for_convert: false
   hold_semantics: zero_order_hold_until_next_sample
 
 published:
@@ -19,7 +17,7 @@ published:
 
   action:
     align: latest_before
-    max_age_ms: 50
+    max_age_ms: 150
 
   images:
     align: nearest
@@ -30,7 +28,6 @@ published_depth:
   align: nearest
   max_skew_ms: 25
   required: false
-  unit: millimeters
 
 conversion:
   frame_grid:

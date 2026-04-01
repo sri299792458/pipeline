@@ -185,6 +185,14 @@ Each episode is written under `raw_episodes/<episode_id>/` with:
 
 If `data_pipeline/configs/calibration.local.json` exists, the recorder also snapshots the current solved calibration into the sensor entries of `episode_manifest.json`.
 
+For RealSense sensors, the manifest also snapshots per-episode camera metadata when the bridge exposes it:
+
+- `device_type`
+- `firmware_version`
+- stream profiles
+- stream intrinsics
+- `depth_scale_meters_per_unit`
+
 `episode_manifest.json` is now the single resolved per-episode snapshot. The reusable profile stays in YAML, and the manifest carries the resolved episode-specific sections:
 
 - `episode`
@@ -231,6 +239,13 @@ If the selected profile declares `published_depth`, the converter also writes a 
 
 - `published/<dataset_id>/depth/`
 - `published/<dataset_id>/meta/depth_info.json`
+
+The published dataset also keeps a per-episode source snapshot under:
+
+- `published/<dataset_id>/meta/spark_source/<episode_id>/episode_manifest.json`
+- `published/<dataset_id>/meta/spark_source/<episode_id>/notes.md`
+
+`meta/depth_info.json` is only the dataset-level index for the depth sidecar layout. The copied source manifest remains the canonical place for per-sensor metadata such as RealSense intrinsics and `depth_scale_meters_per_unit`.
 
 ## Offline Archive
 

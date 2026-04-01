@@ -268,11 +268,9 @@ def build_manifest(
             "devices": sensors,
         },
         "recorded_topics": build_recorded_topics_snapshot(
-            profile=effective_profile,
             selected_topics=topics,
             live_topics=TOPIC_TYPES,
             sensors=sensors,
-            extra_topics=[],
         ),
         "provenance": {
             "git_commit": "dummy",

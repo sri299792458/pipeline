@@ -15,9 +15,8 @@ Add RealSense depth to the published dataset in a way that is:
 - Published depth must not be encoded through the current LeRobot RGB video path.
 - Published depth must be stored as a separate lossless sidecar under the published dataset root.
 - The first supported published depth fields are:
-  - `observation.depth.wrist`
-  - `observation.depth.scene`
-- Depth values must be preserved as native `uint16` millimeter images.
+  - one field for each recorded RealSense sensor with a published depth stream
+- Depth values must be preserved as native raw `uint16` images.
 - The canonical on-disk payload for each published depth frame is:
   - PNG-encoded 16-bit grayscale bytes
 - These depth frames must be stored in chunked parquet files rather than as one file per frame.
@@ -31,7 +30,7 @@ Add RealSense depth to the published dataset in a way that is:
 - The current local LeRobot checkout is not depth-ready as a published feature path:
   - `video_utils.py` reports `video.is_depth_map = False`
   - `image_writer.py` still assumes 3-channel images for writing
-- RealSense depth is already native `uint16` in millimeters and should not be quantized down to 8-bit by default.
+- RealSense depth is already native `uint16` and should not be quantized down to 8-bit by default.
 - RGB-D manipulation stacks commonly treat depth as a geometry signal that should stay lossless at storage time, even if training-time preprocessing later converts it to:
   - float depth
   - normalized depth
@@ -55,11 +54,10 @@ Add RealSense depth to the published dataset in a way that is:
 
 ### Included
 
-- RealSense wrist depth
-- RealSense scene depth
+- RealSense depth from any recorded sensor key that resolves to a published depth field
 - alignment to the published frame grid
 - lossless storage
-- metadata sufficient to decode and interpret the depth sidecar later
+- metadata sufficient to locate and decode the depth sidecar later
 
 ### Excluded
 
@@ -82,19 +80,19 @@ published/<dataset_id>/
   meta/
   videos/
   depth/
-    observation.depth.wrist/
+    observation.depth.lightning.wrist_1/
       chunk-000/
         file-000000.parquet
         file-000001.parquet
-    observation.depth.scene/
+    observation.depth.world.scene_1/
       chunk-000/
         file-000000.parquet
         file-000001.parquet
   depth_preview/
-    observation.depth.wrist/
+    observation.depth.lightning.wrist_1/
       chunk-000/
         file-000000.mp4
-    observation.depth.scene/
+    observation.depth.world.scene_1/
       chunk-000/
         file-000000.mp4
   meta/depth_info.json
@@ -120,7 +118,6 @@ Each row in a depth parquet file must contain:
 - `png16_bytes`
 - `height`
 - `width`
-- `unit`
 - `source_topic`
 
 Field requirements:
@@ -139,8 +136,6 @@ Field requirements:
   - integer
 - `width`
   - integer
-- `unit`
-  - must be `"millimeters"`
 - `source_topic`
   - exact raw depth topic used for the aligned sample
 
@@ -154,7 +149,6 @@ Field requirements:
 - `encoding`
 - `unit`
 - `alignment_policy`
-- `source_topics`
 - `chunking`
 - `episode_indices_present`
 
@@ -163,9 +157,16 @@ Expected values:
 - `encoding`
   - `png16_gray`
 - `unit`
-  - `millimeters`
+  - `raw_uint16`
 - `alignment_policy`
   - nearest-to-grid from the same published frame grid already used by the converter
+
+`meta/depth_info.json` is only a dataset-level sidecar index.
+
+Metric interpretation must come from the copied source manifest for the episode that produced the depth frames:
+
+- `meta/spark_source/<episode_id>/episode_manifest.json`
+- use the corresponding RealSense sensor entry's `depth_scale_meters_per_unit`
 
 
 ## Alignment Policy
@@ -175,8 +176,10 @@ Depth must align to the same published frame grid as RGB/state/action.
 For each published depth field:
 
 - source topic:
-  - wrist: `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
-  - scene: `/spark/cameras/world/scene_1/depth/image_rect_raw`
+  - the recorded RealSense depth topic for that sensor key
+  - for example:
+    - `/spark/cameras/lightning/wrist_1/depth/image_rect_raw`
+    - `/spark/cameras/world/scene_4/depth/image_rect_raw`
 - selection rule:
   - nearest frame to the published timestamp
 - tolerance:

@@ -45,9 +45,12 @@ Keep raw episode capture lossless and low-overhead while removing the old
 - `bag_storage_preset_profile` should be `null` / unset by default for capture bags
 - Raw episode manifests must not embed archive-specific trim/compression
   results.
+- Raw episode manifests should remain the canonical source of per-sensor
+  metadata captured at record time.
 - Conversion must auto-detect bag storage from `bag/metadata.yaml` and must not assume `sqlite3`.
 - Recording integrity checks must continue to use `bag/metadata.yaml`, which is backend-agnostic.
-- New recordings must include the teleop-activity topic declared by the profile, even though published conversion may still fall back gracefully for older raw episodes that predate this signal.
+- New recordings must include the teleop-activity topic declared by the profile.
+- Published conversion now treats that topic as part of the required raw contract; missing teleop activity is a conversion failure.
 - Archive-time trim/compression provenance belongs in a separate archive manifest,
   not in the capture manifest.
 

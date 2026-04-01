@@ -102,12 +102,10 @@ def select_topics_from_session_plan(
 def build_manifest(
     args: argparse.Namespace,
     profile: dict,
-    effective_profile: dict,
     profile_path: Path,
     active_arms: list[str],
     selected_topics: list[str],
     live_topics: dict[str, str],
-    extra_topics: list[str],
     sensor_overrides: dict[str, dict],
     sensors_file: Path | None,
     calibration_results: dict[str, object],
@@ -123,11 +121,9 @@ def build_manifest(
         calibration_results_path=calibration_results_path,
     )
     recorded_topics = build_recorded_topics_snapshot(
-        profile=effective_profile,
         selected_topics=selected_topics,
         live_topics=live_topics,
         sensors=sensors,
-        extra_topics=extra_topics,
     )
     profile_relpath = str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path)
 
@@ -265,12 +261,10 @@ def main(argv: list[str] | None = None) -> int:
         dry_run_manifest = build_manifest(
             args=args,
             profile=profile,
-            effective_profile=effective_profile,
             profile_path=resolved_profile_path,
             active_arms=active_arms,
             selected_topics=selected_topics,
             live_topics=live_topics,
-            extra_topics=extra_topics,
             sensor_overrides=sensor_overrides,
             sensors_file=sensors_file,
             calibration_results=calibration_results,
@@ -309,12 +303,10 @@ def main(argv: list[str] | None = None) -> int:
     manifest = build_manifest(
         args=args,
         profile=profile,
-        effective_profile=effective_profile,
         profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
         live_topics=live_topics,
-        extra_topics=extra_topics,
         sensor_overrides=sensor_overrides,
         sensors_file=sensors_file,
         calibration_results=calibration_results,
@@ -351,12 +343,10 @@ def main(argv: list[str] | None = None) -> int:
     final_manifest = build_manifest(
         args=args,
         profile=profile,
-        effective_profile=effective_profile,
         profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
         live_topics=live_topics,
-        extra_topics=extra_topics,
         sensor_overrides=sensor_overrides,
         sensors_file=sensors_file,
         calibration_results=calibration_results,

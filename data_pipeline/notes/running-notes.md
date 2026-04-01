@@ -1793,6 +1793,45 @@
 
 - Refactored [launch_devs.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/launch_devs.py) into a thin wrapper over a new typed launcher module:
   - [teleop_device_launcher.py](/home/srinivas/Desktop/pipeline/TeleopSoftware/teleop_device_launcher.py)
+
+### Generic conversion constant cleanup
+
+- Re-audited the checked-in generic conversion profile after the profile unification work.
+- Found one stale constant in [multisensor_20hz.yaml](/home/srinivas/Desktop/pipeline/data_pipeline/configs/multisensor_20hz.yaml):
+  - `published.action.max_age_ms` had drifted back to `50`
+  - but the earlier bounded-hold decision for the Spark command path was `150`
+- Updated the generic profile accordingly:
+  - `published.action.max_age_ms = 150`
+  - bumped `profile_version` to `4`
+- Rechecked the rest of the constants against the latest verified real-episode notes and left them unchanged:
+  - `dataset.fps = 20`
+    - still the honest default for tactile-inclusive published datasets
+  - `published.observation_state.max_age_ms = 50`
+    - last healthy real run stayed well inside this bound
+  - `published.images.max_skew_ms = 25`
+  - `published_depth.max_skew_ms = 25`
+    - last healthy real run stayed within the `25 ms` image/depth skew policy
+- Also fixed a misleading converter error string in [convert_episode_bag_to_lerobot.py](/home/srinivas/Desktop/pipeline/data_pipeline/convert_episode_bag_to_lerobot.py):
+  - it no longer hardcodes `20Hz` in the empty-grid failure message
+  - it now reports the actual configured `fps`
+
+### Teleop-activity contract simplification
+
+- Removed the transitional split between:
+  - `required_for_record`
+  - `required_for_convert`
+  on the profile-level `teleop_activity` block.
+- The shared activity topic remains in the profile only as:
+  - `topic`
+  - `active_value`
+  - `hold_semantics`
+- Cleaned the active pipeline contract accordingly:
+  - raw recording always treats `/spark/session/teleop_active` as required when declared
+  - published conversion now always requires that topic for supported episodes
+  - missing or empty teleop-activity data is now a conversion failure instead of a fallback path
+- Reason:
+  - the old split only existed to keep converting older bags that predated the activity signal
+  - with backward-compatibility cleanup now prioritized, that knob had become unnecessary bloat
 - The new module separates:
   - USB discovery
   - SPARK child-process command construction
@@ -2386,3 +2425,30 @@
 - This keeps the mental model simple:
   - example files are templates
   - chosen files are the working defaults
+
+### Teleop activity and manifest contract got stricter
+
+- Removed the transition-only `required_for_record` / `required_for_convert` flags from the profile-level `teleop_activity` block.
+- The active contract is now simpler:
+  - raw episodes must record `/spark/session/teleop_active`
+  - conversion requires that topic
+  - there is no graceful fallback path for missing activity
+- Also removed extra manifest/topic bloat:
+  - `recorded_topics` entries no longer carry a nested `usage` block
+  - the manifest helper path now only supports the current `sensors.devices` shape
+
+### Published provenance now copies the raw source snapshot
+
+- Stopped treating `meta/depth_info.json` as the place for per-sensor truth.
+- `realsense_bridge.py` now exposes record-time metadata that belongs in the raw manifest:
+  - `device_type`
+  - `firmware_version`
+  - stream profiles
+  - stream intrinsics
+  - `depth_scale_meters_per_unit`
+- The recorder snapshots that into the RealSense sensor entries of `episode_manifest.json`.
+- The converter now copies the per-episode raw source snapshot into the published dataset:
+  - `meta/spark_source/<episode_id>/episode_manifest.json`
+  - `meta/spark_source/<episode_id>/notes.md`
+- `meta/depth_info.json` remains only the dataset-level index for the depth sidecar layout.
+- Published depth sidecars also stopped repeating `unit` on every parquet row, and the dataset-level depth metadata now says `raw_uint16` instead of falsely claiming millimeters.
