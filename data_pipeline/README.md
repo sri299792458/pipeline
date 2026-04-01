@@ -20,7 +20,11 @@ For the shared local `.venv` and interpreter split, use [docs/python-env-setup.m
 
 For a generic bring-up sequence, use [docs/hardware-bringup.md](./docs/hardware-bringup.md).
 
-For the current exact Lightning-only command sequence on this machine, use [docs/current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md).
+For the first smoke-test raw recording flow after bring-up, use [docs/first-raw-demo.md](./docs/first-raw-demo.md).
+
+For the first published conversion flow after raw capture, use [docs/first-published-conversion.md](./docs/first-published-conversion.md).
+
+For the first local viewer inspection flow after conversion, use [docs/first-viewer-review.md](./docs/first-viewer-review.md).
 
 The current reference frontend is the Qt implementation:
 

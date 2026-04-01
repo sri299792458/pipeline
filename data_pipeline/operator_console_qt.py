@@ -304,7 +304,7 @@ class OperatorConsoleQtWindow(QMainWindow):
         layout.addLayout(form)
 
         self.session_devices_table = QTableWidget(0, 4)
-        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Kind", "Identifier", "Sensor"])
+        self.session_devices_table.setHorizontalHeaderLabels(["Record", "Device", "Hardware ID", "Sensor Key"])
         self.session_devices_table.verticalHeader().setVisible(False)
         self.session_devices_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.session_devices_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)

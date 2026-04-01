@@ -69,8 +69,10 @@ use. The operator console's `Open Viewer` path already handles those at runtime.
 
 ## Next Step
 
-After viewer setup is complete, continue with:
+After the viewer toolchain is ready, the normal workflow is:
 
-- Python environment setup
-- hardware bring-up
-- recording and conversion
+- [python-env-setup.md](./python-env-setup.md)
+- [hardware-bringup.md](./hardware-bringup.md)
+- [first-raw-demo.md](./first-raw-demo.md)
+- [first-published-conversion.md](./first-published-conversion.md)
+- [first-viewer-review.md](./first-viewer-review.md)

@@ -8,12 +8,6 @@ The goal is simple:
 - confirm the expected `/spark/...` topic surface exists
 - stop before longer data collection work
 
-For the current exact Lightning-only command sequence validated on this machine,
-use [current-lightning-gelsight-runbook.md](./current-lightning-gelsight-runbook.md).
-That page is intentionally concrete and machine-specific. This page is the
-general bring-up contract.
-
-
 ## Before You Start
 
 Finish these setup pages first:
@@ -100,11 +94,17 @@ In the operator console:
 4. click `Discover Devices`
 
 The `Session Devices` table should populate with discovered hardware only.
+The columns mean:
 
-Expected device kinds include:
-
-- `realsense`
-- `gelsight`
+- `Record`
+  - include this device in the current session
+- `Device`
+  - the discovered runtime device class, such as `realsense` or `gelsight`
+- `Hardware ID`
+  - the stable hardware identifier the console discovered
+  - for example a RealSense serial number or a GelSight V4L path
+- `Sensor Key`
+  - the canonical `/spark/...` sensor identity you want this device to publish as
 
 Use the table to decide which devices are part of this session:
 
@@ -288,7 +288,7 @@ operator workflow.
 
 Hardware bring-up is complete when:
 
-- the correct devices are discovered and assigned roles
+- the correct devices are discovered and assigned sensor keys
 - `Start Session` brings up the expected services
 - the Teleop GUI is connected to the intended robot or robots
 - the required health cards are green
@@ -296,6 +296,6 @@ Hardware bring-up is complete when:
 
 At that point, the rig is ready for a first smoke-test recording.
 
-For the current known-good machine-specific record/convert/viewer sequence, use:
+Next:
 
-- [current-lightning-gelsight-runbook.md](./current-lightning-gelsight-runbook.md)
+- [first-raw-demo.md](./first-raw-demo.md)
