@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -54,6 +55,7 @@ TOPIC_PROBE_SCRIPT = REPO_ROOT / "data_pipeline" / "ros_topic_probe.py"
 VIEWER_REPO = WORKSPACE_ROOT / "lerobot-dataset-visualizer"
 VIEWER_BUN = Path.home() / ".bun" / "bin" / "bun"
 VIEWER_BUILD_ID = VIEWER_REPO / ".next" / "BUILD_ID"
+VIEWER_DATASETS_ROOT = VIEWER_REPO / "public" / "datasets" / "local"
 DEFAULT_VIEWER_BASE_URL = "http://localhost:3000"
 
 
@@ -646,9 +648,81 @@ class OperatorConsoleBackend:
             f"{shlex.quote(str(VIEWER_BUN))} start"
         )
 
+    def _viewer_dataset_root(self, dataset_id: str) -> Path:
+        return REPO_ROOT / "published" / dataset_id
+
+    def _viewer_dataset_mount(self, dataset_id: str) -> Path:
+        return VIEWER_DATASETS_ROOT / dataset_id / "resolve" / "main"
+
+    def _viewer_dataset_info_url(self, viewer_base_url: str, dataset_id: str) -> str:
+        return f"{viewer_base_url}/datasets/local/{dataset_id}/resolve/main/meta/info.json"
+
+    def _ensure_viewer_dataset_mount(self, dataset_id: str) -> bool:
+        dataset_root = self._viewer_dataset_root(dataset_id)
+        if not (dataset_root / "meta" / "info.json").exists():
+            raise RuntimeError(f"Published dataset info not found: {dataset_root / 'meta' / 'info.json'}")
+
+        mount_path = self._viewer_dataset_mount(dataset_id)
+        mount_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if mount_path.exists() or mount_path.is_symlink():
+            if mount_path.is_symlink() and mount_path.resolve() == dataset_root.resolve():
+                return False
+            raise RuntimeError(
+                f"Viewer dataset mount already exists and does not match {dataset_root}: {mount_path}"
+            )
+
+        mount_path.symlink_to(dataset_root.resolve(), target_is_directory=True)
+        return True
+
+    def _viewer_listener_pid(self) -> int | None:
+        try:
+            result = subprocess.run(
+                ["ss", "-ltnp", "( sport = :3000 )"],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+                check=False,
+            )
+        except Exception:
+            return None
+
+        for line in result.stdout.splitlines():
+            match = re.search(r"pid=(\d+)", line)
+            if not match:
+                continue
+            pid = int(match.group(1))
+            try:
+                cwd = Path(os.readlink(f"/proc/{pid}/cwd"))
+            except OSError:
+                continue
+            if cwd.resolve() == VIEWER_REPO.resolve():
+                return pid
+        return None
+
+    def _stop_existing_viewer_listener(self) -> None:
+        pid = self._viewer_listener_pid()
+        if pid is None:
+            return
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if self._viewer_listener_pid() is None:
+                return
+            time.sleep(0.1)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+
     def _ensure_viewer_server(self, config: dict[str, Any], dataset_id: str, episode_index: int) -> None:
         viewer_base_url = DEFAULT_VIEWER_BASE_URL
+        self._ensure_viewer_dataset_mount(dataset_id)
         command = self._build_viewer_server_command(config, dataset_id, episode_index)
+        dataset_info_url = self._viewer_dataset_info_url(viewer_base_url, dataset_id)
         process = self.processes["viewer_server"]
         process_running = process.process is not None and process.process.poll() is None
 
@@ -661,19 +735,21 @@ class OperatorConsoleBackend:
                 time.sleep(0.1)
 
         if process.process is not None and process.process.poll() is None and process.command == command:
-            if self._url_reachable(viewer_base_url, timeout_s=1.5):
+            if self._url_reachable(dataset_info_url, timeout_s=1.5):
                 return
 
-        if self._url_reachable(viewer_base_url, timeout_s=1.5):
+        if self._url_reachable(dataset_info_url, timeout_s=1.5):
             return
+
+        self._stop_existing_viewer_listener()
 
         self._start_process("viewer_server", command)
         deadline = time.time() + 15.0
         while time.time() < deadline:
-            if self._url_reachable(viewer_base_url, timeout_s=1.5):
+            if self._url_reachable(dataset_info_url, timeout_s=1.5):
                 return
             time.sleep(0.25)
-        raise RuntimeError(f"Viewer server did not become reachable: {viewer_base_url}")
+        raise RuntimeError(f"Viewer dataset did not become reachable: {dataset_info_url}")
 
     def _url_reachable(self, url: str, timeout_s: float = 2.0) -> bool:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
