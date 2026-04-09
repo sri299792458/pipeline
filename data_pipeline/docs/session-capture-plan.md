@@ -1,4 +1,4 @@
-# Session State V2
+# Session Model And Device Discovery
 
 ## Purpose
 
@@ -12,6 +12,26 @@ V2 keeps only three concepts here:
 
 Everything else that had grown around this, such as expected-device lists and
 profile-compatibility matrices, is intentionally out of the main workflow.
+
+
+## Why The Session Model Exists
+
+The session model exists because the operator UI is not itself the durable
+recording contract.
+
+The pipeline needs one resolved object that answers:
+
+- what this session is trying to record
+- which discovered devices are included
+- which canonical sensor keys those devices map to
+- which raw topics the recorder should actually capture
+
+That resolved object is simpler and more durable than trying to infer the full
+session intent later from:
+
+- ad hoc UI state
+- mutable local files
+- or whichever devices happened to be visible at one later moment
 
 
 ## Ground Rules
@@ -75,6 +95,12 @@ Its main job is:
 
 Solved camera geometry is a separate local file, not something the operator should type into the console state.
 
+Why this matters:
+
+- device identity and solved geometry are not the same thing
+- the sensors file should stay simple enough to act as a safe default map
+- calibration belongs in its own subsystem
+
 ### Presets file
 
 The operator console may load or save a presets file for later reuse.
@@ -90,6 +116,8 @@ It does not replace the sensors file.
 The checked-in starting point is:
 
 - `data_pipeline/configs/operator_console_presets.example.yaml`
+
+The presets file is a convenience artifact, not a shared contract object.
 
 ### Session state
 
@@ -109,6 +137,26 @@ still derived from:
 - the chosen presets file
 - the chosen sensors file
 - live device discovery
+
+
+## Why Published Profiles Do Not Define The Live Session
+
+Published conversion policy and live session setup are intentionally separate.
+
+The published profile answers things like:
+
+- output frame rate
+- alignment rules
+- missing-data policy
+
+It should not be the thing that decides:
+
+- which physical devices are present today
+- which discovered devices are recorded this session
+- which canonical sensor key a specific serial or device path should use today
+
+That separation is why the console can stay discovery-first while conversion
+still uses one generic checked-in policy.
 
 
 ## Canonical Sensor Keys
@@ -139,8 +187,6 @@ Example:
 
 ```json
 {
-  "schema_version": 4,
-  "contract_version": "v2",
   "session_id": "20260323-101500",
   "active_arms": ["lightning"],
   "sensors_file": "data_pipeline/configs/sensors.local.yaml",
@@ -218,3 +264,8 @@ It must not expose:
 The session state decides what one session records.
 
 It does not redefine the shared contract, it does not change the canonical V2 topic surface, and it does not choose the published dataset folder up front.
+
+That last point is important:
+
+- published folder choice is a later artifact decision
+- the session model should describe recording truth, not dataset naming policy

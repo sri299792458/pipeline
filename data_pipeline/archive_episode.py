@@ -762,7 +762,6 @@ def main(argv: list[str] | None = None) -> int:
     capture_storage_id = detect_bag_storage_id(capture_bag_dir)
     capture_size_bytes = bag_dir_size_bytes(capture_bag_dir)
     archive_manifest: dict[str, Any] = {
-        "schema_version": 1,
         "archive_created_ns": time.time_ns(),
         "tool": {
             "script": "data_pipeline/archive_episode.py",
@@ -780,7 +779,6 @@ def main(argv: list[str] | None = None) -> int:
         "episode_manifest_path": relpath_or_abs(episode_dir / "episode_manifest.json")
         if (episode_dir / "episode_manifest.json").is_file()
         else None,
-        "episode_manifest_schema_version": episode_manifest.get("manifest_schema_version") if episode_manifest else None,
         "trim": None,
         "image_transcode": None,
         "archive_storage": {

@@ -1,5 +1,9 @@
 # Raw Storage Contract
 
+For the higher-level artifact and compression rationale, see
+[archive-and-compression-strategy.md](./archive-and-compression-strategy.md)
+and [artifact-model.md](./artifact-model.md).
+
 ## Goal
 
 Keep raw episode capture lossless and low-overhead while removing the old
@@ -40,9 +44,8 @@ Keep raw episode capture lossless and low-overhead while removing the old
 ## Requirements
 
 - `record_episode.py` must default to plain `mcap`.
-- Raw episode manifests must stamp:
-  - `bag_storage_id`
-- `bag_storage_preset_profile` should be `null` / unset by default for capture bags
+- Raw episode manifests must stamp the capture storage backend through
+  `capture.storage.bag_storage_id`.
 - Raw episode manifests must not embed archive-specific trim/compression
   results.
 - Raw episode manifests should remain the canonical source of per-sensor

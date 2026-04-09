@@ -1,5 +1,8 @@
 # Operator Console V2 Spec
 
+For the higher-level design rationale behind the console workflow, see
+[operator-console-design.md](./operator-console-design.md).
+
 ## Goal
 
 Build a lab-facing console for:

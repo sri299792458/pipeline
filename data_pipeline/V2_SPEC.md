@@ -180,7 +180,6 @@ Examples:
 
 Its top-level sections stay:
 
-- `manifest_schema_version`
 - `episode`
 - `session`
 - `profile`

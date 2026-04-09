@@ -2,6 +2,9 @@
 
 This is the V2 camera-calibration workflow for the pipeline.
 
+For the design rationale behind the calibration split, see
+[calibration-design.md](./calibration-design.md).
+
 The calibration system has two parts:
 
 - `data_pipeline/configs/sensors.local.yaml`

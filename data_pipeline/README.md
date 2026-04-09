@@ -4,6 +4,8 @@ This directory contains the raw-capture and LeRobot conversion stack.
 
 For the curated docs entrypoint, start with [docs/setup.md](./docs/setup.md).
 
+For the design section, start with [docs/design-choices.md](./docs/design-choices.md).
+
 The default setup path for a collection-only user on the existing collection machine is:
 
 1. [lab-machine-quick-start.md](./docs/lab-machine-quick-start.md)
@@ -23,6 +25,24 @@ Supporting setup pages are:
 - [python-env-setup.md](./docs/python-env-setup.md)
 - [viewer-setup.md](./docs/viewer-setup.md)
 - [system-setup.md](./docs/system-setup.md)
+
+Curated design pages are:
+
+- [design-choices.md](./docs/design-choices.md)
+- [system-boundaries.md](./docs/system-boundaries.md)
+- [artifact-model.md](./docs/artifact-model.md)
+- [episode-manifest-design.md](./docs/episode-manifest-design.md)
+- [environment-and-workspace-model.md](./docs/environment-and-workspace-model.md)
+- [calibration-design.md](./docs/calibration-design.md)
+- [operator-console-design.md](./docs/operator-console-design.md)
+- [viewer-integration.md](./docs/viewer-integration.md)
+- [sensor-runtime-design.md](./docs/sensor-runtime-design.md)
+- [archive-and-compression-strategy.md](./docs/archive-and-compression-strategy.md)
+- [topic-contract.md](./docs/topic-contract.md)
+- [session-capture-plan.md](./docs/session-capture-plan.md)
+- [dataset-mapping.md](./docs/dataset-mapping.md)
+- [calibration.md](./docs/calibration.md)
+- [operator-console-spec.md](./docs/operator-console-spec.md)
 
 Internal implementation references still live here:
 
@@ -104,7 +124,7 @@ Current implementation note:
   - the enabled session sensors
 - conversion uses the same generic policy and derives the effective published schema from:
   - the manifest active-arm set
-  - the recorded sensor keys
+  - the `sensor_key` values under `sensors.devices`
 - `dataset_id` remains the place where you keep embodiment-specific or rig-specific published datasets separate
 
 

@@ -47,7 +47,6 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
     manifest_episode_id,
     manifest_language_instruction,
     manifest_profile_name,
-    manifest_robot_id,
     manifest_sensors,
     manifest_task_name,
     manifest_topic_types,
@@ -544,7 +543,6 @@ def compare_feature_specs(existing: dict[str, dict], expected: dict[str, dict]) 
 def get_or_create_dataset(
     dataset_root: Path,
     dataset_id: str,
-    robot_type: str | None,
     fps: int,
     features: dict[str, dict[str, Any]],
     vcodec: str,
@@ -577,7 +575,6 @@ def get_or_create_dataset(
     return LeRobotDataset.create(
         repo_id=dataset_id,
         root=dataset_root,
-        robot_type=robot_type,
         fps=fps,
         features=features,
         vcodec=vcodec,
@@ -1274,7 +1271,6 @@ def main(argv: list[str] | None = None) -> int:
     dataset = get_or_create_dataset(
         dataset_root=dataset_root,
         dataset_id=dataset_id,
-        robot_type=manifest_robot_id(manifest),
         fps=int(effective_profile["dataset"]["fps"]),
         features=features,
         vcodec=args.vcodec,

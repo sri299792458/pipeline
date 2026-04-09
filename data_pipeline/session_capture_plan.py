@@ -111,8 +111,6 @@ def build_session_capture_plan(config: dict[str, Any], session_id: str) -> dict[
     effective_profile = effective_profile_for_session(profile, active_arms, enabled_sensor_keys)
 
     return {
-        "schema_version": 4,
-        "contract_version": "v2",
         "session_id": session_id,
         "active_arms": active_arms,
         "sensors_file": sensors_file or None,

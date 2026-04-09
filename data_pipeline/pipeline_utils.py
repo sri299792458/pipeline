@@ -24,7 +24,6 @@ DEFAULT_CALIBRATION_RESULTS_PATH = CONFIGS_DIR / "calibration.local.json"
 DEFAULT_BAG_STORAGE_ID = "mcap"
 DEFAULT_BAG_STORAGE_PRESET_PROFILE = ""
 ARM_ORDER = ("lightning", "thunder")
-MANIFEST_SCHEMA_VERSION = 10
 PROFILE_NAME_TO_PATH = {
     "multisensor_20hz": CONFIGS_DIR / "multisensor_20hz.yaml",
 }
@@ -785,202 +784,18 @@ def infer_sensor_metadata(
     return sensors
 
 
-def _sensor_keys_by_topic(sensors: list[dict[str, Any]]) -> dict[str, str]:
-    topic_to_sensor: dict[str, str] = {}
-    for sensor in sensors:
-        sensor_key = str(sensor.get("sensor_key", "")).strip()
-        if not sensor_key:
-            continue
-        for topic in sensor.get("topic_names", []):
-            topic_to_sensor[str(topic)] = sensor_key
-    return topic_to_sensor
-
-
-def _rate_range(min_hz: float | None, max_hz: float | None) -> dict[str, float | None]:
-    return {
-        "min_hz": float(min_hz) if min_hz is not None else None,
-        "max_hz": float(max_hz) if max_hz is not None else None,
-    }
-
-
-def _static_topic_descriptor(topic: str) -> dict[str, Any]:
-    if topic == "/spark/session/teleop_active":
-        return {
-            "producer": {
-                "process": "TeleopSoftware/Spark/SparkNode.py",
-                "node": "SparkNode",
-                "upstream_source": "SPARK serial packet enable_switch from the shared foot pedal",
-            },
-            "semantics": {
-                "kind": "teleop_activity",
-                "value_meaning": "Boolean teleop activity mask",
-                "units": "boolean",
-                "convention": "true=pedal_active",
-            },
-            "timestamp": {
-                "carrier": "bag_timestamp_ns",
-                "meaning": "host receive/publish time of the SPARK packet carrying the enable state",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": False,
-            },
-            "expected_rate_hz": _rate_range(20, 200),
-        }
-
-    camera_match = _CAMERA_TOPIC_PATTERN.fullmatch(topic)
-    if camera_match:
-        attachment = camera_match.group("attachment")
-        slot = camera_match.group("slot")
-        suffix = camera_match.group("suffix")
-        kind = "raw_sensor"
-        value_meaning = "RGB image observation" if suffix == "color/image_raw" else "Raw uint16 depth image"
-        units = None
-        convention = None if suffix == "color/image_raw" else "multiply by per-sensor depth_scale_meters_per_unit to obtain meters"
-        return {
-            "producer": {
-                "process": "data_pipeline/realsense_bridge.py",
-                "node": f"/spark/cameras/{attachment}/{slot}",
-                "upstream_source": f"Intel RealSense {attachment}/{slot} stream",
-            },
-            "semantics": {
-                "kind": kind,
-                "value_meaning": value_meaning,
-                "units": units,
-                "convention": convention,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after wait_for_frames() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(20, 30),
-        }
-
-    tactile_match = _TACTILE_TOPIC_PATTERN.fullmatch(topic)
-    if tactile_match:
-        arm = tactile_match.group("arm")
-        finger = tactile_match.group("finger")
-        suffix = tactile_match.group("suffix")
-        return {
-            "producer": {
-                "process": "data_pipeline/gelsight_bridge.py",
-                "node": f"/gelsight_{arm}_{finger}_bridge",
-                "upstream_source": f"GelSight Mini {arm}/{finger} tactile stream",
-            },
-            "semantics": {
-                "kind": "raw_sensor",
-                "value_meaning": "GelSight tactile RGB frame",
-                "units": None,
-                "convention": None,
-            },
-            "timestamp": {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned immediately after camera.read() returns",
-                "vocabulary": "host_capture_time_v1",
-                "has_header": True,
-            },
-            "expected_rate_hz": _rate_range(15, 30),
-        }
-
-    robot_match = re.fullmatch(
-        r"/spark/(lightning|thunder)/(robot|teleop)/(joint_state|eef_pose|tcp_wrench|gripper_state|cmd_joint_state|cmd_gripper_state)",
-        topic,
-    )
-    if robot_match:
-        arm, namespace, signal = robot_match.groups()
-        if namespace == "robot":
-            timestamp = {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time assigned once for the robot/control update tick",
-                "vocabulary": "control_tick_time_v1",
-                "has_header": True,
-            }
-            kind = "measured_state"
-        else:
-            timestamp = {
-                "carrier": "header.stamp",
-                "meaning": "host ROS time when the teleop/runtime command is issued",
-                "vocabulary": "command_issue_time_v1",
-                "has_header": True,
-            }
-            kind = "command"
-        semantics = {
-            "joint_state": ("Measured UR joint positions", "radians", None),
-            "eef_pose": ("Measured UR end-effector pose", "meters_and_radians", None),
-            "tcp_wrench": ("Measured UR TCP wrench", "newtons_and_newton_meters", None),
-            "gripper_state": ("Measured gripper opening", "unitless_0_to_1", "0=open,1=closed"),
-            "cmd_joint_state": ("Issued joint target", "radians", None),
-            "cmd_gripper_state": ("Issued gripper opening target", "unitless_0_to_1", "0=open,1=closed"),
-        }[signal]
-        upstream_source = {
-            "joint_state": "UR RTDE receive",
-            "eef_pose": "UR RTDE TCP pose",
-            "tcp_wrench": "UR RTDE force-torque",
-            "gripper_state": "Robotiq gripper state",
-            "cmd_joint_state": "Spark teleop command path",
-            "cmd_gripper_state": "Spark-derived gripper command path",
-        }[signal]
-        return {
-            "producer": {
-                "process": "TeleopSoftware/launch.py",
-                "node": "gui_node",
-                "upstream_source": f"{arm} {upstream_source}",
-            },
-            "semantics": {
-                "kind": kind,
-                "value_meaning": semantics[0],
-                "units": semantics[1],
-                "convention": semantics[2],
-            },
-            "timestamp": timestamp,
-            "expected_rate_hz": _rate_range(20, 200),
-        }
-
-    return {
-        "producer": {
-            "process": None,
-            "node": None,
-            "upstream_source": None,
-        },
-        "semantics": {
-            "kind": "unknown",
-            "value_meaning": None,
-            "units": None,
-            "convention": None,
-        },
-        "timestamp": {
-            "carrier": "unknown",
-            "meaning": "No static topic-contract entry available",
-            "vocabulary": None,
-            "has_header": None,
-        },
-        "expected_rate_hz": _rate_range(None, None),
-    }
-
-
 def build_recorded_topics_snapshot(
     *,
     selected_topics: list[str],
     live_topics: dict[str, str],
-    sensors: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    sensor_keys_by_topic = _sensor_keys_by_topic(sensors)
-
-    entries: list[dict[str, Any]] = []
-    for topic in selected_topics:
-        descriptor = _static_topic_descriptor(topic)
-        entries.append(
-            {
-                "topic": topic,
-                "message_type": live_topics[topic],
-                "producer": descriptor["producer"],
-                "semantics": descriptor["semantics"],
-                "timestamp": descriptor["timestamp"],
-                "expected_rate_hz": descriptor["expected_rate_hz"],
-                "sensor_key": sensor_keys_by_topic.get(topic),
-            }
-        )
-    return entries
+    return [
+        {
+            "topic": topic,
+            "message_type": live_topics[topic],
+        }
+        for topic in selected_topics
+    ]
 
 
 def manifest_episode(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -1021,18 +836,8 @@ def manifest_language_instruction(manifest: dict[str, Any]) -> str | None:
 def manifest_active_arms(manifest: dict[str, Any]) -> list[str]:
     return list(manifest_episode(manifest).get("active_arms", []))
 
-
-def manifest_robot_id(manifest: dict[str, Any]) -> str | None:
-    value = manifest_episode(manifest).get("robot_id")
-    return str(value) if value not in {"", None} else None
-
-
 def manifest_profile_name(manifest: dict[str, Any]) -> str:
     return str(manifest_profile(manifest)["name"])
-
-
-def manifest_profile_version(manifest: dict[str, Any]) -> int:
-    return int(manifest_profile(manifest)["version"])
 
 
 def manifest_clock_policy(manifest: dict[str, Any]) -> str:
@@ -1073,9 +878,6 @@ def build_notes_template(manifest: dict[str, Any]) -> str:
             f"- language_instruction: {episode.get('language_instruction') or ''}",
         ]
     )
-    robot_id = episode.get("robot_id")
-    if robot_id not in {"", None}:
-        lines.append(f"- robot_id: {robot_id}")
     lines.extend(
         [
             f"- active_arms: {', '.join(episode.get('active_arms', [])) or 'unknown'}",

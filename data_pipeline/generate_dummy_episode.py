@@ -30,7 +30,6 @@ from data_pipeline.pipeline_utils import (  # noqa: E402
     collect_candidate_topics,
     effective_profile_for_session,
     load_profile,
-    MANIFEST_SCHEMA_VERSION,
     make_episode_id,
     normalize_active_arms,
     now_ns,
@@ -229,7 +228,6 @@ def build_manifest(
     topics = [topic for topic in collect_candidate_topics(effective_profile) if topic in TOPIC_TYPES]
 
     return {
-        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "episode": {
             "episode_id": episode_id,
             "task_name": args.task_name,
@@ -238,8 +236,6 @@ def build_manifest(
             "operator": args.operator,
         },
         "session": {
-            "schema_version": 4,
-            "contract_version": "v2",
             "session_id": "dummy-session",
             "active_arms": active_arms,
             "sensors_file": None,
@@ -248,8 +244,6 @@ def build_manifest(
         },
         "profile": {
             "name": profile["profile_name"],
-            "version": profile["profile_version"],
-            "path": str(Path(args.profile)),
             "clock_policy": profile["dataset"]["clock_policy"],
         },
         "capture": {
@@ -257,20 +251,14 @@ def build_manifest(
             "end_time_ns": end_ns,
             "storage": {
                 "bag_storage_id": args.storage_id,
-                "bag_storage_preset_profile": (
-                    args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
-                ),
             },
-            "record_exit_code": 0,
         },
         "sensors": {
-            "inventory_version": 2,
             "devices": sensors,
         },
         "recorded_topics": build_recorded_topics_snapshot(
             selected_topics=topics,
             live_topics=TOPIC_TYPES,
-            sensors=sensors,
         ),
         "provenance": {
             "git_commit": "dummy",

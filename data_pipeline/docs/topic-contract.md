@@ -1,4 +1,4 @@
-# Topic Contract V2
+# Topic Contract And Timing
 
 ## Purpose
 
@@ -12,6 +12,24 @@ It is authoritative for:
 - semantic conventions
 
 It is not a migration guide for V1.
+
+
+## Why This Contract Exists
+
+The pipeline became easier to evolve once one raw topic surface was treated as
+the stable contract and everything else was treated as either:
+
+- an upstream producer detail
+- a historical bag-compatibility detail
+- or a local bridge input
+
+The design rule is:
+
+- `/spark/...` is the canonical raw surface
+- legacy producer-specific names are not the contract
+
+That keeps recording, manifests, conversion, calibration, and review aligned to
+one naming system instead of accumulating more alias layers.
 
 
 ## Timestamp Vocabulary
@@ -87,6 +105,22 @@ Camera slots are 1-based. This is intentional for user-facing consistency with j
 | `/spark/tactile/{arm}/{finger_slot}/color/image_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `get_image()` returns | 15-30 Hz | raw/published depending on profile |
 
 
+## Observed Rates On The Current Rig
+
+Recent Lightning single-arm bags recorded on `2026-04-06` on the current rig
+showed these typical observed rates:
+
+| Topic Family | Typical Observed Rate |
+|---|---:|
+| world RGB / depth | ~30 Hz |
+| `/spark/session/teleop_active` | ~30 Hz |
+| robot measured state topics | ~114-150 Hz |
+| teleop command topics | ~8-17 Hz during active demos |
+
+This is here as a practical reference for the current rig, especially when
+debugging throughput or checking whether a new recording looks obviously wrong.
+
+
 ## Examples
 
 Examples of valid V2 raw topics:
@@ -112,6 +146,12 @@ The following are not part of the V2 canonical raw contract:
 
 They may exist in historical bags or old code, but they must not be extended or treated as the target contract.
 
+Why this matters:
+
+- old aliases create a second naming vocabulary
+- the manifest, session model, and published schema then drift apart
+- future changes become migration work instead of forward progress
+
 
 ## Semantic Conventions
 
@@ -129,6 +169,9 @@ For measured state, normalize from the calibrated Robotiq open/closed range when
 `/spark/session/teleop_active` is not a published action.
 
 It exists only so conversion can remove intentional pedal-off spans instead of misclassifying them as stale action gaps.
+
+It is now part of the required raw contract for supported episodes, not an
+optional hint.
 
 ### Camera and tactile geometry
 

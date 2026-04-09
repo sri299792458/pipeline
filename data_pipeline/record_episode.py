@@ -29,7 +29,6 @@ from data_pipeline.pipeline_utils import (
     list_live_topics,
     load_optional_calibration_results,
     load_optional_sensor_overrides,
-    MANIFEST_SCHEMA_VERSION,
     make_episode_id,
     normalize_active_arms,
     now_ns,
@@ -97,7 +96,6 @@ def select_topics_from_session_plan(
 def build_manifest(
     args: argparse.Namespace,
     profile: dict,
-    profile_path: Path,
     active_arms: list[str],
     selected_topics: list[str],
     live_topics: dict[str, str],
@@ -118,12 +116,9 @@ def build_manifest(
     recorded_topics = build_recorded_topics_snapshot(
         selected_topics=selected_topics,
         live_topics=live_topics,
-        sensors=sensors,
     )
-    profile_relpath = str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path)
 
     manifest = {
-        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "episode": {
             "episode_id": args.episode_id,
             "task_name": args.task_name,
@@ -138,8 +133,6 @@ def build_manifest(
         {
             "profile": {
                 "name": profile["profile_name"],
-                "version": profile["profile_version"],
-                "path": profile_relpath,
                 "clock_policy": profile["dataset"]["clock_policy"],
             },
             "capture": {
@@ -147,14 +140,9 @@ def build_manifest(
                 "end_time_ns": end_time_ns,
                 "storage": {
                     "bag_storage_id": args.storage_id,
-                    "bag_storage_preset_profile": (
-                        args.storage_preset_profile if args.storage_id == "mcap" and args.storage_preset_profile else None
-                    ),
                 },
-                "record_exit_code": None,
             },
             "sensors": {
-                "inventory_version": 2,
                 "sensors_file": str(sensors_file.relative_to(REPO_ROOT)) if sensors_file and sensors_file.is_relative_to(REPO_ROOT) else (str(sensors_file) if sensors_file else None),
                 "calibration_results_file": (
                     str(calibration_results_path.relative_to(REPO_ROOT))
@@ -256,7 +244,6 @@ def main(argv: list[str] | None = None) -> int:
         dry_run_manifest = build_manifest(
             args=args,
             profile=profile,
-            profile_path=resolved_profile_path,
             active_arms=active_arms,
             selected_topics=selected_topics,
             live_topics=live_topics,
@@ -298,7 +285,6 @@ def main(argv: list[str] | None = None) -> int:
     manifest = build_manifest(
         args=args,
         profile=profile,
-        profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
         live_topics=live_topics,
@@ -338,7 +324,6 @@ def main(argv: list[str] | None = None) -> int:
     final_manifest = build_manifest(
         args=args,
         profile=profile,
-        profile_path=resolved_profile_path,
         active_arms=active_arms,
         selected_topics=selected_topics,
         live_topics=live_topics,
@@ -350,7 +335,6 @@ def main(argv: list[str] | None = None) -> int:
         end_time_ns=end_time_ns,
         session_capture_plan=session_capture_plan,
     )
-    final_manifest["capture"]["record_exit_code"] = return_code
     write_json(manifest_path, final_manifest)
 
     print(f"Finished episode {args.episode_id} with ros2 bag exit code {return_code}")

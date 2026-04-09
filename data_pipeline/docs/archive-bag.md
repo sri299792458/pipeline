@@ -1,5 +1,8 @@
 # Offline Archive Bag Spec
 
+For the higher-level design rationale behind this archive path, see
+[archive-and-compression-strategy.md](./archive-and-compression-strategy.md).
+
 ## Goal
 
 Add an offline archive step that reduces episode storage size without adding

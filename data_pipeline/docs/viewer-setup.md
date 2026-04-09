@@ -1,5 +1,8 @@
 # Viewer Setup
 
+For the higher-level viewer design rationale, see
+[viewer-integration.md](./viewer-integration.md).
+
 This is a setup page for any account that needs local dataset viewing.
 
 Use it when you are:
