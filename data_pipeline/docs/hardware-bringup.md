@@ -12,8 +12,8 @@ The goal is simple:
 
 Finish one of these setup paths first:
 
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md) for `shared_account`
-- [personal-account-setup.md](./personal-account-setup.md) for your own Linux account
+- [Lab Machine Quick Start](./lab-machine-quick-start.md) for `shared_account`
+- [Personal Account Setup](./personal-account-setup.md) for your own Linux account
 
 Notes:
 
@@ -39,7 +39,7 @@ controller layout. Do not assume that any two convenient ports are equivalent.
 
 Use:
 
-- [usb-port-and-controller-mapping.md](./usb-port-and-controller-mapping.md)
+- [USB Port and Controller Mapping](./usb-port-and-controller-mapping.md)
 
 if you need to verify or remap the machine.
 
@@ -70,14 +70,14 @@ Important:
 
 If this is a new camera setup or the rig has changed, plan to run:
 
-- [calibration.md](./calibration.md)
+- [Calibration](./calibration.md)
 
 before serious data collection.
 
 
 ## 3. Start The Operator Console
 
-Normally this page starts after `collect` already opened the operator console from [lab-machine-quick-start.md](./lab-machine-quick-start.md).
+Normally this page starts after `collect` already opened the operator console from [Lab Machine Quick Start](./lab-machine-quick-start.md).
 
 If you are using your own account, or the shared account is not provisioned yet,
 start the console manually from the repository root:
@@ -296,4 +296,4 @@ At that point, the rig is ready for a first smoke-test recording.
 
 Next:
 
-- [first-raw-demo.md](./first-raw-demo.md)
+- [First Raw Demo](./first-raw-demo.md)

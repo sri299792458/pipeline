@@ -14,7 +14,7 @@ This page is **not** for rebuilding the machine from scratch.
 
 If you are provisioning or repairing the machine itself, use:
 
-- [system-setup.md](./system-setup.md)
+- [System Setup](./system-setup.md)
 
 ## Normal Operator Workflow
 
@@ -64,10 +64,10 @@ What still matters operationally is:
 
 After `collect` launches the console, continue with:
 
-1. [hardware-bringup.md](./hardware-bringup.md)
-2. [first-raw-demo.md](./first-raw-demo.md)
-3. [first-published-conversion.md](./first-published-conversion.md)
-4. [first-viewer-review.md](./first-viewer-review.md)
+1. [Hardware Bring-Up](./hardware-bringup.md)
+2. [First Raw Demo](./first-raw-demo.md)
+3. [First Published Conversion](./first-published-conversion.md)
+4. [First Viewer Review](./first-viewer-review.md)
 
 ## Quick Checks
 
@@ -94,10 +94,10 @@ ros2 --help
 If any of those checks fail on the shared machine, that is not a normal user
 workflow issue. Treat it as machine/account provisioning work and go to:
 
-- [system-setup.md](./system-setup.md)
-- [workspace-setup.md](./workspace-setup.md)
-- [python-env-setup.md](./python-env-setup.md)
-- [viewer-setup.md](./viewer-setup.md)
+- [System Setup](./system-setup.md)
+- [Workspace Setup](./workspace-setup.md)
+- [Python Environment Setup](./python-env-setup.md)
+- [Viewer Setup](./viewer-setup.md)
 
 ## Calibration
 
@@ -105,4 +105,4 @@ Calibration is not part of the shortest first-smoke-test path, but it is a
 real subsystem and should be treated as first-class work before serious data
 collection:
 
-- [calibration.md](./calibration.md)
+- [Calibration](./calibration.md)

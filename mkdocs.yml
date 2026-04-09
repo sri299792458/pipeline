@@ -10,7 +10,11 @@ exclude_docs: |
 
 theme:
   name: material
+  palette:
+    primary: custom
+    accent: custom
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.top
     - content.code.copy
@@ -18,10 +22,13 @@ theme:
 plugins:
   - search
 
+extra_css:
+  - stylesheets/extra.css
+
 nav:
   - Home: index.md
   - Setup:
-    - setup.md
+    - Overview: setup.md
     - Lab Machine Quick Start: lab-machine-quick-start.md
     - Personal Account Setup: personal-account-setup.md
     - Hardware Bring-Up: hardware-bringup.md
@@ -34,7 +41,7 @@ nav:
     - System Setup: system-setup.md
     - Calibration: calibration.md
   - Design Choices:
-    - design-choices.md
+    - Overview: design-choices.md
     - System Boundaries: system-boundaries.md
     - Artifact Model: artifact-model.md
     - Episode Manifest Design: episode-manifest-design.md
@@ -48,10 +55,8 @@ nav:
     - Viewer Integration: viewer-integration.md
     - Archive and Compression Strategy: archive-and-compression-strategy.md
   - Operations and Debugging:
-    - operations-and-debugging.md
+    - Overview: operations-and-debugging.md
     - USB Port and Controller Mapping: usb-port-and-controller-mapping.md
-    - Current Lightning + GelSight Runbook: current-lightning-gelsight-runbook.md
-    - Replay: replay.md
 
 markdown_extensions:
   - attr_list

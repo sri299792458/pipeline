@@ -11,7 +11,7 @@ Use it when you are:
 
 Normal operators on the already-prepared lab machine should not need to do this during collection. If `collect` already works from `shared_account`, skip this page and continue with:
 
-- [hardware-bringup.md](./hardware-bringup.md)
+- [Hardware Bring-Up](./hardware-bringup.md)
 
 This page explains the local Python environment used by the current pipeline.
 
@@ -53,8 +53,8 @@ The bootstrap script is:
 
 - `./data_pipeline/setup_shared_venv.sh`
 
-Despite the historical name, it now prepares the repo-local `.venv` used by
-more than just the converter.
+The script name stays `setup_shared_venv.sh`, but it prepares the repo-local
+`.venv` used by more than just the converter.
 
 ## What System ROS Python Is Still Used For
 
@@ -81,7 +81,7 @@ source /opt/ros/jazzy/setup.bash
 source .venv/bin/activate
 ```
 
-What that script currently installs:
+What that script installs:
 
 - `requirements-converter.txt`
 - `requirements-teleop.txt`
@@ -173,6 +173,6 @@ Those should be documented separately once their setup path is tightened.
 
 After the Python environment is ready, move on to:
 
-- [viewer-setup.md](./viewer-setup.md) if this account needs local dataset viewing
-- [personal-account-setup.md](./personal-account-setup.md) if you are following the personal-account path
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md) if you are preparing the shared account
+- [Viewer Setup](./viewer-setup.md) if this account needs local dataset viewing
+- [Personal Account Setup](./personal-account-setup.md) if you are following the personal-account path
+- [Lab Machine Quick Start](./lab-machine-quick-start.md) if you are preparing the shared account

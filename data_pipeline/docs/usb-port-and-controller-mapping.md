@@ -91,4 +91,4 @@ artifact.
 
 The operator-facing bring-up flow references this page here:
 
-- [hardware-bringup.md](./hardware-bringup.md)
+- [Hardware Bring-Up](./hardware-bringup.md)

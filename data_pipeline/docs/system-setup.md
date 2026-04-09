@@ -15,8 +15,8 @@ Use it when:
 For the normal user path on the already-prepared lab machine, do **not** start
 here. Start with:
 
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md)
-- [personal-account-setup.md](./personal-account-setup.md) if you are using your own account on the same machine
+- [Lab Machine Quick Start](./lab-machine-quick-start.md)
+- [Personal Account Setup](./personal-account-setup.md) if you are using your own account on the same machine
 
 The current target platform is:
 
@@ -168,7 +168,7 @@ sudo apt-get install -y nodejs npm
 
 The current viewer setup path will install `bun` separately. See:
 
-- [viewer-setup.md](./viewer-setup.md)
+- [Viewer Setup](./viewer-setup.md)
 
 ## Practical Check
 
@@ -192,7 +192,7 @@ apt-cache show ros-jazzy-rosbag2-storage-mcap
 
 After system setup is done, move on to:
 
-- [workspace-setup.md](./workspace-setup.md) if the workspace does not exist yet
-- [python-env-setup.md](./python-env-setup.md)
-- [viewer-setup.md](./viewer-setup.md) if local dataset viewing is part of the shared-account workflow
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md) once the shared account is provisioned
+- [Workspace Setup](./workspace-setup.md) if the workspace does not exist yet
+- [Python Environment Setup](./python-env-setup.md)
+- [Viewer Setup](./viewer-setup.md) if local dataset viewing is part of the shared-account workflow
+- [Lab Machine Quick Start](./lab-machine-quick-start.md) once the shared account is provisioned

@@ -2,8 +2,8 @@
 
 ## Goal
 
-Add a first-class replay primitive to the V2 pipeline so a recorded raw episode
-can be sent back to the robot hardware for verification.
+Replay lets a recorded raw episode be sent back to the robot hardware for
+verification.
 
 The purpose of replay is not dataset publishing. It is a trust and debugging
 tool for the raw capture path.
@@ -11,10 +11,10 @@ tool for the raw capture path.
 
 ## Scope
 
-This first replay slice is intentionally narrow:
+The current replay scope is intentionally narrow:
 
 - raw episode replay only
-- V2 raw episode folders only
+- raw episode folders only
 - joint-space replay only
 - UR hardware only
 - command topics only
@@ -38,14 +38,14 @@ Replay reads one raw episode under:
 
 - `raw_episodes/<episode_id>/`
 
-and specifically replays these V2 raw topics:
+and specifically replays these raw topics:
 
 - `/spark/{arm}/teleop/cmd_joint_state`
 - `/spark/{arm}/teleop/cmd_gripper_state`
 - `/spark/session/teleop_active`
 
 
-## First-Version Contract
+## Replay Contract
 
 ### Episode source
 
@@ -103,7 +103,7 @@ When teleop activity returns true:
 
 - replay resumes issuing recorded commands
 
-This keeps replay faithful to the V2 raw contract, where pedal-off spans are
+This keeps replay faithful to the raw contract, where pedal-off spans are
 intentional raw-session state, not fake command continuity.
 
 ### Startup behavior
@@ -123,12 +123,12 @@ At the end of replay:
 - command streaming stops
 - the robot is left at the final replayed pose
 
-The first version does not automatically return home after replay.
+Replay does not automatically return home after completion.
 
 
 ## Non-Goals
 
-This first replay slice does not include:
+Replay does not include:
 
 - processed replay from published LeRobot `action`
 - IK or Cartesian replay
@@ -141,7 +141,7 @@ This first replay slice does not include:
 
 ## Implementation Shape
 
-The first implementation should be a single CLI:
+The implementation is a single CLI:
 
 - `data_pipeline/replay_episode.py`
 
@@ -157,7 +157,7 @@ That CLI should:
 
 ## Safety Boundary
 
-Replay is still a hardware-moving tool. So the first version must stay simple:
+Replay is still a hardware-moving tool. So the implementation stays simple:
 
 - explicit confirmation prompt
 - no hidden auto-run

@@ -56,13 +56,11 @@ Curated operations and debugging pages are:
 
 - [operations-and-debugging.md](./docs/operations-and-debugging.md)
 - [usb-port-and-controller-mapping.md](./docs/usb-port-and-controller-mapping.md)
-- [current-lightning-gelsight-runbook.md](./docs/current-lightning-gelsight-runbook.md)
-- [replay.md](./docs/replay.md)
 
 Internal implementation references still live here:
 
 - [V2_SPEC.md](./V2_SPEC.md)
-- [V1_SPEC.md](./V1_SPEC.md) archive-only
+- [V1_SPEC.md](./V1_SPEC.md) archived
 - [notes/running-notes.md](./notes/running-notes.md)
 - [docs/internal/raw-storage.md](./docs/internal/raw-storage.md)
 - [docs/internal/archive-bag.md](./docs/internal/archive-bag.md)
@@ -70,6 +68,8 @@ Internal implementation references still live here:
 - [docs/internal/operator-console-spec.md](./docs/internal/operator-console-spec.md)
 - [docs/internal/raiden-reference-analysis.md](./docs/internal/raiden-reference-analysis.md)
 - [docs/internal/teleop-runtime-refactor-spec.md](./docs/internal/teleop-runtime-refactor-spec.md)
+- [docs/internal/current-lightning-gelsight-runbook.md](./docs/internal/current-lightning-gelsight-runbook.md)
+- [docs/internal/replay.md](./docs/internal/replay.md)
 
 The current reference frontend is the Qt implementation:
 
@@ -88,7 +88,7 @@ sudo apt-get install -y libxcb-cursor0
 
 ## Current Scope
 
-The current V2-direction path is in place:
+The current system provides:
 
 - stable `/spark/...` topic contract for robot, camera, tactile, and teleop-activity streams
 - raw episode recording as one rosbag per demo
@@ -130,7 +130,7 @@ The accepted direction is:
 - do not zero-fill a missing arm into a bimanual schema by default
 - do not mix different active-arm or sensor layouts into the same `dataset_id`
 
-The pipeline now uses one checked-in conversion policy:
+The pipeline uses one checked-in conversion policy:
 
 - `multisensor_20hz`
   - generic 20 Hz conversion policy
@@ -180,7 +180,8 @@ ros2 launch data_pipeline/launch/realsense_contract.launch.py \
 
 That setup script builds the local `pyrealsense2` binding for system ROS Python, not for `.venv`.
 
-This bridge stamps `Image.header.stamp` with host ROS time immediately after `wait_for_frames()` returns, which matches the V2 topic contract directly. Older bags that include official RealSense metadata topics are still supported by the converter.
+This bridge stamps `Image.header.stamp` with host ROS time immediately after
+`wait_for_frames()` returns, which matches the current topic contract directly.
 
 See [docs/hardware-bringup.md](./docs/hardware-bringup.md) for the exact bring-up sequence.
 

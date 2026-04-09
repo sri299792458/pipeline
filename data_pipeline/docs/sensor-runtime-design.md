@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This page explains the sensor-runtime choices behind the current V2 pipeline.
+This page explains the sensor-runtime choices behind the current pipeline.
 
 The important design question was never just “can we read camera frames?” It was
 whether the runtime could produce the pipeline's canonical `/spark/...` contract
@@ -14,7 +14,7 @@ with trustworthy timing and stable per-episode metadata.
 The pipeline treats upstream vendor or community packages as inputs and
 references, not automatically as the final raw-contract runtime.
 
-That is why the current direction is:
+That is why the runtime uses:
 
 - direct RealSense bridge for the active `/spark/cameras/...` contract
 - thin GelSight ROS bridge over the official SDK path
@@ -22,9 +22,9 @@ That is why the current direction is:
 
 ## RealSense Runtime Choice
 
-### Current direction
+### RealSense path
 
-The active RealSense path is the direct SDK bridge backed by a pinned local
+The RealSense path is the direct SDK bridge backed by a pinned local
 `librealsense v2.54.2` runtime.
 
 Current entrypoints:
@@ -57,7 +57,7 @@ into `PYTHONPATH` and `LD_LIBRARY_PATH`, then launches the bridge with
 The pipeline did not reject the official wrapper as useless. It rejected the
 idea that the wrapper's default behavior should define the pipeline contract.
 
-The V2 raw contract cares about:
+The raw contract cares about:
 
 - canonical topic shape
 - explicit timestamp semantics
@@ -68,7 +68,7 @@ Those had to remain pipeline-owned decisions.
 
 ## GelSight Runtime Choice
 
-### Current direction
+### GelSight path
 
 GelSight uses a thin ROS bridge over the official `gsrobotics` path.
 

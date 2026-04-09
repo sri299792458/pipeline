@@ -1,11 +1,11 @@
 # First Viewer Review
 
-This page starts after [first-published-conversion.md](./first-published-conversion.md) is already complete.
+This page starts after [First Published Conversion](./first-published-conversion.md) is already complete.
 
 It applies to both:
 
-- `shared_account` after [lab-machine-quick-start.md](./lab-machine-quick-start.md)
-- a lab member using their own account after [personal-account-setup.md](./personal-account-setup.md)
+- `shared_account` after [Lab Machine Quick Start](./lab-machine-quick-start.md)
+- a lab member using their own account after [Personal Account Setup](./personal-account-setup.md)
 
 The goal is simple:
 
@@ -26,14 +26,14 @@ Make sure these are already true:
 
 If those are not true yet, go back to:
 
-- [viewer-setup.md](./viewer-setup.md)
-- [personal-account-setup.md](./personal-account-setup.md) if you are using your own account
-- [first-published-conversion.md](./first-published-conversion.md)
+- [Viewer Setup](./viewer-setup.md)
+- [Personal Account Setup](./personal-account-setup.md) if you are using your own account
+- [First Published Conversion](./first-published-conversion.md)
 
 Normal workflow note:
 
 - on `shared_account`, local viewer setup should already be part of account provisioning
-- on a personal account, the viewer setup should already be covered by [personal-account-setup.md](./personal-account-setup.md)
+- on a personal account, the viewer setup should already be covered by [Personal Account Setup](./personal-account-setup.md)
 
 
 ## 1. Check The Viewer Target
@@ -109,7 +109,7 @@ Typical causes are:
 
 In that case, go back to:
 
-- [viewer-setup.md](./viewer-setup.md)
+- [Viewer Setup](./viewer-setup.md)
 
 and rerun:
 
@@ -123,7 +123,7 @@ cd ~/spark-workspace/spark-data-collection
 
 Known local issues we have already seen:
 
-- stale viewer process from an older dataset target
+- stale viewer process from a different dataset target
 - missing production build marker:
   - `.next/BUILD_ID`
 - proxy environment variables interfering with local dataset requests

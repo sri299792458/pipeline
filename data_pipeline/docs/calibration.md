@@ -1,9 +1,9 @@
 # Calibration
 
-This is the V2 camera-calibration workflow for the pipeline.
+This is the camera-calibration workflow for the pipeline.
 
 For the design rationale behind the calibration split, see
-[calibration-design.md](./calibration-design.md).
+[Calibration Design](./calibration-design.md).
 
 The calibration system has two parts:
 
@@ -91,7 +91,8 @@ python data_pipeline/calibrate_rig.py \
   --sensors-file data_pipeline/configs/sensors.local.yaml
 ```
 
-The runner now defaults to the current lab board above, so you only need to pass board flags if you are calibrating against a different ChArUco target.
+The runner defaults to the lab board above, so you only need to pass board
+flags if you are calibrating against a different ChArUco target.
 
 To calibrate only selected cameras:
 

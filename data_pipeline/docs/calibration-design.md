@@ -79,7 +79,7 @@ The current design uses:
 This gives one coherent geometry model without inventing custom per-camera
 special cases.
 
-More concretely, `calibrate_rig.py` currently does this:
+More concretely, `calibrate_rig.py` does this:
 
 1. open the selected RealSense cameras
 2. replay the recorded pose list from `calibration_poses.local.json`
@@ -88,7 +88,7 @@ More concretely, `calibrate_rig.py` currently does this:
 5. solve each scene camera against one reference wrist camera
 
 If both wrist cameras are available and no explicit reference is requested, the
-current lab default is to prefer Lightning as the reference wrist camera.
+default is to prefer Lightning as the reference wrist camera.
 
 
 ## Why The Manifest Snapshots Calibration
@@ -106,10 +106,10 @@ it was when recorded.
 
 The design rule is:
 
-- local calibration files are the current working state
+- local calibration files are the working state
 - the manifest snapshot is the episode-time truth
 
-The current working file is:
+The working file is:
 
 - `data_pipeline/configs/calibration.local.json`
 

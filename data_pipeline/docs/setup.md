@@ -29,7 +29,7 @@ Those are not the same workflow.
 For the normal collection-only workflow on the dedicated lab machine, start
 here:
 
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md)
+- [Lab Machine Quick Start](./lab-machine-quick-start.md)
 
 That is the shortest operator path we expect many collection-only users to use.
 
@@ -38,7 +38,7 @@ That is the shortest operator path we expect many collection-only users to use.
 If you are a lab member using your own Linux account on the same prepared
 machine, start here:
 
-- [personal-account-setup.md](./personal-account-setup.md)
+- [Personal Account Setup](./personal-account-setup.md)
 
 This is the right path when the machine already has ROS and system packages,
 but your own account still needs a workspace, `.venv`, or viewer setup.
@@ -54,7 +54,7 @@ If you are:
 
 use:
 
-- [system-setup.md](./system-setup.md)
+- [System Setup](./system-setup.md)
 
 ## Recommended Order
 
@@ -80,10 +80,10 @@ path is:
 These pages still matter, but they are supporting setup pages rather than the
 default operator flow on `shared_account`:
 
-- [workspace-setup.md](./workspace-setup.md)
-- [python-env-setup.md](./python-env-setup.md)
-- [viewer-setup.md](./viewer-setup.md)
-- [system-setup.md](./system-setup.md)
+- [Workspace Setup](./workspace-setup.md)
+- [Python Environment Setup](./python-env-setup.md)
+- [Viewer Setup](./viewer-setup.md)
+- [System Setup](./system-setup.md)
 
 ## Optional But Important
 
@@ -108,7 +108,7 @@ This setup section is **not** the place for:
 - architecture rationale
 - topic-contract deep dives
 - storage design rationale
-- historical migration notes
+- internal implementation history
 - speculative or archive-only design docs
 
 Those belong in the later documentation sections:

@@ -16,8 +16,8 @@ This is **not** the right page for:
 
 Use instead:
 
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md) for the shared collection account
-- [system-setup.md](./system-setup.md) for machine provisioning or repair
+- [Lab Machine Quick Start](./lab-machine-quick-start.md) for the shared collection account
+- [System Setup](./system-setup.md) for machine provisioning or repair
 
 ## What Is Different From `shared_account`
 
@@ -38,13 +38,13 @@ But your own account may still need:
 
 Follow these pages in order:
 
-1. [workspace-setup.md](./workspace-setup.md)
-2. [python-env-setup.md](./python-env-setup.md)
-3. [viewer-setup.md](./viewer-setup.md) if you need `Open Viewer`
-4. [hardware-bringup.md](./hardware-bringup.md)
-5. [first-raw-demo.md](./first-raw-demo.md)
-6. [first-published-conversion.md](./first-published-conversion.md)
-7. [first-viewer-review.md](./first-viewer-review.md)
+1. [Workspace Setup](./workspace-setup.md)
+2. [Python Environment Setup](./python-env-setup.md)
+3. [Viewer Setup](./viewer-setup.md) if you need `Open Viewer`
+4. [Hardware Bring-Up](./hardware-bringup.md)
+5. [First Raw Demo](./first-raw-demo.md)
+6. [First Published Conversion](./first-published-conversion.md)
+7. [First Viewer Review](./first-viewer-review.md)
 
 ## Group Membership Still Matters
 
@@ -57,11 +57,11 @@ still need the same device-access groups as `shared_account`, especially:
 
 If those are missing, treat that as account provisioning work and use:
 
-- [system-setup.md](./system-setup.md)
+- [System Setup](./system-setup.md)
 
 ## Calibration
 
 Calibration is not part of the shortest smoke-test path, but it remains part of
 the real system:
 
-- [calibration.md](./calibration.md)
+- [Calibration](./calibration.md)

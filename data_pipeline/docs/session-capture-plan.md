@@ -2,9 +2,10 @@
 
 ## Purpose
 
-This document defines the session-level object used by the operator console and raw recorder.
+This document defines the session-level object used by the operator console and
+raw recorder.
 
-V2 keeps only three concepts here:
+The session model keeps only three concepts:
 
 - the shared topic contract
 - the local sensors file
@@ -78,12 +79,12 @@ Operators do not redefine:
 
 The shared contract defines:
 
-- canonical V2 topic names
+- canonical topic names
 - canonical sensor keys
 - timestamp meanings
 - dataset-facing semantics
 
-See [topic-contract.md](./topic-contract.md).
+See [Topic Contract](./topic-contract.md).
 
 ### Sensors file
 
@@ -173,7 +174,7 @@ Examples:
 - `/spark/tactile/thunder/finger_right`
 
 The naming scheme is extensible. New keys should follow the shared topic grammar
-in [topic-contract.md](./topic-contract.md), not add a second alias layer.
+in [Topic Contract](./topic-contract.md), not add a second alias layer.
 
 Sensor-key choices are constrained by device kind:
 
@@ -263,7 +264,8 @@ It must not expose:
 
 The session state decides what one session records.
 
-It does not redefine the shared contract, it does not change the canonical V2 topic surface, and it does not choose the published dataset folder up front.
+It does not redefine the shared contract, it does not change the canonical
+topic surface, and it does not choose the published dataset folder up front.
 
 That last point is important:
 

@@ -1,7 +1,7 @@
 # Viewer Setup
 
 For the higher-level viewer design rationale, see
-[viewer-integration.md](./viewer-integration.md).
+[Viewer Integration](./viewer-integration.md).
 
 This is a setup page for any account that needs local dataset viewing.
 
@@ -29,9 +29,9 @@ The viewer lives in the sibling repo:
 
 Before running the viewer setup script:
 
-- complete [workspace-setup.md](./workspace-setup.md)
-- complete [system-setup.md](./system-setup.md) if the machine does not already have the required system packages
-- complete [python-env-setup.md](./python-env-setup.md) if this account environment is not provisioned yet
+- complete [Workspace Setup](./workspace-setup.md)
+- complete [System Setup](./system-setup.md) if the machine does not already have the required system packages
+- complete [Python Environment Setup](./python-env-setup.md) if this account environment is not provisioned yet
 
 In particular, the viewer setup expects:
 
@@ -61,8 +61,8 @@ What the script does:
 - runs `bun run build`
 - verifies that `.next/BUILD_ID` exists
 
-That last check matters because we previously saw a broken local viewer state
-where `.next/` existed but the production build marker did not.
+That last check prevents partial viewer builds from being treated as ready when
+`.next/` exists but the production build marker does not.
 
 ## Relationship To Open Viewer
 
@@ -89,6 +89,6 @@ The supported viewer contract is local-only:
 
 After the viewer toolchain is ready, the next step is usually:
 
-- [personal-account-setup.md](./personal-account-setup.md) if you are following the personal-account path
-- [lab-machine-quick-start.md](./lab-machine-quick-start.md) if you are preparing the shared account
-- [hardware-bringup.md](./hardware-bringup.md) if you are testing the flow immediately
+- [Personal Account Setup](./personal-account-setup.md) if you are following the personal-account path
+- [Lab Machine Quick Start](./lab-machine-quick-start.md) if you are preparing the shared account
+- [Hardware Bring-Up](./hardware-bringup.md) if you are testing the flow immediately

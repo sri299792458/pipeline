@@ -18,12 +18,12 @@ That means:
 - operators confirm and label what is present
 - operators do not author a fake rig model from scratch in the UI
 
-This was one of the most important simplifications in the V2 direction.
+This was one of the most important simplifications in the current design.
 
 
 ## Why Discovery Comes First
 
-The earlier tendency was to let UI state drift toward:
+The console should not drift toward:
 
 - expected-device panes
 - missing-device authoring
@@ -124,37 +124,25 @@ process states:
 - `degraded`
 
 
-## Why `Validate` Was Removed
+## Why Readiness Stays Simple
 
-The explicit `Validate` step created two problems:
+The operator-facing workflow keeps readiness simple:
 
-- it added friction to every take
-- it created stale “validated” state even though live health can change moments
-  later
+- health cards show the live system state
+- `Record` readiness follows required-service health and process state
+- post-take checks happen after recording, where they can evaluate the actual
+  artifact instead of a snapshot guess
 
-The main workflow now favors:
-
-- continuous health visibility
-- simpler operator actions
-- post-take integrity checks where they actually matter
-
-That does not mean validation logic was worthless. It means the explicit
-operator-facing validate step was the wrong abstraction for the main workflow.
-
-Current reality:
-
-- `Validate` is no longer part of the normal GUI workflow
-- `Record` readiness is driven by required-service health, not a stale
-  validation flag
-- some old backend validation helpers still exist internally, but they are no
-  longer the operator-facing gate
+This keeps the console focused on session bring-up and recording, instead of
+adding extra operator steps that can drift away from the live state moments
+later.
 
 
 ## Why Sensor Keys Stay Canonical In The UI
 
-The console used to drift toward a second naming layer for devices and roles.
+The console should not grow a second naming layer for devices and roles.
 
-The current direction is stricter:
+The rule is:
 
 - canonical sensor identity is the topic-prefix sensor key itself
 - hardware identifiers are runtime display values only

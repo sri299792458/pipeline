@@ -1,11 +1,11 @@
 # First Published Conversion
 
-This page starts after [first-raw-demo.md](./first-raw-demo.md) is already complete.
+This page starts after [First Raw Demo](./first-raw-demo.md) is already complete.
 
 It applies to both:
 
-- `shared_account` after [lab-machine-quick-start.md](./lab-machine-quick-start.md)
-- a lab member using their own account after [personal-account-setup.md](./personal-account-setup.md)
+- `shared_account` after [Lab Machine Quick Start](./lab-machine-quick-start.md)
+- a lab member using their own account after [Personal Account Setup](./personal-account-setup.md)
 
 The goal is simple:
 
@@ -28,12 +28,12 @@ Make sure these are already true:
 
 If those are not true yet, go back to:
 
-- [first-raw-demo.md](./first-raw-demo.md)
+- [First Raw Demo](./first-raw-demo.md)
 
 Normal workflow note:
 
 - on `shared_account`, the repo-local `.venv` should already be provisioned
-- on a personal account, that setup should already be covered by [personal-account-setup.md](./personal-account-setup.md)
+- on a personal account, that setup should already be covered by [Personal Account Setup](./personal-account-setup.md)
 
 
 ## 1. Choose The Conversion Profile
@@ -218,6 +218,6 @@ At that point, the raw-to-published conversion path is working.
 
 Once one episode converts successfully, move on to:
 
-- [first-viewer-review.md](./first-viewer-review.md)
+- [First Viewer Review](./first-viewer-review.md)
 
 That should stay separate from the conversion page.

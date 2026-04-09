@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This document defines the canonical raw ROS topic contract for the V2 data pipeline.
+This document defines the canonical raw ROS topic contract for the current data
+pipeline.
 
 It is authoritative for:
 
@@ -11,22 +12,23 @@ It is authoritative for:
 - timestamp meanings
 - semantic conventions
 
-It is not a migration guide for V1.
+It is meant to document the current contract, not every alternate naming scheme
+someone might find elsewhere.
 
 
 ## Why This Contract Exists
 
-The pipeline became easier to evolve once one raw topic surface was treated as
-the stable contract and everything else was treated as either:
+The pipeline is easier to evolve when one raw topic surface is treated as the
+stable contract and everything else is treated as either:
 
 - an upstream producer detail
-- a historical bag-compatibility detail
+- a compatibility detail
 - or a local bridge input
 
 The design rule is:
 
 - `/spark/...` is the canonical raw surface
-- legacy producer-specific names are not the contract
+- producer-specific names are not the contract
 
 That keeps recording, manifests, conversion, calibration, and review aligned to
 one naming system instead of accumulating more alias layers.
@@ -34,7 +36,7 @@ one naming system instead of accumulating more alias layers.
 
 ## Timestamp Vocabulary
 
-V2 keeps the existing timestamp meanings because the clock semantics are unchanged:
+The timestamp meanings are:
 
 - `host_capture_time_v1`
   - Host ROS time assigned immediately after a sensor sample is acquired by the producer.
@@ -89,25 +91,25 @@ Camera slots are 1-based. This is intentional for user-facing consistency with j
 - `finger_right`
 
 
-## Canonical V2 Topics
+## Canonical Topics
 
-| Topic Pattern | Message Type | Semantic Type | Timestamp Meaning | Expected Rate | Usage |
-|---|---|---|---|---:|---|
-| `/spark/{arm}/robot/joint_state` | `sensor_msgs/msg/JointState` | measured state | `control_tick_time_v1` | 50-200 Hz | published source |
-| `/spark/{arm}/robot/eef_pose` | `geometry_msgs/msg/PoseStamped` | measured state | `control_tick_time_v1` | 50-200 Hz | published source |
-| `/spark/{arm}/robot/tcp_wrench` | `geometry_msgs/msg/WrenchStamped` | measured state | `control_tick_time_v1` | 50-200 Hz | published source |
-| `/spark/{arm}/robot/gripper_state` | `sensor_msgs/msg/JointState` | measured state | `control_tick_time_v1` | 20-100 Hz | published source |
-| `/spark/{arm}/teleop/cmd_joint_state` | `sensor_msgs/msg/JointState` | command | `command_issue_time_v1` | 20-200 Hz | published source |
-| `/spark/{arm}/teleop/cmd_gripper_state` | `sensor_msgs/msg/JointState` | command | `command_issue_time_v1` | 20-200 Hz | published source |
-| `/spark/session/teleop_active` | `std_msgs/msg/Bool` | teleop activity | host receive/publish time of the shared pedal activity packet | 20-200 Hz | raw-only conversion aid |
-| `/spark/cameras/{attachment}/{camera_slot}/color/image_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `wait_for_frames()` returns | 20-30 Hz | raw/published depending on profile |
-| `/spark/cameras/{attachment}/{camera_slot}/depth/image_rect_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `wait_for_frames()` returns | 20-30 Hz | raw-only or published-depth depending on profile |
-| `/spark/tactile/{arm}/{finger_slot}/color/image_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `get_image()` returns | 15-30 Hz | raw/published depending on profile |
+| Topic Pattern | Message Type | Semantic Type | Timestamp Meaning | Usage |
+|---|---|---|---|---|
+| `/spark/{arm}/robot/joint_state` | `sensor_msgs/msg/JointState` | measured state | `control_tick_time_v1` | published source |
+| `/spark/{arm}/robot/eef_pose` | `geometry_msgs/msg/PoseStamped` | measured state | `control_tick_time_v1` | published source |
+| `/spark/{arm}/robot/tcp_wrench` | `geometry_msgs/msg/WrenchStamped` | measured state | `control_tick_time_v1` | published source |
+| `/spark/{arm}/robot/gripper_state` | `sensor_msgs/msg/JointState` | measured state | `control_tick_time_v1` | published source |
+| `/spark/{arm}/teleop/cmd_joint_state` | `sensor_msgs/msg/JointState` | command | `command_issue_time_v1` | published source |
+| `/spark/{arm}/teleop/cmd_gripper_state` | `sensor_msgs/msg/JointState` | command | `command_issue_time_v1` | published source |
+| `/spark/session/teleop_active` | `std_msgs/msg/Bool` | teleop activity | host receive/publish time of the shared pedal activity packet | raw-only conversion aid |
+| `/spark/cameras/{attachment}/{camera_slot}/color/image_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `wait_for_frames()` returns | raw/published depending on profile |
+| `/spark/cameras/{attachment}/{camera_slot}/depth/image_rect_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `wait_for_frames()` returns | raw-only or published-depth depending on profile |
+| `/spark/tactile/{arm}/{finger_slot}/color/image_raw` | `sensor_msgs/msg/Image` | raw sensor | `host_capture_time_v1` immediately after `get_image()` returns | raw/published depending on profile |
 
 
 ## Observed Rates On The Current Rig
 
-Recent Lightning single-arm bags recorded on `2026-04-06` on the current rig
+Recent Lightning single-arm bags recorded on `2026-04-06` on this rig
 showed these typical observed rates:
 
 | Topic Family | Typical Observed Rate |
@@ -117,13 +119,13 @@ showed these typical observed rates:
 | robot measured state topics | ~114-150 Hz |
 | teleop command topics | ~8-17 Hz during active demos |
 
-This is here as a practical reference for the current rig, especially when
+This is here as a practical reference for this rig, especially when
 debugging throughput or checking whether a new recording looks obviously wrong.
 
 
 ## Examples
 
-Examples of valid V2 raw topics:
+Examples of valid raw topics:
 
 - `/spark/lightning/robot/joint_state`
 - `/spark/thunder/teleop/cmd_gripper_state`
@@ -134,9 +136,9 @@ Examples of valid V2 raw topics:
 - `/spark/tactile/lightning/finger_left/color/image_raw`
 
 
-## Forbidden V1 Aliases
+## Non-Canonical Names
 
-The following are not part of the V2 canonical raw contract:
+The following are not part of the canonical raw contract:
 
 - `/spark/cameras/wrist/...`
 - `/spark/cameras/scene/...`
@@ -144,13 +146,11 @@ The following are not part of the V2 canonical raw contract:
 - `/spark/tactile/right/...`
 - `/Spark_enable/lightning`
 
-They may exist in historical bags or old code, but they must not be extended or treated as the target contract.
-
 Why this matters:
 
-- old aliases create a second naming vocabulary
+- extra aliases create a second naming vocabulary
 - the manifest, session model, and published schema then drift apart
-- future changes become migration work instead of forward progress
+- future changes become harder than they need to be
 
 
 ## Semantic Conventions
@@ -211,7 +211,7 @@ For `/spark/{arm}/robot/...` and `/spark/{arm}/teleop/...` topics:
 
 ## Documentation Rule
 
-No new topic is ready for V2 unless its:
+No new topic is ready unless its:
 
 - topic pattern
 - message type

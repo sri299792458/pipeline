@@ -18,8 +18,6 @@ knowledge that operators and maintainers will need again.
 ## Current Pages
 
 - [USB Port and Controller Mapping](./usb-port-and-controller-mapping.md)
-- [Current Lightning + GelSight Runbook](./current-lightning-gelsight-runbook.md)
-- [Replay](./replay.md)
 
 ## What Belongs Here
 
@@ -34,10 +32,10 @@ Examples of good content for this section:
 Examples of content that should usually live elsewhere:
 
 - first-time operator instructions
-- put those in [setup.md](./setup.md)
+- put those in [Setup](./setup.md)
 - stable architectural rationale
-- put that in [design-choices.md](./design-choices.md)
-- internal history, abandoned approaches, or scratch notes
+- put that in [Design Choices](./design-choices.md)
+- implementation notes, abandoned approaches, or scratch notes
 - keep those out of the curated docs surface
 
 ## Planned Additions

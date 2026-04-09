@@ -56,7 +56,7 @@ Doing this offline means:
 - one bad archive job does not corrupt the source-of-truth artifact
 - heavy transcode work does not sit on the demo-to-demo critical path
 
-In the current implementation, `archive_episode.py` also writes a separate
+`archive_episode.py` also writes a separate
 `archive_manifest.json` so trim, transcode, and final archive settings are
 auditable without mutating the raw episode manifest.
 
@@ -89,9 +89,9 @@ Preferred properties:
 - offline trim
 - MCAP chunk compression
 
-Current implementation note:
+Implementation note:
 
-- `archive_episode.py` currently exposes `zstd_fast` and `zstd_small`
+- `archive_episode.py` exposes `zstd_fast` and `zstd_small`
 - the default archive preset is `zstd_small`
 
 ### Published dataset
@@ -109,10 +109,10 @@ Preferred properties:
 
 ## Why The Archive Path Is Lossless
 
-The archive path is designed to stay lossless for the currently important visual
+The archive path is designed to stay lossless for the important visual
 modalities.
 
-That is why the current direction is:
+That is why the archive path uses:
 
 - RGB and tactile archived with PNG-backed compressed image transport
 - depth archived with lossless `compressedDepth` PNG
@@ -127,7 +127,7 @@ The design reasoning is simple:
 
 Trim is now an archive-time decision, not a record-time mutation.
 
-That avoids two older problems:
+That avoids two problems:
 
 - recording logic doing too much on the critical path
 - source-of-truth bags being rewritten to fit later storage preferences

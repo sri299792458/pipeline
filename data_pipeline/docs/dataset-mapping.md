@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This document defines how raw episode bags are converted into the published V2 LeRobot dataset.
+This document defines how raw episode bags are converted into the published
+LeRobot dataset.
 
 The raw bag preserves asynchronous truth.
 The published dataset is a fixed-rate aligned view of that raw data.
@@ -24,7 +25,7 @@ raw layer without pretending the raw layer never existed.
 
 ## Conversion Profile
 
-V2 now uses one checked-in conversion profile at `20 Hz`:
+The current pipeline uses one checked-in conversion profile at `20 Hz`:
 
 - `multisensor_20hz`
 
@@ -149,7 +150,7 @@ rules.
 
 ## Published Observation Schema
 
-V2 publishes:
+The published dataset includes:
 
 - `observation.state`
 - `action`
@@ -286,7 +287,9 @@ The current bimanual `multisensor_20hz` profile uses this flat `action` order:
 
 ### Why
 
-The V2 action is the command sent by the teleoperation/runtime stack. This is more stable and more semantically honest than silently replacing action with a derived delta later in the pipeline.
+The published `action` is the command sent by the teleoperation/runtime stack.
+This is more stable and more semantically honest than silently replacing action
+with a derived delta later in the pipeline.
 
 For both arms:
 
@@ -419,7 +422,8 @@ Silent filling of large gaps hides real collection problems and makes the datase
 
 ## Raw-Only Modalities
 
-The following topics remain raw-only in V2 unless the effective schema explicitly publishes them:
+The following topics remain raw-only unless the effective schema explicitly
+publishes them:
 
 - `/spark/session/teleop_active`
 - optional point cloud or debugging topics
@@ -435,7 +439,7 @@ These topics are valuable to preserve, but they complicate the first published d
 
 ## Multi-Sensor Rules
 
-V2 supports:
+The current pipeline supports:
 
 - multiple RealSense sensors
 - multiple GelSight sensors
