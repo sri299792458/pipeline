@@ -549,10 +549,9 @@ def get_or_create_dataset(
 ) -> LeRobotDataset:
     info_path = dataset_root / "meta" / "info.json"
     if info_path.is_file():
-        dataset = LeRobotDataset(
+        dataset = LeRobotDataset.resume(
             repo_id=dataset_id,
             root=dataset_root,
-            download_videos=False,
             vcodec=vcodec,
         )
         if dataset.fps != fps:
