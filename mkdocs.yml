@@ -2,6 +2,7 @@ site_name: Spark Data Collection
 site_description: Documentation for the RPM Lab spark-data-collection system
 repo_url: https://github.com/RPM-lab-UMN/spark-data-collection
 repo_name: RPM-lab-UMN/spark-data-collection
+edit_uri: edit/main/data_pipeline/docs/
 docs_dir: data_pipeline/docs
 exclude_docs: |
   archive/
@@ -17,6 +18,7 @@ theme:
     - navigation.sections
     - navigation.top
     - content.code.copy
+    - content.action.edit
 
 plugins:
   - search
@@ -26,6 +28,7 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Contributing to Docs: contributing-to-docs.md
   - Setup:
     - Overview: setup.md
     - Lab Machine Quick Start: lab-machine-quick-start.md

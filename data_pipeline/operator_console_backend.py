@@ -98,10 +98,6 @@ class OperatorConsoleBackend:
         self.process_lock = threading.Lock()
         self.last_health: dict[str, dict[str, Any]] = {}
         self.health_refresh_in_flight = False
-        self.validation_running = False
-        self.last_validation_ok = False
-        self.last_validation_output = ""
-        self.last_validation_signature = ""
         self.last_action_error = ""
         self.latest_episode_id: str | None = None
         self.latest_dataset_id: str | None = None
@@ -356,7 +352,6 @@ class OperatorConsoleBackend:
     def snapshot(self, config: dict[str, Any]) -> dict[str, Any]:
         return {
             "session_state": self.session_state(config),
-            "validation_state": self.validation_state(config),
             "published_dataset_target": self.get_published_dataset_target(),
             "processes": {
                 name: {
@@ -369,8 +364,6 @@ class OperatorConsoleBackend:
                 for name, proc in self.processes.items()
             },
             "health": self.last_health,
-            "last_validation_ok": self.last_validation_ok,
-            "last_validation_output": self.last_validation_output,
             "last_action_error": self.last_action_error,
             "latest_episode_id": self.latest_episode_id,
             "latest_dataset_id": self.latest_dataset_id,
@@ -381,17 +374,6 @@ class OperatorConsoleBackend:
             "latest_recording_check_output": self.latest_recording_check_output,
             "recording_check_running": self.recording_check_running,
         }
-
-    def validation_state(self, config: dict[str, Any]) -> str:
-        if self.validation_running:
-            return "running"
-        if self.last_validation_ok and self.last_validation_signature == self._config_signature(config):
-            return "passed"
-        if self.last_validation_output and not self.last_validation_ok:
-            return "failed"
-        if self.last_validation_ok and self.last_validation_signature != self._config_signature(config):
-            return "stale"
-        return "not_run"
 
     def get_process_logs(self, name: str) -> list[str]:
         process = self.processes.get(name)
@@ -443,20 +425,10 @@ class OperatorConsoleBackend:
         self.stop_recording()
         for name in ("converter", "gelsight_contract", "realsense_contract", "teleop_gui", "spark_devices"):
             self._stop_process(name)
-        self.validation_running = False
-        self.last_validation_ok = False
-        self.last_validation_signature = ""
-        self.last_validation_output = ""
         self.last_action_error = ""
         self.current_session_capture_plan = None
         self.current_session_capture_plan_path = None
         self._record_event("stop_session", {})
-
-    def start_validation(self, config: dict[str, Any]) -> None:
-        if self.validation_running:
-            return
-        thread = threading.Thread(target=self._run_validation, args=(config,), daemon=True)
-        thread.start()
 
     def start_recording(self, config: dict[str, Any]) -> None:
         self.last_action_error = ""
@@ -688,9 +660,6 @@ class OperatorConsoleBackend:
 
     def _dataset_port(self) -> int:
         return self._port_from_base_url(self._dataset_base_url())
-
-    def _viewer_dataset_root(self, dataset_id: str) -> Path:
-        return REPO_ROOT / "published" / dataset_id
 
     def _dataset_info_url(self, dataset_id: str) -> str:
         return f"{self._dataset_base_url()}/datasets/local/{dataset_id}/resolve/main/meta/info.json"
@@ -1196,79 +1165,6 @@ class OperatorConsoleBackend:
         )
         self.topic_probe_cache[cache_key] = (now, value)
         return value
-
-    def _run_validation(self, config: dict[str, Any]) -> None:
-        self.validation_running = True
-        self.last_validation_ok = False
-        self.last_validation_signature = ""
-        self._refresh_session_capture_plan(config)
-        probe_errors = self._probe_required_streams(config)
-        if probe_errors:
-            self.last_validation_output = "\n".join(probe_errors)
-            self.last_action_error = "Validate failed."
-            self._record_event(
-                "validate",
-                {
-                    "ok": False,
-                    "returncode": None,
-                    "output": self.last_validation_output,
-                },
-            )
-            self.validation_running = False
-            return
-
-        command = self._build_record_command(config, episode_id="", dry_run=True)
-        try:
-            result = subprocess.run(
-                ["/bin/bash", "-lc", command],
-                cwd=str(REPO_ROOT),
-                text=True,
-                capture_output=True,
-                timeout=15.0,
-                check=False,
-            )
-            output = (result.stdout or "") + (result.stderr or "")
-            self.last_validation_output = output.strip()
-            self.last_validation_ok = result.returncode == 0
-            self.last_validation_signature = self._config_signature(config) if self.last_validation_ok else ""
-            self.last_action_error = "" if self.last_validation_ok else "Validate failed."
-            self._record_event(
-                "validate",
-                {
-                    "ok": self.last_validation_ok,
-                    "returncode": result.returncode,
-                    "output": self.last_validation_output,
-                },
-            )
-        except Exception as exc:
-            self.last_validation_ok = False
-            self.last_validation_signature = ""
-            self.last_validation_output = str(exc)
-            self.last_action_error = f"Validate failed: {exc}"
-        finally:
-            self.validation_running = False
-
-    def _probe_required_streams(self, config: dict[str, Any]) -> list[str]:
-        errors: list[str] = []
-        active_arms = self._active_arm_list(config)
-        if active_arms:
-            spark_topic = f"/Spark_angle/{active_arms[0]}"
-            if not self._topic_has_message(spark_topic, topic_type="std_msgs/msg/Float32MultiArray", timeout_s=2.5):
-                errors.append(f"Timed out waiting for Spark stream: {spark_topic}")
-            if not self._topic_has_message("/spark/session/teleop_active", topic_type="std_msgs/msg/Bool", timeout_s=2.5):
-                errors.append("Timed out waiting for shared teleop activity: /spark/session/teleop_active")
-            robot_topic = f"/spark/{active_arms[0]}/robot/joint_state"
-            if not self._topic_has_message(robot_topic, topic_type="sensor_msgs/msg/JointState", timeout_s=2.5):
-                errors.append(f"Timed out waiting for robot state: {robot_topic}")
-        if config.get("realsense_enabled", True):
-            for topic in [topic for topic in self._realsense_required_topics(config) if topic.endswith("/color/image_raw")]:
-                if not self._topic_has_message(topic, topic_type="sensor_msgs/msg/Image", timeout_s=2.5):
-                    errors.append(f"Timed out waiting for camera stream: {topic}")
-        if config.get("gelsight_enabled", False):
-            for topic in self._gelsight_required_topics(config):
-                if not self._topic_has_message(topic, topic_type="sensor_msgs/msg/Image", timeout_s=2.5):
-                    errors.append(f"Timed out waiting for tactile stream: {topic}")
-        return errors
 
     def _start_process(self, name: str, command: str) -> None:
         with self.process_lock:

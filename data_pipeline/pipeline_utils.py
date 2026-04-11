@@ -109,14 +109,6 @@ def sensor_key_for_topic(topic: str) -> str | None:
     return None
 
 
-def sensor_kind_for_sensor_key(sensor_key: str) -> str | None:
-    if camera_path_parts_for_sensor_key(sensor_key) is not None:
-        return "realsense"
-    if tactile_path_parts_for_sensor_key(sensor_key) is not None:
-        return "gelsight"
-    return None
-
-
 def sensor_topic_for_stream(sensor_key: str, stream: str) -> str | None:
     sensor_key = canonical_sensor_key(sensor_key)
     stream_name = str(stream).strip().lower()
@@ -139,29 +131,6 @@ def sensor_topic_for_stream(sensor_key: str, stream: str) -> str | None:
 
     return None
 
-
-def default_topics_for_sensor_key(sensor_key: str) -> list[str]:
-    sensor_key = canonical_sensor_key(sensor_key)
-    if camera_path_parts_for_sensor_key(sensor_key) is not None:
-        return [
-            topic
-            for topic in (
-                sensor_topic_for_stream(sensor_key, "color"),
-                sensor_topic_for_stream(sensor_key, "depth"),
-                sensor_topic_for_stream(sensor_key, "color_metadata"),
-                sensor_topic_for_stream(sensor_key, "depth_metadata"),
-            )
-            if topic
-        ]
-    if tactile_path_parts_for_sensor_key(sensor_key) is not None:
-        return [
-            topic
-            for topic in (
-                sensor_topic_for_stream(sensor_key, "color"),
-            )
-            if topic
-        ]
-    return []
 
 def _arm_topic(arm: str, suffix: str) -> str:
     return f"/spark/{arm}/{suffix}"
@@ -375,14 +344,6 @@ def resolve_profile_for_active_arms(
         f"Requested profile {requested_profile.get('profile_name')} expects arms {requested_arms}, "
         f"but active arms are {normalized_arms}"
     )
-
-
-def list_known_profiles() -> list[tuple[dict[str, Any], Path]]:
-    profiles: list[tuple[dict[str, Any], Path]] = []
-    for profile_name in sorted(PROFILE_NAME_TO_PATH):
-        profile_path = profile_path_for_name(profile_name)
-        profiles.append((load_profile(profile_path), profile_path))
-    return profiles
 
 
 def collect_candidate_topics(profile: dict[str, Any]) -> list[str]:
@@ -804,10 +765,6 @@ def manifest_episode(manifest: dict[str, Any]) -> dict[str, Any]:
 
 def manifest_profile(manifest: dict[str, Any]) -> dict[str, Any]:
     return manifest["profile"]
-
-
-def manifest_capture(manifest: dict[str, Any]) -> dict[str, Any]:
-    return manifest["capture"]
 
 
 def manifest_sensors(manifest: dict[str, Any]) -> list[dict[str, Any]]:

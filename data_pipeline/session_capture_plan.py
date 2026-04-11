@@ -38,11 +38,6 @@ def _sensor_for_sensor_key(
     return None, {}
 
 
-def _device_metadata(entry: dict[str, Any], sensor: dict[str, Any]) -> dict[str, Any]:
-    merged = dict(sensor)
-    return merged
-
-
 def _device_from_session_config(
     *,
     entry: dict[str, Any],
@@ -54,7 +49,6 @@ def _device_from_session_config(
     device_path = str(entry.get("device_path", "")).strip()
 
     _sensor_name, sensor = _sensor_for_sensor_key(sensor_key, sensor_overrides)
-    metadata = _device_metadata(entry, sensor)
 
     device: dict[str, Any] = {
         "kind": kind,

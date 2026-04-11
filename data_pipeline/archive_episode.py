@@ -7,7 +7,6 @@ from __future__ import annotations
 import argparse
 import heapq
 import hashlib
-import json
 import os
 import random
 import re
@@ -724,13 +723,6 @@ def run_image_transport_transcode(
                 managed.log_handle.close()
 
 
-def load_json_if_present(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
@@ -758,7 +750,6 @@ def main(argv: list[str] | None = None) -> int:
     work_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    episode_manifest = load_json_if_present(episode_dir / "episode_manifest.json")
     capture_storage_id = detect_bag_storage_id(capture_bag_dir)
     capture_size_bytes = bag_dir_size_bytes(capture_bag_dir)
     archive_manifest: dict[str, Any] = {

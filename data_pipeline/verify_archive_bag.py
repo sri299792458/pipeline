@@ -55,8 +55,6 @@ def load_archive_context(episode_dir: Path, archive_dir_name: str) -> tuple[Path
 
     archive_manifest = json.loads(archive_manifest_path.read_text(encoding="utf-8"))
     image_transcode = archive_manifest.get("image_transcode") or {}
-    trim_info = archive_manifest.get("trim") or {}
-
     image_pairs = [
         ArchiveImageTopicPair(
             source_topic=entry["source_topic"],

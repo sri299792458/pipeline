@@ -104,13 +104,6 @@ class TopicSeries:
         ts_ns = self.timestamps_ns[idx]
         return self.values[idx], target_ns - ts_ns
 
-    def latest_before_index(self, target_ns: int) -> tuple[int, int] | None:
-        idx = bisect_right(self.timestamps_ns, target_ns) - 1
-        if idx < 0:
-            return None
-        ts_ns = self.timestamps_ns[idx]
-        return idx, target_ns - ts_ns
-
     def nearest(self, target_ns: int) -> tuple[Any, int] | None:
         idx = bisect_left(self.timestamps_ns, target_ns)
         candidates: list[tuple[Any, int]] = []

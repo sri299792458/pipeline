@@ -1205,14 +1205,11 @@ class OperatorConsoleQtWindow(QMainWindow):
                 continue
 
             card.primary_button.setText("Start")
-            card.primary_button.clicked.disconnect() if False else None
             card.primary_button.setEnabled(start_enabled)
             card.secondary_button.setText("Stop")
             card.secondary_button.setEnabled(stop_enabled)
 
     def _update_recorder_card(self, card: HealthCard, recorder_state: str, can_record: bool, recording_check_running: bool) -> None:
-        card.primary_button.clicked.disconnect() if False else None
-        card.secondary_button.clicked.disconnect() if False else None
         self._rebind_button(card.primary_button, "Record", self._start_recording)
         self._rebind_button(card.secondary_button, "Stop", self._stop_recording)
         if recorder_state == "running":

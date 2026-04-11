@@ -62,7 +62,7 @@ What still matters operationally is:
 
 The checked-in launcher is:
 
-- [`collect`](../../collect)
+- [`collect`](https://github.com/RPM-lab-UMN/spark-data-collection/blob/main/collect)
 
 Any account can run the script directly from the repo root:
 
